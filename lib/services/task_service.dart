@@ -96,6 +96,111 @@ class TaskService {
     }
   }
 
+// task_service.dart 파일에 다음 메서드 추가
+
+// 학생 데이터 직접 가져오기 (새로고침용)
+  Future<FirebaseStudentModel?> getStudentDataDirectly(String studentId) async {
+    try {
+      print('서버에서 학생 데이터 직접 요청: $studentId');
+
+      // Firebase에서 학생 데이터 직접 가져오기
+      QuerySnapshot querySnapshot = await _firestore
+          .collection('students')
+          .where('studentId', isEqualTo: studentId)
+          .limit(1)
+          .get();
+
+      if (querySnapshot.docs.isEmpty) {
+        print('학생 정보를 찾을 수 없습니다: $studentId');
+        return null;
+      }
+
+      // 학생 정보 파싱
+      final student =
+          FirebaseStudentModel.fromFirestore(querySnapshot.docs.first);
+
+      // 로컬 캐시 업데이트
+      _students[student.id] = student;
+
+      // 학급별 캐시도 업데이트
+      if (!_studentsByClass.containsKey(student.className)) {
+        _studentsByClass[student.className] = [];
+      }
+
+      // 기존 학생 정보가 있는지 확인
+      final index = _studentsByClass[student.className]!
+          .indexWhere((s) => s.id == student.id);
+      if (index >= 0) {
+        _studentsByClass[student.className]![index] = student;
+      } else {
+        _studentsByClass[student.className]!.add(student);
+      }
+
+      print('학생 데이터 직접 가져오기 성공: ${student.name} (${student.studentId})');
+      return student;
+    } catch (e) {
+      print('학생 데이터 직접 가져오기 오류: $e');
+
+      // Firebase 연결 오류 시 로컬 데이터 반환
+      if (_students.containsKey(studentId)) {
+        print('로컬 캐시에서 학생 데이터 사용: $studentId');
+        return _students[studentId];
+      }
+
+      // 임시 학생 데이터 찾기 시도 (studentId 기준)
+      for (var student in _students.values) {
+        if (student.studentId == studentId) {
+          print('studentId로 로컬 캐시에서 학생 찾음: $studentId');
+          return student;
+        }
+      }
+
+      return null;
+    }
+  }
+
+// 학생의 그룹원 조회 메서드 추가
+  Future<List<FirebaseStudentModel>> getGroupMembers(
+      int groupId, String className) async {
+    try {
+      print('그룹 $groupId의 학생 조회 시도');
+
+      // 모둠원 조회
+      final querySnapshot = await _firestore
+          .collection('students')
+          .where('group', isEqualTo: groupId)
+          .where('className', isEqualTo: className)
+          .get();
+
+      if (querySnapshot.docs.isEmpty) {
+        print('그룹 $groupId에 학생이 없습니다 (className 기준)');
+
+        // classNum으로도 시도
+        final querySnapshot2 = await _firestore
+            .collection('students')
+            .where('group', isEqualTo: groupId)
+            .where('classNum', isEqualTo: className)
+            .get();
+
+        if (querySnapshot2.docs.isEmpty) {
+          print('그룹 $groupId에 학생이 없습니다 (classNum 기준)');
+          return [];
+        }
+
+        return querySnapshot2.docs
+            .map((doc) => FirebaseStudentModel.fromFirestore(doc))
+            .toList();
+      }
+
+      return querySnapshot.docs
+          .map((doc) => FirebaseStudentModel.fromFirestore(doc))
+          .toList();
+    } catch (e) {
+      print('그룹원 조회 오류: $e');
+      return [];
+    }
+  }
+
 // task_service.dart 파일의 updateTaskStatus 메서드에서 날짜 생성 부분 수정
 
   Future<void> updateTaskStatus(String studentId, String taskName,

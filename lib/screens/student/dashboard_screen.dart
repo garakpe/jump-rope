@@ -1,5 +1,4 @@
 // lib/screens/student/dashboard_screen.dart
-// dashboard_screen.dart 파일의 import 부분
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../models/task_model.dart';
@@ -10,6 +9,22 @@ import '../../widgets/task_card.dart';
 import './progress_screen.dart'; // 진도 화면
 import './reflection_screen.dart'; // 성찰 화면 (이름 충돌 해결)
 import '../../models/ui_models.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+
+// 현재 학생의 진도 정보 찾기 (일관된 방식으로)
+StudentProgress getCurrentStudent(TaskProvider taskProvider, String studentId) {
+  // 캐시에서 먼저 확인
+  final cachedStudent = taskProvider.getStudentFromCache(studentId);
+  if (cachedStudent != null) {
+    return cachedStudent;
+  }
+
+  // 없으면 목록에서 검색
+  return taskProvider.students.firstWhere(
+      (s) => s.id == studentId || s.id == studentId,
+      orElse: () =>
+          StudentProgress(id: studentId, name: '', number: 0, group: 0));
+}
 
 class StudentDashboard extends StatefulWidget {
   const StudentDashboard({Key? key}) : super(key: key);
@@ -27,6 +42,18 @@ class _StudentDashboardState extends State<StudentDashboard>
   void initState() {
     super.initState();
     _tabController = TabController(length: 2, vsync: this);
+
+    // 화면이 처음 로드될 때 데이터 강제 새로고침
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      // 사용자 정보를 이용해 학생 ID 가져오기
+      final authProvider = Provider.of<AuthProvider>(context, listen: false);
+      final studentId = authProvider.userInfo?.studentId ?? '';
+
+      if (studentId.isNotEmpty) {
+        // 강제로 서버에서 직접 데이터를 가져오는 함수 호출
+        _loadStudentDataFromServer(studentId);
+      }
+    });
   }
 
   @override
@@ -75,6 +102,42 @@ class _StudentDashboardState extends State<StudentDashboard>
           ],
         ),
         actions: [
+          // 새로고침 버튼 추가
+          IconButton(
+            icon: const Icon(Icons.refresh),
+            tooltip: '새로고침',
+            onPressed: () {
+              // 로딩 표시
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('데이터를 새로고침 중입니다...')),
+              );
+
+              // 사용자 정보를 이용해 학생 ID 가져오기
+              final studentId = user?.studentId ?? '';
+
+              if (studentId.isNotEmpty) {
+                // 데이터 새로고침 요청
+                taskProvider.refreshStudentData(studentId).then((_) {
+                  // 성공 메시지
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('데이터가 업데이트되었습니다'),
+                      backgroundColor: Colors.green,
+                    ),
+                  );
+                }).catchError((e) {
+                  // 오류 메시지
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text('새로고침 오류: $e'),
+                      backgroundColor: Colors.red,
+                    ),
+                  );
+                });
+              }
+            },
+          ),
+
           if (isOffline)
             IconButton(
               icon: const Icon(Icons.sync),
@@ -117,8 +180,6 @@ class _StudentDashboardState extends State<StudentDashboard>
       ),
     );
   }
-
-// lib/screens/student/dashboard_screen.dart의 _buildBody 메서드 부분 수정
 
   Widget _buildBody() {
     switch (_currentTab) {
@@ -181,25 +242,35 @@ class _StudentDashboardState extends State<StudentDashboard>
     );
   }
 
-// lib/screens/student/dashboard_screen.dart 파일의 _buildTaskGrid 메서드 부분만 수정
-
   Widget _buildTaskGrid(List<TaskModel> tasks, bool isIndividual) {
     final taskProvider = Provider.of<TaskProvider>(context);
-    final currentLevel = taskProvider.currentLevel;
-
-    // 현재 로그인한 사용자 정보 가져오기
     final authProvider = Provider.of<AuthProvider>(context);
     final user = authProvider.userInfo;
     final studentId = user?.studentId ?? '';
 
-    // 현재 학생의 진도 정보 찾기
-    final currentStudent = taskProvider.students.firstWhere(
-        (s) => s.id == studentId,
-        orElse: () =>
-            StudentProgress(id: studentId, name: '', number: 0, group: 0));
+    // 현재 학생의 진도 정보 찾기 (캐시 우선 사용)
+    StudentProgress currentStudent;
 
+    // 캐시된 데이터 확인
+    final cachedStudent = taskProvider.getStudentFromCache(studentId);
+    if (cachedStudent != null) {
+      currentStudent = cachedStudent;
+      print('캐시에서 학생 데이터 사용: $studentId');
+    } else {
+      // 캐시에 없으면 목록에서 검색
+      currentStudent = taskProvider.students.firstWhere(
+          (s) => s.id == studentId || s.id == user?.name,
+          orElse: () =>
+              StudentProgress(id: studentId, name: '', number: 0, group: 0));
+    }
     // 학생의 그룹 찾기
     final group = int.tryParse(user?.group ?? '1') ?? 1;
+
+    // 학생 진행 상태 확인
+    print('학생 ${user?.name} (ID: $studentId) 진행 상태:');
+    currentStudent.individualProgress.forEach((key, progress) {
+      print('- 과제: $key, 완료: ${progress.isCompleted}');
+    });
 
     // 단체줄넘기 허용 여부 확인
     bool canDoGroupTasks = false;
@@ -209,8 +280,19 @@ class _StudentDashboardState extends State<StudentDashboard>
       print('단체줄넘기 허용 여부 확인 오류: $e');
     }
 
-    // 디버그 정보 출력
-    print('학생 대시보드 - 그룹: $group, 단체줄넘기 허용: $canDoGroupTasks');
+    // 로딩 상태 표시
+    if (taskProvider.isLoading) {
+      return const Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            CircularProgressIndicator(),
+            SizedBox(height: 16),
+            Text('데이터를 불러오는 중입니다...'),
+          ],
+        ),
+      );
+    }
 
     return GridView.builder(
       padding: const EdgeInsets.all(16),
@@ -224,11 +306,6 @@ class _StudentDashboardState extends State<StudentDashboard>
       itemBuilder: (context, index) {
         final task = tasks[index];
 
-        // 활성화 여부 결정
-        final bool isActive = isIndividual
-            ? task.level <= currentLevel // 개인줄넘기: 현재 레벨 이하만 도전 가능
-            : canDoGroupTasks; // 단체줄넘기: 모둠 자격 충족해야 도전 가능
-
         // 과제 완료 여부 확인
         bool isCompleted = false;
         if (isIndividual) {
@@ -239,43 +316,74 @@ class _StudentDashboardState extends State<StudentDashboard>
           isCompleted = progress?.isCompleted ?? false;
         }
 
+        // 디버깅
+        print('과제 상태: ${task.name}, 완료=$isCompleted');
+
+// 과제 활성화 로직 단순화
+        bool isActive;
+
+        if (isIndividual) {
+          // 완료된 과제는 항상 활성화
+          if (isCompleted) {
+            isActive = true;
+          }
+          // 레벨 1 과제는 항상 활성화
+          else if (task.level == 1) {
+            isActive = true;
+          }
+          // 이미 완료된 과제 수 + 1까지 활성화
+          else {
+            final completedCount = currentStudent.individualProgress.values
+                .where((p) => p.isCompleted)
+                .length;
+
+            print('완료된 과제 수: $completedCount, 현재 과제 레벨: ${task.level}');
+            isActive = task.level <= completedCount + 1;
+          }
+        } else {
+          // 단체 과제는 조건 충족 시 활성화
+          isActive = canDoGroupTasks || isCompleted;
+        }
+
+        // 디버깅 정보 출력
+        print(
+            '과제: ${task.name}, 레벨: ${task.level}, 완료: $isCompleted, 활성화: $isActive');
+
         return TaskCard(
           task: task,
           isActive: isActive,
           isCompleted: isCompleted,
-          currentLevel: currentLevel,
-          onTap: isActive ? () => _showTaskModal(task, isCompleted) : null,
+          currentLevel: task.level,
+          onTap: (isActive || isCompleted)
+              ? () => _showTaskModal(task, isCompleted)
+              : null,
         );
       },
     );
   }
 
-  // 단체줄넘기 시작 조건 확인 함수
-  bool _canStartGroupActivities(TaskProvider provider, int group) {
-    // 같은 그룹의 모든 학생 찾기
-    final groupStudents =
-        provider.students.where((s) => s.group == group).toList();
+  Future<void> _loadStudentDataFromServer(String studentId) async {
+    if (studentId.isEmpty) return;
 
-    if (groupStudents.isEmpty) return false;
+    try {
+      // TaskProvider의 통합 메서드 사용
+      final taskProvider = Provider.of<TaskProvider>(context, listen: false);
+      await taskProvider.syncStudentDataFromServer(studentId);
 
-    // 그룹의 모든 학생의 개인줄넘기 성공 수 합계
-    int totalSuccesses = 0;
-    for (var student in groupStudents) {
-      totalSuccesses +=
-          student.individualProgress.values.where((p) => p.isCompleted).length;
+      // 화면 갱신
+      setState(() {});
+    } catch (e) {
+      print('학생 데이터 로드 오류: $e');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('데이터 로드 오류: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
     }
-
-    // 필요한 성공 개수: 학생 수 × 5
-    int neededSuccesses = groupStudents.length * 5;
-
-    return totalSuccesses >= neededSuccesses;
   }
 
   void _showTaskModal(TaskModel task, bool isCompleted) {
-    if (mounted) {
-      setState(() {});
-    }
-
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -368,6 +476,18 @@ class _StudentDashboardState extends State<StudentDashboard>
                                   ),
                                 ),
                               ),
+                              if (!isCompleted)
+                                Padding(
+                                  padding: const EdgeInsets.only(left: 8.0),
+                                  child: Text(
+                                    '${task.level}단계',
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.bold,
+                                      color: Colors.grey.shade600,
+                                    ),
+                                  ),
+                                ),
                             ],
                           ),
                         ],
@@ -465,6 +585,7 @@ class _StudentDashboardState extends State<StudentDashboard>
         );
       },
     ).then((_) {
+      // 모달이 닫힐 때 화면 갱신
       setState(() {});
     });
   }

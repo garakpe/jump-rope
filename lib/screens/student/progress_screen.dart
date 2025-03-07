@@ -6,6 +6,21 @@ import '../../providers/task_provider.dart';
 import '../../models/ui_models.dart';
 import '../../providers/auth_provider.dart';
 
+// 현재 학생의 진도 정보 찾기 (일관된 방식으로)
+StudentProgress getCurrentStudent(TaskProvider taskProvider, String studentId) {
+  // 캐시에서 먼저 확인
+  final cachedStudent = taskProvider.getStudentFromCache(studentId);
+  if (cachedStudent != null) {
+    return cachedStudent;
+  }
+
+  // 없으면 목록에서 검색
+  return taskProvider.students.firstWhere(
+      (s) => s.id == studentId || s.id == studentId,
+      orElse: () =>
+          StudentProgress(id: studentId, name: '', number: 0, group: 0));
+}
+
 class ProgressScreen extends StatelessWidget {
   const ProgressScreen({Key? key}) : super(key: key);
 

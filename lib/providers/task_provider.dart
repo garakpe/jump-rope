@@ -97,6 +97,14 @@ final List<TaskModel> _hardcodedGroupTasks = [
           "긴 줄을 8자 모양으로 돌리며 여러 명이 연속으로 뛰는 고급 동작입니다. 팀워크와 타이밍이 매우 중요합니다."),
 ];
 
+// 학생 ID 기준 캐시
+final Map<String, StudentProgress> _studentCache = {};
+
+// 캐시 데이터 가져오기 메서드
+StudentProgress? getStudentFromCache(String studentId) {
+  return _studentCache[studentId];
+}
+
 class TaskProvider extends ChangeNotifier {
   final TaskService _taskService = TaskService();
 
@@ -109,6 +117,7 @@ class TaskProvider extends ChangeNotifier {
   String _selectedClass = '';
   bool _isLoading = false;
   bool _isOffline = false; // 오프라인 상태 추적
+  final Map<String, StudentProgress> _studentCache = {};
   bool _previousOfflineState = false; // 이전 오프라인 상태
   bool _disposed = false; // dispose 여부 추적
   String _error = '';
@@ -129,6 +138,9 @@ class TaskProvider extends ChangeNotifier {
   bool get isOffline => _isOffline;
   String get error => _error;
   String get selectedClass => _selectedClass;
+  StudentProgress? getStudentFromCache(String studentId) {
+    return _studentCache[studentId];
+  }
 
   // 생성자에서 임시 데이터 로드
   TaskProvider() {
@@ -360,6 +372,133 @@ class TaskProvider extends ChangeNotifier {
     }
   }
 
+// 학생 데이터 설정 및 캐시 업데이트
+  void setStudentProgress(StudentProgress student) {
+    // 학생 ID가 비어있으면 처리하지 않음
+    if (student.id.isEmpty) return;
+
+    print('학생 데이터 캐시 업데이트: ${student.id}, ${student.name}');
+
+    // 기존 학생 정보가 있는지 확인
+    final index = _students.indexWhere((s) => s.id == student.id);
+
+    if (index >= 0) {
+      // 기존 학생 정보 업데이트
+      final newStudents = List<StudentProgress>.from(_students);
+      newStudents[index] = student;
+      _students = newStudents;
+    } else {
+      // 새 학생 추가
+      _students = [..._students, student];
+    }
+
+    // 캐시 업데이트 - 중요!
+    _studentCache[student.id] = student;
+
+    // 도장 개수 재계산
+    _calculateStampCount();
+    _calculateGroupStampCounts();
+
+    notifyListeners();
+  }
+
+  // 서버에서 학생 데이터 동기화 (통합 메서드)
+  Future<StudentProgress?> syncStudentDataFromServer(String studentId) async {
+    if (studentId.isEmpty) return null;
+
+    _isLoading = true;
+    _error = '';
+    notifyListeners();
+
+    try {
+      print('서버에서 학생 데이터 동기화 시작: $studentId');
+
+      // 서버에서 학생 데이터 직접 가져오기
+      final studentData = await _taskService.getStudentDataDirectly(studentId);
+
+      if (studentData != null) {
+        print('서버에서 가져온 학생: ${studentData.name}');
+
+        // 개인 과제 완료 상태 확인 및 로깅
+        int completedTaskCount = 0;
+        studentData.individualTasks.forEach((key, value) {
+          if (value is Map && value['completed'] == true) {
+            completedTaskCount++;
+            print('완료된 과제 확인: $key');
+          }
+        });
+        print('서버에서 확인된 완료 과제 수: $completedTaskCount');
+
+        // 진행 상태 데이터 변환
+        final individualProgress = <String, TaskProgress>{};
+        final groupProgress = <String, TaskProgress>{};
+
+        // 개인 과제 처리
+        for (var task in _individualTasks) {
+          final value = studentData.individualTasks[task.name];
+          final isCompleted = value is Map && value['completed'] == true;
+          final completedDate =
+              value is Map ? value['completedDate']?.toString() : null;
+
+          individualProgress[task.name] = TaskProgress(
+            taskName: task.name,
+            isCompleted: isCompleted,
+            completedDate: completedDate,
+          );
+
+          print('과제 상태 설정: ${task.name}, 완료: $isCompleted, 날짜: $completedDate');
+        }
+
+        // 단체 과제 처리
+        for (var task in _groupTasks) {
+          final value = studentData.groupTasks[task.name];
+          final isCompleted = value is Map && value['completed'] == true;
+          final completedDate =
+              value is Map ? value['completedDate']?.toString() : null;
+
+          groupProgress[task.name] = TaskProgress(
+            taskName: task.name,
+            isCompleted: isCompleted,
+            completedDate: completedDate,
+          );
+        }
+
+        // 학생 진도 정보 생성
+        final student = StudentProgress(
+          id: studentData.id,
+          name: studentData.name,
+          number: int.tryParse(studentData.studentId.substring(
+                  studentData.studentId.length > 2
+                      ? studentData.studentId.length - 2
+                      : 0)) ??
+              0,
+          group: studentData.group,
+          individualProgress: individualProgress,
+          groupProgress: groupProgress,
+          attendance: studentData.attendance,
+        );
+
+        // 통합 상태 업데이트 (중요)
+        setStudentProgress(student);
+
+        print('학생 데이터 동기화 완료: ${student.id}');
+        print(
+            '개인 과제 완료: ${individualProgress.values.where((p) => p.isCompleted).length}개');
+        print(
+            '단체 과제 완료: ${groupProgress.values.where((p) => p.isCompleted).length}개');
+
+        return student;
+      }
+    } catch (e) {
+      print('학생 데이터 동기화 오류: $e');
+      _error = '데이터 동기화 오류: $e';
+    } finally {
+      _isLoading = false;
+      notifyListeners();
+    }
+
+    return null;
+  }
 // 2. task_provider.dart의 _convertToStudentProgress 메서드 수정
 
   void _convertToStudentProgress(List<FirebaseStudentModel> studentList) async {
@@ -615,6 +754,116 @@ class TaskProvider extends ChangeNotifier {
         '단체줄넘기 자격 확인 - 그룹 $groupId: 성공 $totalSuccesses개, 필요 $neededSuccesses개');
 
     return totalSuccesses >= neededSuccesses;
+  }
+
+  // task_provider.dart 파일에 다음 메서드 추가
+
+// task_provider.dart에 추가할 메서드 수정
+
+// 특정 학생 데이터 새로고침 (개선된 버전)
+  Future<void> refreshStudentData(String studentId) async {
+    if (studentId.isEmpty) return;
+
+    _isLoading = true;
+    _error = '';
+    notifyListeners();
+
+    try {
+      print('학생 데이터 새로고침 시도: $studentId');
+
+      // 서버에서 학생 데이터 새로 가져오기
+      final studentData = await _taskService.getStudentDataDirectly(studentId);
+
+      if (studentData != null) {
+        // 개인 과제 완료 상태 확인 및 로깅
+        int completedTaskCount = 0;
+        studentData.individualTasks.forEach((key, value) {
+          if (value is Map && value['completed'] == true) {
+            completedTaskCount++;
+            print('완료된 과제 확인: $key');
+          }
+        });
+        print('서버에서 확인된 완료 과제 수: $completedTaskCount');
+
+        // 학생 진행 상태 변환
+        final individualProgress = <String, TaskProgress>{};
+        final groupProgress = <String, TaskProgress>{};
+
+        // 개인 과제 처리
+        for (var task in _individualTasks) {
+          final value = studentData.individualTasks[task.name];
+          final isCompleted = value is Map && value['completed'] == true;
+          final completedDate =
+              value is Map ? value['completedDate']?.toString() : null;
+
+          individualProgress[task.name] = TaskProgress(
+            taskName: task.name,
+            isCompleted: isCompleted,
+            completedDate: completedDate,
+          );
+
+          print('과제 상태 설정: ${task.name}, 완료: $isCompleted, 날짜: $completedDate');
+        }
+
+        // 단체 과제 처리
+        for (var task in _groupTasks) {
+          final value = studentData.groupTasks[task.name];
+          final isCompleted = value is Map && value['completed'] == true;
+          final completedDate =
+              value is Map ? value['completedDate']?.toString() : null;
+
+          groupProgress[task.name] = TaskProgress(
+            taskName: task.name,
+            isCompleted: isCompleted,
+            completedDate: completedDate,
+          );
+        }
+
+        // 중요: 학생 ID 일관되게 사용
+        final studentIdToUse = studentData.id;
+
+        // 학생 목록에서 중복 제거 (ID 또는 studentId 기준)
+        _students = _students
+            .where(
+                (s) => s.id != studentIdToUse && s.id != studentData.studentId)
+            .toList();
+
+        // 학생 진도 정보 생성
+        final updatedStudent = StudentProgress(
+          id: studentIdToUse,
+          name: studentData.name,
+          number: int.tryParse(studentData.studentId.substring(
+                  studentData.studentId.length > 2
+                      ? studentData.studentId.length - 2
+                      : 0)) ??
+              0,
+          group: studentData.group,
+          individualProgress: individualProgress,
+          groupProgress: groupProgress,
+          attendance: studentData.attendance,
+        );
+
+        // 학생 목록에 추가
+        _students = [..._students, updatedStudent];
+
+        // 디버깅 정보 출력
+        print('학생 데이터 새로고침 성공: $studentId');
+        print(
+            '개인 과제 완료: ${individualProgress.values.where((p) => p.isCompleted).length}개');
+        print(
+            '단체 과제 완료: ${groupProgress.values.where((p) => p.isCompleted).length}개');
+
+        // 도장 개수 재계산
+        _calculateStampCount();
+        _calculateGroupStampCounts();
+      }
+    } catch (e) {
+      print('학생 데이터 새로고침 오류: $e');
+      _error = '데이터 새로고침 오류: $e';
+    } finally {
+      _isLoading = false;
+      notifyListeners();
+    }
   }
 
   // 수동 데이터 동기화 (사용자가 동기화 버튼을 누를 때 호출)
