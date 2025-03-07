@@ -96,7 +96,7 @@ class TaskService {
     }
   }
 
-// 5. task_service.dart의 updateTaskStatus 메서드 수정
+// task_service.dart 파일의 updateTaskStatus 메서드에서 날짜 생성 부분 수정
 
   Future<void> updateTaskStatus(String studentId, String taskName,
       bool isCompleted, bool isGroupTask) async {
@@ -131,7 +131,7 @@ class TaskService {
 
       // 날짜 결정
       if (isCompleted && completedDate == null) {
-        // 새로 완료하는 과제라면 현재 날짜 사용
+        // 새로 완료하는 과제라면 현재 날짜 사용 (ISO 형식으로 저장)
         completedDate = DateTime.now().toIso8601String();
         print('새로운 완료 날짜 생성: $taskName, $completedDate');
       } else if (!isCompleted) {
@@ -147,11 +147,10 @@ class TaskService {
         'completedDate': completedDate,
       };
 
-      // 해결책 7: Firebase 업데이트 시 특정 필드만 업데이트
+      // Firebase 업데이트 시 특정 필드만 업데이트
       await _firestore.collection('students').doc(studentId).update(updateData);
 
       print('Firebase에 과제 상태 업데이트 성공: $studentId, $taskName, $isCompleted');
-      return;
     } catch (e) {
       print('과제 상태 업데이트 오류: $e');
 

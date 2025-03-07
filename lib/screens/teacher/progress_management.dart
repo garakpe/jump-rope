@@ -417,6 +417,8 @@ class _ProgressManagementState extends State<ProgressManagement> {
                             ),
 // lib/screens/teacher/progress_management.dart의 _buildProgressTable 내부에서 DataCell 부분 수정
 
+// progress_management.dart 파일의 _buildProgressTable 메서드 내부 DataCell 부분 수정
+
                             ...tasks.map((task) {
                               final isIndividual = _viewMode == 'individual';
                               final progress = isIndividual
@@ -473,8 +475,9 @@ class _ProgressManagementState extends State<ProgressManagement> {
                                           : null,
                                       child: Center(
                                         child: isCompleted
-                                            ? Stack(
-                                                alignment: Alignment.center,
+                                            ? Column(
+                                                mainAxisAlignment:
+                                                    MainAxisAlignment.center,
                                                 children: [
                                                   Icon(
                                                     Icons.check_circle,
@@ -484,15 +487,40 @@ class _ProgressManagementState extends State<ProgressManagement> {
                                                     size: 24,
                                                   ),
                                                   if (completionDate != null)
-                                                    Positioned(
-                                                      bottom: 0,
+                                                    Container(
+                                                      margin:
+                                                          const EdgeInsets.only(
+                                                              top: 4),
+                                                      padding: const EdgeInsets
+                                                          .symmetric(
+                                                          horizontal: 4,
+                                                          vertical: 2),
+                                                      decoration: BoxDecoration(
+                                                        color: isIndividual
+                                                            ? Colors
+                                                                .blue.shade100
+                                                                .withOpacity(
+                                                                    0.7)
+                                                            : Colors
+                                                                .green.shade100
+                                                                .withOpacity(
+                                                                    0.7),
+                                                        borderRadius:
+                                                            BorderRadius
+                                                                .circular(4),
+                                                      ),
                                                       child: Text(
                                                         _formatDate(
                                                             completionDate),
                                                         style: TextStyle(
                                                           fontSize: 9,
-                                                          color: Colors
-                                                              .grey.shade600,
+                                                          fontWeight:
+                                                              FontWeight.bold,
+                                                          color: isIndividual
+                                                              ? Colors
+                                                                  .blue.shade800
+                                                              : Colors.green
+                                                                  .shade800,
                                                         ),
                                                       ),
                                                     ),
@@ -577,16 +605,22 @@ class _ProgressManagementState extends State<ProgressManagement> {
     );
   }
 
-  // 날짜 포맷팅 함수
+// 날짜 포맷팅 함수 개선
   String _formatDate(String? dateString) {
     if (dateString == null) return '';
 
     try {
       final dateTime = DateTime.parse(dateString);
-      return DateFormat('yy/MM/dd').format(dateTime);
+
+      // 년/월/일 형식으로 표시 (더 직관적으로)
+      final y = dateTime.year.toString().substring(2); // 년도 뒤 2자리
+      final m = dateTime.month.toString().padLeft(2, '0');
+      final d = dateTime.day.toString().padLeft(2, '0');
+
+      return '$y/$m/$d';
     } catch (e) {
-      // 날짜 형식이 아닌 경우 원본 그대로 반환
-      return dateString.substring(0, min(10, dateString.length));
+      // 날짜 형식이 아닌 경우 원본 그대로 반환 (최대 10자)
+      return dateString.length > 10 ? dateString.substring(0, 10) : dateString;
     }
   }
 

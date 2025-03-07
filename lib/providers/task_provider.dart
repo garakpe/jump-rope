@@ -498,7 +498,7 @@ class TaskProvider extends ChangeNotifier {
     }
   }
 
-// 4. task_provider.dart의 _updateLocalTaskStatus 메서드 수정
+// task_provider.dart 파일의 _updateLocalTaskStatus 메서드에서 날짜 생성 부분 수정
 
   void _updateLocalTaskStatus(
       String studentId, String taskName, bool isCompleted, bool isGroupTask) {
@@ -510,76 +510,52 @@ class TaskProvider extends ChangeNotifier {
 
     final student = _students[studentIndex];
 
-    // 해결책 5: 전체 복사 대신 정확히 수정할 부분만 복사
-    Map<String, TaskProgress> updatedIndividualProgress =
-        Map<String, TaskProgress>.from(student.individualProgress);
-    Map<String, TaskProgress> updatedGroupProgress =
-        Map<String, TaskProgress>.from(student.groupProgress);
+    // 과제 맵 처리 (개인 또는 단체)
+    final Map<String, TaskProgress> currentProgress = isGroupTask
+        ? Map<String, TaskProgress>.from(student.groupProgress)
+        : Map<String, TaskProgress>.from(student.individualProgress);
 
-    // 해결책 6: 특정 과제만 업데이트
-    if (isGroupTask) {
-      // 해당 과제의 현재 상태
-      final existingTask = updatedGroupProgress[taskName];
-      String? newCompletedDate;
+    // 기존 과제 상태를 확인하고 업데이트
+    final existing = currentProgress[taskName];
 
-      if (isCompleted) {
-        // 이미 완료된 경우 기존 날짜를 유지
-        if (existingTask != null && existingTask.isCompleted) {
-          newCompletedDate = existingTask.completedDate;
-        } else {
-          // 새로 완료하는 경우 현재 날짜 설정
-          newCompletedDate = DateTime.now().toString();
-        }
+    // 새로운 완료 날짜 생성
+    String? newCompletedDate;
+
+    if (isCompleted) {
+      if (existing?.isCompleted == true && existing?.completedDate != null) {
+        // 이미 완료된 상태면 기존 날짜 유지
+        newCompletedDate = existing?.completedDate;
       } else {
-        // 완료 취소 시 날짜 정보 삭제
-        newCompletedDate = null;
+        // 새로 완료하는 경우 현재 날짜 설정 (yyyy-MM-dd 형식으로 저장)
+        final now = DateTime.now();
+        newCompletedDate = now.toIso8601String();
       }
-
-      // 해당 과제만 업데이트
-      updatedGroupProgress[taskName] = TaskProgress(
-        taskName: taskName,
-        isCompleted: isCompleted,
-        completedDate: newCompletedDate,
-      );
     } else {
-      // 해당 과제의 현재 상태
-      final existingTask = updatedIndividualProgress[taskName];
-      String? newCompletedDate;
-
-      if (isCompleted) {
-        // 이미 완료된 경우 기존 날짜를 유지
-        if (existingTask != null && existingTask.isCompleted) {
-          newCompletedDate = existingTask.completedDate;
-        } else {
-          // 새로 완료하는 경우 현재 날짜 설정
-          newCompletedDate = DateTime.now().toString();
-        }
-      } else {
-        // 완료 취소 시 날짜 정보 삭제
-        newCompletedDate = null;
-      }
-
-      // 해당 과제만 업데이트
-      updatedIndividualProgress[taskName] = TaskProgress(
-        taskName: taskName,
-        isCompleted: isCompleted,
-        completedDate: newCompletedDate,
-      );
+      // 완료 취소하는 경우 날짜 null로 설정
+      newCompletedDate = null;
     }
 
-    // 새 학생 객체 생성 (특정 프로그레스 맵만 업데이트)
+    // TaskProgress 객체 업데이트
+    currentProgress[taskName] = TaskProgress(
+      taskName: taskName,
+      isCompleted: isCompleted,
+      completedDate: newCompletedDate,
+    );
+
+    // 학생 객체 업데이트
     final updatedStudent = student.copyWith(
-      individualProgress: updatedIndividualProgress,
-      groupProgress: updatedGroupProgress,
+      individualProgress:
+          isGroupTask ? student.individualProgress : currentProgress,
+      groupProgress: isGroupTask ? currentProgress : student.groupProgress,
     );
 
     // 학생 목록 업데이트
     final newStudents = List<StudentProgress>.from(_students);
     newStudents[studentIndex] = updatedStudent;
-    _students = newStudents;
 
+    _students = newStudents;
     _calculateStampCount();
-    _calculateGroupStampCounts();
+    _calculateGroupStampCounts(); // 모둠별 도장 개수 계산
 
     print(
         '로컬 과제 상태 업데이트 완료: $studentId, $taskName, $isCompleted (${isGroupTask ? '단체' : '개인'})');
