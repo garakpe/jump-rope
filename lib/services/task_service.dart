@@ -96,93 +96,129 @@ class TaskService {
     }
   }
 
-// lib/services/task_service.dart - updateTaskStatus 메서드
+// 5. task_service.dart의 updateTaskStatus 메서드 수정
 
   Future<void> updateTaskStatus(String studentId, String taskName,
       bool isCompleted, bool isGroupTask) async {
     final taskPath = isGroupTask ? 'groupTasks' : 'individualTasks';
 
-    // 현재 날짜/시간 저장
-    final completedDate = isCompleted ? DateTime.now().toIso8601String() : null;
-
-    // 업데이트 데이터 구성
-    final updateData = {
-      'studentId': studentId,
-      'taskName': taskName,
-      'isCompleted': isCompleted,
-      'isGroupTask': isGroupTask,
-      'timestamp': DateTime.now().toIso8601String(),
-    };
-
     try {
-      // Firestore 업데이트
-      await _firestore.collection('students').doc(studentId).update({
-        '$taskPath.$taskName': {
-          'completed': isCompleted,
-          'completedDate': completedDate,
-        }
-      });
+      // 현재 상태 확인
+      DocumentSnapshot studentDoc =
+          await _firestore.collection('students').doc(studentId).get();
 
-      print('Firebase에 과제 상태 업데이트 성공: $studentId, $taskName, $isCompleted');
-    } catch (e) {
-      print('과제 상태 업데이트 오류: $e');
+      if (!studentDoc.exists) {
+        throw Exception("학생 정보를 찾을 수 없습니다");
+      }
 
-      // 오프라인인 경우 보류 중인 업데이트에 추가
-      _pendingUpdates.add(updateData);
-      await _savePendingUpdates();
+      Map<String, dynamic> studentData =
+          studentDoc.data() as Map<String, dynamic>;
+      Map<String, dynamic>? tasks =
+          studentData[taskPath] as Map<String, dynamic>?;
 
-      print('업데이트가 보류 중인 목록에 추가됨: ${_pendingUpdates.length}개');
+      // 이미 완료된 과제인지 확인
+      String? completedDate;
 
-      // 로컬 데이터도 업데이트
-      if (_students.containsKey(studentId)) {
-        final student = _students[studentId]!;
-
-        // 깊은 복사를 위해 새 맵 생성
-        final Map<String, dynamic> updatedIndividualTasks =
-            Map.from(student.individualTasks);
-        final Map<String, dynamic> updatedGroupTasks =
-            Map.from(student.groupTasks);
-
-        if (isGroupTask) {
-          updatedGroupTasks[taskName] = {
-            'completed': isCompleted,
-            'completedDate': completedDate,
-          };
-        } else {
-          updatedIndividualTasks[taskName] = {
-            'completed': isCompleted,
-            'completedDate': completedDate,
-          };
-        }
-
-        // 학생 정보 업데이트
-        final updatedStudent = FirebaseStudentModel(
-          id: student.id,
-          name: student.name,
-          studentId: student.studentId,
-          className: student.className,
-          classNum: student.classNum,
-          group: student.group,
-          individualTasks: updatedIndividualTasks,
-          groupTasks: updatedGroupTasks,
-          attendance: student.attendance,
-        );
-
-        // 저장
-        _students[studentId] = updatedStudent;
-
-        // 학급 목록도 업데이트
-        if (_studentsByClass.containsKey(student.className)) {
-          final index = _studentsByClass[student.className]!
-              .indexWhere((s) => s.id == studentId);
-          if (index >= 0) {
-            _studentsByClass[student.className]![index] = updatedStudent;
-          }
+      if (tasks != null && tasks.containsKey(taskName)) {
+        Map<String, dynamic>? taskData =
+            tasks[taskName] as Map<String, dynamic>?;
+        if (taskData != null && taskData['completed'] == true && isCompleted) {
+          // 이미 완료된 과제라면 기존 날짜 유지
+          completedDate = taskData['completedDate']?.toString();
+          print('기존 완료된 과제의 날짜 유지: $taskName, $completedDate');
         }
       }
 
-      // Firebase 오류는 계속 전파하여 UI에서 처리
+      // 날짜 결정
+      if (isCompleted && completedDate == null) {
+        // 새로 완료하는 과제라면 현재 날짜 사용
+        completedDate = DateTime.now().toIso8601String();
+        print('새로운 완료 날짜 생성: $taskName, $completedDate');
+      } else if (!isCompleted) {
+        // 완료 취소 시
+        completedDate = null;
+        print('도장 취소: $taskName');
+      }
+
+      // 중요: 해당 필드만 업데이트
+      Map<String, dynamic> updateData = {};
+      updateData['$taskPath.$taskName'] = {
+        'completed': isCompleted,
+        'completedDate': completedDate,
+      };
+
+      // 해결책 7: Firebase 업데이트 시 특정 필드만 업데이트
+      await _firestore.collection('students').doc(studentId).update(updateData);
+
+      print('Firebase에 과제 상태 업데이트 성공: $studentId, $taskName, $isCompleted');
+      return;
+    } catch (e) {
+      print('과제 상태 업데이트 오류: $e');
+
+      // 오류 발생 시 보류 중인 업데이트 목록에 추가
+      _pendingUpdates.add({
+        'studentId': studentId,
+        'taskName': taskName,
+        'isCompleted': isCompleted,
+        'isGroupTask': isGroupTask,
+        'timestamp': DateTime.now().toIso8601String(),
+      });
+
+      await _savePendingUpdates();
+
       throw Exception("Firebase 업데이트 실패: $e");
+    }
+  }
+
+  // 로컬 데이터 업데이트 헬퍼 메서드 (코드 중복 방지)
+  void _updateLocalStudentData(String studentId, String taskName,
+      bool isCompleted, String? completedDate, bool isGroupTask) {
+    if (!_students.containsKey(studentId)) return;
+
+    final student = _students[studentId]!;
+
+    // 깊은 복사로 데이터 변경 준비
+    final Map<String, dynamic> updatedIndividualTasks =
+        Map<String, dynamic>.from(student.individualTasks);
+    final Map<String, dynamic> updatedGroupTasks =
+        Map<String, dynamic>.from(student.groupTasks);
+
+    // 적절한 맵 업데이트
+    if (isGroupTask) {
+      updatedGroupTasks[taskName] = {
+        'completed': isCompleted,
+        'completedDate': completedDate,
+      };
+    } else {
+      updatedIndividualTasks[taskName] = {
+        'completed': isCompleted,
+        'completedDate': completedDate,
+      };
+    }
+
+    // 업데이트된 학생 객체 생성
+    final updatedStudent = FirebaseStudentModel(
+      id: student.id,
+      name: student.name,
+      studentId: student.studentId,
+      className: student.className,
+      classNum: student.classNum,
+      group: student.group,
+      individualTasks: updatedIndividualTasks,
+      groupTasks: updatedGroupTasks,
+      attendance: student.attendance,
+    );
+
+    // 캐시 업데이트
+    _students[studentId] = updatedStudent;
+
+    // 학급별 캐시도 업데이트
+    if (_studentsByClass.containsKey(student.className)) {
+      final index = _studentsByClass[student.className]!
+          .indexWhere((s) => s.id == studentId);
+      if (index >= 0) {
+        _studentsByClass[student.className]![index] = updatedStudent;
+      }
     }
   }
 

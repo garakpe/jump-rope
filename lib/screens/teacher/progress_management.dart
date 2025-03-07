@@ -595,7 +595,7 @@ class _ProgressManagementState extends State<ProgressManagement> {
     return a < b ? a : b;
   }
 
-// lib/screens/teacher/progress_management.dart 파일의 _toggleTaskCompletion 메서드 수정
+// lib/screens/teacher/progress_management.dart의 _toggleTaskCompletion 메서드
 
   void _toggleTaskCompletion(
       String studentId, String taskName, bool completed, bool isGroupTask) {
@@ -604,6 +604,9 @@ class _ProgressManagementState extends State<ProgressManagement> {
     final isOffline = taskProvider.isOffline;
 
     print('도장 토글: 학생=$studentId, 과제=$taskName, 완료=$completed, 그룹=$isGroupTask');
+
+    // 로딩 스낵바를 추적하기 위한 키 생성
+    final scaffoldMessengerKey = GlobalKey<ScaffoldMessengerState>();
 
     // 알림 대화상자 표시
     showDialog(
@@ -623,24 +626,25 @@ class _ProgressManagementState extends State<ProgressManagement> {
             onPressed: () async {
               Navigator.of(context).pop();
 
-              // 로딩 표시
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Row(
-                    children: [
-                      const SizedBox(
-                        width: 20,
-                        height: 20,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      ),
-                      const SizedBox(width: 16),
-                      Text('${completed ? '도장 부여' : '도장 취소'} 중...'),
-                    ],
-                  ),
-                  duration: const Duration(seconds: 60), // 긴 시간 설정
-                  backgroundColor: Colors.blue.shade700,
+              // 로딩 표시 - 타임아웃 설정
+              final snackBar = SnackBar(
+                content: Row(
+                  children: [
+                    const SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    ),
+                    const SizedBox(width: 16),
+                    Text('${completed ? '도장 부여' : '도장 취소'} 중...'),
+                  ],
                 ),
+                duration: const Duration(seconds: 3), // 최대 3초 표시
+                backgroundColor: Colors.blue.shade700,
               );
+
+              // 스낵바 표시
+              ScaffoldMessenger.of(context).showSnackBar(snackBar);
 
               try {
                 // TaskProvider를 통해 상태 업데이트
@@ -684,6 +688,9 @@ class _ProgressManagementState extends State<ProgressManagement> {
                         : null,
                   ),
                 );
+
+                // 오류가 발생해도 UI 갱신 (로컬 상태는 업데이트되었을 수 있음)
+                setState(() {});
               }
             },
           ),

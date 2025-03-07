@@ -1,4 +1,5 @@
 // lib/providers/task_provider.dart
+
 import 'package:flutter/material.dart';
 import '../models/task_model.dart';
 import '../models/ui_models.dart';
@@ -6,6 +7,95 @@ import '../services/task_service.dart';
 import '../models/firebase_models.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:async';
+
+// task_provider.dart 파일의 최상단에 추가
+
+// 개인 줄넘기 과제 목록 직접 정의
+final List<TaskModel> _hardcodedIndividualTasks = [
+  TaskModel(
+      id: 1,
+      name: "양발모아 뛰기",
+      count: "50회",
+      level: 1,
+      description: "두 발을 모아 제자리에서 뛰는 기본 동작입니다. 착지 시 무릎을 살짝 굽혀 충격을 흡수하세요."),
+  TaskModel(
+      id: 2,
+      name: "구보로 뛰기",
+      count: "50회",
+      level: 2,
+      description: "제자리에서 구보 동작으로 뛰기를 합니다. 팔 동작을 자연스럽게 하면서 뛰어주세요."),
+  TaskModel(
+      id: 3,
+      name: "십자뛰기",
+      count: "20회",
+      level: 3,
+      description: "앞, 뒤, 좌, 우로 십자 모양을 그리며 뛰는 동작입니다. 방향 전환을 부드럽게 하세요."),
+  TaskModel(
+      id: 4,
+      name: "가위바위보 뛰기",
+      count: "30회",
+      level: 4,
+      description: "가위바위보 동작을 하면서 뛰기를 합니다. 리듬감 있게 동작을 연결하세요."),
+  TaskModel(
+      id: 5,
+      name: "엇걸었다 풀어 뛰기",
+      count: "10회",
+      level: 5,
+      description: "줄을 엇갈리게 넘었다가 풀어서 뛰는 고급 동작입니다. 손목 동작이 중요합니다."),
+  TaskModel(
+      id: 6,
+      name: "이중뛰기",
+      count: "10회",
+      level: 6,
+      description: "한 번 뛰어오를 때 줄을 두 번 돌리는 동작입니다. 높이 점프하여 시간을 확보하세요."),
+];
+
+// 단체 줄넘기 과제 목록 직접 정의
+final List<TaskModel> _hardcodedGroupTasks = [
+  TaskModel(
+      id: 1,
+      name: "2인 맞서서 뛰기",
+      count: "20회",
+      level: 1,
+      isIndividual: false,
+      description: "두 사람이 마주보고 서서 한 줄을 함께 넘습니다. 호흡을 맞추는 것이 중요합니다."),
+  TaskModel(
+      id: 2,
+      name: "엇갈아 2인뛰기",
+      count: "20회",
+      level: 2,
+      isIndividual: false,
+      description: "두 사람이 번갈아가며 뛰는 동작입니다. 타이밍을 잘 맞춰야 합니다."),
+  TaskModel(
+      id: 3,
+      name: "배웅통과하기",
+      count: "4회",
+      level: 3,
+      isIndividual: false,
+      description: "돌아가는 줄을 통과하여 뛰는 동작입니다. 줄의 속도와 타이밍을 잘 맞추세요."),
+  TaskModel(
+      id: 4,
+      name: "1인 4도약 연속뛰기",
+      count: "2회",
+      level: 4,
+      isIndividual: false,
+      description: "한 사람이 4번 연속으로 도약하며 줄넘기를 하는 동작입니다. 리듬감과 균형 유지가 중요합니다."),
+  TaskModel(
+      id: 5,
+      name: "단체줄넘기",
+      count: "30회",
+      level: 5,
+      isIndividual: false,
+      description: "여러 명이 함께 줄을 넘는 단체 활동입니다. 일정한 간격을 유지하세요."),
+  TaskModel(
+      id: 6,
+      name: "긴 줄 연속 8자 뛰기",
+      count: "40회",
+      level: 6,
+      isIndividual: false,
+      description:
+          "긴 줄을 8자 모양으로 돌리며 여러 명이 연속으로 뛰는 고급 동작입니다. 팀워크와 타이밍이 매우 중요합니다."),
+];
 
 class TaskProvider extends ChangeNotifier {
   final TaskService _taskService = TaskService();
@@ -26,6 +116,9 @@ class TaskProvider extends ChangeNotifier {
   // 구독 관리를 위한 변수
   StreamSubscription? _classSubscription;
 
+  // 모둠별 도장 개수 맵
+  final Map<int, int> _groupStampCounts = {};
+
   List<StudentProgress> get students => _students;
   List<TaskModel> get individualTasks => _individualTasks;
   List<TaskModel> get groupTasks => _groupTasks;
@@ -42,6 +135,13 @@ class TaskProvider extends ChangeNotifier {
     _loadTasks();
     _loadSavedSettings();
     _checkNetworkStatus();
+  }
+
+  @override
+  void dispose() {
+    _disposed = true;
+    _classSubscription?.cancel();
+    super.dispose();
   }
 
   // 주기적으로 네트워크 상태 확인
@@ -66,11 +166,33 @@ class TaskProvider extends ChangeNotifier {
     });
   }
 
-  @override
-  void dispose() {
-    _disposed = true;
+  // 자동 동기화 메서드
+  Future<void> _autoSyncData() async {
+    if (await _taskService.isNetworkAvailable()) {
+      try {
+        await _taskService.syncOfflineChanges();
+
+        // 동기화 후 데이터 다시 로드
+        if (_selectedClass.isNotEmpty) {
+          _refreshData();
+        }
+      } catch (e) {
+        print('자동 동기화 중 오류: $e');
+      }
+    } else {
+      print('네트워크 연결 오류');
+    }
+  }
+
+  // 데이터 새로고침
+  Future<void> _refreshData() async {
+    if (_selectedClass.isEmpty) return;
+
+    // 기존 구독 취소
     _classSubscription?.cancel();
-    super.dispose();
+
+    // 다시 클래스 선택하여 데이터 로드
+    selectClass(_selectedClass);
   }
 
   // 저장된 설정 로드
@@ -79,7 +201,7 @@ class TaskProvider extends ChangeNotifier {
       final prefs = await SharedPreferences.getInstance();
       _currentLevel = prefs.getInt('currentLevel') ?? 1;
       _currentWeek = prefs.getInt('currentWeek') ?? 1;
-      _selectedClass = prefs.getString('selectedClass') ?? '1';
+      _selectedClass = prefs.getString('selectedClass') ?? '';
 
       // 선택된 학급이 있으면 학생 데이터 로드
       if (_selectedClass.isNotEmpty) {
@@ -94,19 +216,24 @@ class TaskProvider extends ChangeNotifier {
     }
   }
 
-  // 과제 목록 로드
+  // 1. task_provider.dart의 _loadTasks 메서드 수정
+
   Future<void> _loadTasks() async {
     _isLoading = true;
     notifyListeners();
 
     try {
-      // 기존 하드코딩 데이터 사용
-      _individualTasks = individualTasks;
-      _groupTasks = groupTasks;
+      // task_model.dart에서 가져오는 대신 하드코딩된 데이터 사용
+      _individualTasks = List.from(_hardcodedIndividualTasks);
+      _groupTasks = List.from(_hardcodedGroupTasks);
+
+      print(
+          '과제 데이터 로드 완료: 개인=${_individualTasks.length}, 단체=${_groupTasks.length}');
 
       _isLoading = false;
       notifyListeners();
     } catch (e) {
+      print('과제 데이터 로드 오류: $e');
       _isLoading = false;
       _error = e.toString();
       notifyListeners();
@@ -187,14 +314,7 @@ class TaskProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  // 도장 카운트 증가
-  void incrementStampCount() {
-    _stampCount++;
-    notifyListeners();
-  }
-
-// task_provider.dart 파일 수정
-// selectClass 메서드 수정
+  // 학급 선택 및 데이터 로드
   void selectClass(String className) async {
     // 기존 구독 취소
     _classSubscription?.cancel();
@@ -207,14 +327,14 @@ class TaskProvider extends ChangeNotifier {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString('selectedClass', className);
 
-    print('TaskProvider - 선택된 학급: $className'); // 디버깅 로그 추가
+    print('TaskProvider - 선택된 학급: $className');
 
     try {
       // 학급 데이터를 실시간으로 구독
       _classSubscription =
           _taskService.getClassTasksStream(className).listen((studentList) {
         // 데이터 변환 및 UI 업데이트
-        print('TaskProvider - 학급 데이터 수신: ${studentList.length}명'); // 디버깅 로그 추가
+        print('TaskProvider - 학급 데이터 수신: ${studentList.length}명');
         _convertToStudentProgress(studentList);
         _isLoading = false;
         notifyListeners();
@@ -229,7 +349,7 @@ class TaskProvider extends ChangeNotifier {
         _loadSampleStudents();
       });
     } catch (e) {
-      print('학급 데이터 구독 예외: $e'); // 디버깅 로그 수정
+      print('학급 데이터 구독 예외: $e');
       _isLoading = false;
       _error = e.toString();
       _isOffline = true;
@@ -240,24 +360,31 @@ class TaskProvider extends ChangeNotifier {
     }
   }
 
-  // FirebaseStudentModel을 StudentProgress로 변환
+// 2. task_provider.dart의 _convertToStudentProgress 메서드 수정
+
   void _convertToStudentProgress(List<FirebaseStudentModel> studentList) async {
     final progressList = <StudentProgress>[];
     print(
         '변환 시작: 학생 수 ${studentList.length}명, 개인과제 ${_individualTasks.length}개, 단체과제 ${_groupTasks.length}개');
 
-    // 여기서 _individualTasks와 _groupTasks가 비어있는지 확인
+    // 해결책 1: 과제 목록이 비어있으면 강제로 로드
+// _convertToStudentProgress 메서드 내에서 과제 목록이 비어있는 경우의 처리
     if (_individualTasks.isEmpty || _groupTasks.isEmpty) {
       print('경고: 과제 목록이 비어 있습니다! 과제 데이터 로드 필요');
-      await _loadTasks(); // 과제 목록 다시 로드 시도
-    }
 
+      // 하드코딩된 데이터 직접 사용
+      _individualTasks = List.from(_hardcodedIndividualTasks);
+      _groupTasks = List.from(_hardcodedGroupTasks);
+
+      print(
+          '과제 목록 강제 로드 완료: 개인=${_individualTasks.length}, 단체=${_groupTasks.length}개');
+    }
     for (var student in studentList) {
       final individualProgress = <String, TaskProgress>{};
       final groupProgress = <String, TaskProgress>{};
 
-      // 개인 과제 변환 - 모든 가능한 개인 과제를 포함하도록 수정
-      for (var taskModel in individualTasks) {
+      // 해결책 2: 모든 가능한 개인 과제를 포함 (항상 모든 과제를 초기화)
+      for (var taskModel in _individualTasks) {
         final taskName = taskModel.name;
         final value = student.individualTasks[taskName];
         final isCompleted = value != null && value['completed'] == true;
@@ -271,8 +398,8 @@ class TaskProvider extends ChangeNotifier {
         );
       }
 
-      // 단체 과제 변환 - 모든 가능한 단체 과제를 포함하도록 수정
-      for (var taskModel in groupTasks) {
+      // 해결책 3: 모든 가능한 단체 과제를 포함 (항상 모든 과제를 초기화)
+      for (var taskModel in _groupTasks) {
         final taskName = taskModel.name;
         final value = student.groupTasks[taskName];
         final isCompleted = value != null && value['completed'] == true;
@@ -312,6 +439,7 @@ class TaskProvider extends ChangeNotifier {
 
     _students = progressList;
     _calculateStampCount();
+    _calculateGroupStampCounts(); // 모둠별 도장 개수 계산
     print('변환 완료: StudentProgress ${_students.length}명');
   }
 
@@ -327,6 +455,164 @@ class TaskProvider extends ChangeNotifier {
     }
 
     _stampCount = count;
+  }
+
+// 3. task_provider.dart의 updateTaskStatus 메서드 수정
+
+// task_provider.dart 파일의 updateTaskStatus 메서드 수정
+
+  Future<void> updateTaskStatus(String studentId, String taskName,
+      bool isCompleted, bool isGroupTask) async {
+    _error = '';
+    _isLoading = true;
+    notifyListeners();
+
+    try {
+      // 실행 시간 제한 설정
+      const timeout = Duration(seconds: 2);
+
+      // 서비스를 통해 Firebase 업데이트 수행 (타임아웃 설정)
+      await _taskService
+          .updateTaskStatus(studentId, taskName, isCompleted, isGroupTask)
+          .timeout(timeout, onTimeout: () {
+        // 타임아웃 발생 시 로컬만 업데이트하고 완료 처리
+        print('Firebase 업데이트 타임아웃 - 로컬만 업데이트');
+        _error = '서버 응답 지연 - 로컬에 저장됨';
+        return;
+      });
+
+      // 로컬 상태 업데이트
+      _updateLocalTaskStatus(studentId, taskName, isCompleted, isGroupTask);
+    } catch (e) {
+      print('과제 상태 업데이트 오류: $e');
+      _error = '데이터 저장 오류: $e';
+      _isOffline = true;
+
+      // 네트워크 오류더라도 로컬 상태는 업데이트
+      _updateLocalTaskStatus(studentId, taskName, isCompleted, isGroupTask);
+
+      _error = '네트워크 연결 오류. 변경 사항은 로컬에 저장되었으며 연결이 복구되면 자동으로 동기화됩니다.';
+    } finally {
+      _isLoading = false;
+      notifyListeners();
+    }
+  }
+
+// 4. task_provider.dart의 _updateLocalTaskStatus 메서드 수정
+
+  void _updateLocalTaskStatus(
+      String studentId, String taskName, bool isCompleted, bool isGroupTask) {
+    final studentIndex = _students.indexWhere((s) => s.id == studentId);
+    if (studentIndex == -1) {
+      print('학생을 찾을 수 없음: $studentId');
+      return;
+    }
+
+    final student = _students[studentIndex];
+
+    // 해결책 5: 전체 복사 대신 정확히 수정할 부분만 복사
+    Map<String, TaskProgress> updatedIndividualProgress =
+        Map<String, TaskProgress>.from(student.individualProgress);
+    Map<String, TaskProgress> updatedGroupProgress =
+        Map<String, TaskProgress>.from(student.groupProgress);
+
+    // 해결책 6: 특정 과제만 업데이트
+    if (isGroupTask) {
+      // 해당 과제의 현재 상태
+      final existingTask = updatedGroupProgress[taskName];
+      String? newCompletedDate;
+
+      if (isCompleted) {
+        // 이미 완료된 경우 기존 날짜를 유지
+        if (existingTask != null && existingTask.isCompleted) {
+          newCompletedDate = existingTask.completedDate;
+        } else {
+          // 새로 완료하는 경우 현재 날짜 설정
+          newCompletedDate = DateTime.now().toString();
+        }
+      } else {
+        // 완료 취소 시 날짜 정보 삭제
+        newCompletedDate = null;
+      }
+
+      // 해당 과제만 업데이트
+      updatedGroupProgress[taskName] = TaskProgress(
+        taskName: taskName,
+        isCompleted: isCompleted,
+        completedDate: newCompletedDate,
+      );
+    } else {
+      // 해당 과제의 현재 상태
+      final existingTask = updatedIndividualProgress[taskName];
+      String? newCompletedDate;
+
+      if (isCompleted) {
+        // 이미 완료된 경우 기존 날짜를 유지
+        if (existingTask != null && existingTask.isCompleted) {
+          newCompletedDate = existingTask.completedDate;
+        } else {
+          // 새로 완료하는 경우 현재 날짜 설정
+          newCompletedDate = DateTime.now().toString();
+        }
+      } else {
+        // 완료 취소 시 날짜 정보 삭제
+        newCompletedDate = null;
+      }
+
+      // 해당 과제만 업데이트
+      updatedIndividualProgress[taskName] = TaskProgress(
+        taskName: taskName,
+        isCompleted: isCompleted,
+        completedDate: newCompletedDate,
+      );
+    }
+
+    // 새 학생 객체 생성 (특정 프로그레스 맵만 업데이트)
+    final updatedStudent = student.copyWith(
+      individualProgress: updatedIndividualProgress,
+      groupProgress: updatedGroupProgress,
+    );
+
+    // 학생 목록 업데이트
+    final newStudents = List<StudentProgress>.from(_students);
+    newStudents[studentIndex] = updatedStudent;
+    _students = newStudents;
+
+    _calculateStampCount();
+    _calculateGroupStampCounts();
+
+    print(
+        '로컬 과제 상태 업데이트 완료: $studentId, $taskName, $isCompleted (${isGroupTask ? '단체' : '개인'})');
+  }
+
+  // 모둠별 도장 개수 계산
+  void _calculateGroupStampCounts() {
+    // 모둠별 도장 개수 초기화
+    _groupStampCounts.clear();
+
+    // 학생들을 순회하며 모둠별 도장 개수 계산
+    for (var student in _students) {
+      // 학생의 모둠 번호
+      int groupNum = student.group;
+
+      // 개인 과제 완료 개수
+      int individualCompleted =
+          student.individualProgress.values.where((p) => p.isCompleted).length;
+
+      // 단체 과제 완료 개수
+      int groupCompleted =
+          student.groupProgress.values.where((p) => p.isCompleted).length;
+
+      // 모둠별 도장 개수 누적
+      _groupStampCounts[groupNum] = (_groupStampCounts[groupNum] ?? 0) +
+          individualCompleted +
+          groupCompleted;
+    }
+  }
+
+  // 모둠별 도장 개수 가져오기
+  int getGroupStampCount(int groupNum) {
+    return _groupStampCounts[groupNum] ?? 0;
   }
 
   // 단체줄넘기 시작 가능 여부 확인
@@ -355,128 +641,6 @@ class TaskProvider extends ChangeNotifier {
     return totalSuccesses >= neededSuccesses;
   }
 
-// lib/providers/task_provider.dart - updateTaskStatus 메서드
-
-// 과제 상태 업데이트
-  Future<void> updateTaskStatus(String studentId, String taskName,
-      bool isCompleted, bool isGroupTask) async {
-    _error = ''; // 오류 메시지 초기화
-    _isLoading = true; // 로딩 시작
-    notifyListeners();
-
-    try {
-      // Firebase에 변경 사항 저장
-      await _taskService.updateTaskStatus(
-          studentId, taskName, isCompleted, isGroupTask);
-
-      // 성공적으로 업데이트됨
-      print('Firebase에 과제 상태 업데이트 성공');
-
-      // 로컬 상태 업데이트
-      _updateLocalTaskStatus(studentId, taskName, isCompleted, isGroupTask);
-    } catch (e) {
-      _error = '데이터 저장 오류: $e';
-      print('과제 상태 업데이트 오류: $e');
-
-      // 오프라인 모드로 전환
-      _isOffline = true;
-
-      // 로컬 저장 시도 - UI는 이미 업데이트됨
-      _error = '네트워크 연결 오류. 변경 사항은 로컬에 저장되었으며 연결이 복구되면 자동으로 동기화됩니다.';
-    } finally {
-      _isLoading = false; // 로딩 종료
-      notifyListeners();
-    }
-  }
-
-// task_provider.dart의 _updateLocalTaskStatus 메서드 수정
-  void _updateLocalTaskStatus(
-      String studentId, String taskName, bool isCompleted, bool isGroupTask) {
-    // 현재 학생 찾기
-    final studentIndex = _students.indexWhere((s) => s.id == studentId);
-    if (studentIndex == -1) {
-      print('학생을 찾을 수 없음: $studentId');
-      return;
-    }
-
-    final student = _students[studentIndex];
-    print('학생을 찾음: ${student.name}, 기존 진행 상황 확인 중...');
-
-    // 새로운 진행 상황 맵 생성
-    final Map<String, TaskProgress> updatedProgress = isGroupTask
-        ? Map.from(student.groupProgress)
-        : Map.from(student.individualProgress);
-
-    // 작업 업데이트
-    updatedProgress[taskName] = TaskProgress(
-      taskName: taskName,
-      isCompleted: isCompleted,
-      completedDate: isCompleted ? DateTime.now().toString() : null,
-    );
-
-    print('업데이트된 과제 상태: $taskName, 완료=$isCompleted');
-
-    // 학생 정보 업데이트
-    final updatedStudent = student.copyWith(
-      individualProgress:
-          isGroupTask ? student.individualProgress : updatedProgress,
-      groupProgress: isGroupTask ? updatedProgress : student.groupProgress,
-    );
-
-    // 학생 목록 업데이트
-    final newStudents = List<StudentProgress>.from(_students);
-    newStudents[studentIndex] = updatedStudent;
-
-    _students = newStudents;
-    _calculateStampCount(); // 도장 개수 다시 계산
-
-    print('로컬 데이터 업데이트 완료, 총 도장 개수: $_stampCount');
-
-    // 매우 중요: UI 업데이트 알림
-    notifyListeners();
-  }
-
-  // 자동 동기화 실행
-  Future<void> _autoSyncData() async {
-    if (_isOffline) return; // 아직 오프라인이면 동기화 시도하지 않음
-
-    try {
-      // 오프라인에서 변경된 내용이 있으면 동기화
-      await _taskService.syncOfflineChanges();
-
-      // 최신 데이터로 다시 로드 (조용히 백그라운드에서 실행)
-      _reloadData();
-
-      print('네트워크 재연결 후 데이터 동기화 완료');
-    } catch (e) {
-      print('자동 동기화 중 오류 발생: $e');
-      _error = '자동 동기화 실패: $e';
-      notifyListeners();
-    }
-  }
-
-  // 데이터 조용히 다시 로드 (UI 로딩 표시 없이)
-  Future<void> _reloadData() async {
-    if (_selectedClass.isEmpty) return;
-
-    try {
-      // 구독 취소
-      _classSubscription?.cancel();
-
-      // 다시 구독 설정
-      _classSubscription = _taskService
-          .getClassTasksStream(_selectedClass)
-          .listen((studentList) {
-        _convertToStudentProgress(studentList);
-        notifyListeners();
-      }, onError: (error) {
-        print('데이터 리로드 중 오류: $error');
-      });
-    } catch (e) {
-      print('데이터 리로드 중 오류: $e');
-    }
-  }
-
   // 수동 데이터 동기화 (사용자가 동기화 버튼을 누를 때 호출)
   Future<void> syncData() async {
     if (await _taskService.isNetworkAvailable()) {
@@ -489,7 +653,7 @@ class TaskProvider extends ChangeNotifier {
         await _taskService.syncOfflineChanges();
 
         // 최신 데이터로 다시 로드
-        selectClass(_selectedClass);
+        _refreshData();
 
         _isOffline = false;
         _error = '';
