@@ -605,8 +605,122 @@ class _ProgressManagementState extends State<ProgressManagement> {
 
     print('도장 토글: 학생=$studentId, 과제=$taskName, 완료=$completed, 그룹=$isGroupTask');
 
-    // 로딩 스낵바를 추적하기 위한 키 생성
-    final scaffoldMessengerKey = GlobalKey<ScaffoldMessengerState>();
+    // 개인줄넘기 과제의 경우, 순차적 진행 여부 확인
+    if (!isGroupTask && completed) {
+      // 현재 과제의 레벨 찾기
+      final currentTask = individualTasks.firstWhere(
+        (task) => task.name == taskName,
+        orElse: () => TaskModel(id: 0, name: "", count: "", level: 0),
+      );
+
+      // 해당 학생 찾기
+      final student = taskProvider.students.firstWhere(
+        (s) => s.id == studentId,
+        orElse: () => StudentProgress(id: "", name: "", number: 0, group: 0),
+      );
+
+      // 이미 완료된 과제인지 확인
+      final isAlreadyCompleted =
+          student.individualProgress[taskName]?.isCompleted ?? false;
+
+      // 이미 완료된 경우 추가 확인 없이 진행
+      if (isAlreadyCompleted) {
+        _processTaskCompletion(studentId, taskName, completed, isGroupTask);
+        return;
+      }
+
+      // 이전 단계 과제들을 모두 완료했는지 확인
+      bool hasSkippedTasks = false;
+      List<String> skippedTaskNames = [];
+
+      for (var task in individualTasks) {
+        // 현재 과제보다 낮은 레벨의 과제만 확인
+        if (task.level < currentTask.level) {
+          // 이전 단계 과제가 완료되지 않았는지 확인
+          final isCompleted =
+              student.individualProgress[task.name]?.isCompleted ?? false;
+          if (!isCompleted) {
+            hasSkippedTasks = true;
+            skippedTaskNames.add(task.name);
+          }
+        }
+      }
+
+      // 건너뛴 과제가 있으면 경고 대화상자 표시
+      if (hasSkippedTasks) {
+        showDialog(
+          context: context,
+          builder: (context) => AlertDialog(
+            title:
+                const Text('단계 순서 확인', style: TextStyle(color: Colors.orange)),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('${student.name} 학생은 이전 단계를 아직 완료하지 않았습니다:'),
+                const SizedBox(height: 12),
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: Colors.orange.shade50,
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: Colors.orange.shade200),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: skippedTaskNames
+                        .map((name) => Padding(
+                              padding: const EdgeInsets.symmetric(vertical: 4),
+                              child: Row(
+                                children: [
+                                  Icon(Icons.warning,
+                                      color: Colors.orange.shade700, size: 16),
+                                  const SizedBox(width: 8),
+                                  Text(name,
+                                      style: const TextStyle(
+                                          fontWeight: FontWeight.bold)),
+                                ],
+                              ),
+                            ))
+                        .toList(),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                const Text('개인줄넘기는 단계적으로 진행하는 것이 권장됩니다. 그래도 도장을 부여하시겠습니까?'),
+              ],
+            ),
+            actions: [
+              TextButton(
+                child: const Text('취소'),
+                onPressed: () => Navigator.of(context).pop(),
+              ),
+              TextButton(
+                child: const Text('진행', style: TextStyle(color: Colors.orange)),
+                onPressed: () {
+                  Navigator.of(context).pop();
+                  _processTaskCompletion(
+                      studentId, taskName, completed, isGroupTask);
+                },
+              ),
+            ],
+          ),
+        );
+      } else {
+        // 건너뛴 과제가 없으면 바로 진행
+        _processTaskCompletion(studentId, taskName, completed, isGroupTask);
+      }
+    } else {
+      // 단체줄넘기거나 도장 취소의 경우 바로 진행
+      _processTaskCompletion(studentId, taskName, completed, isGroupTask);
+    }
+  }
+
+// 실제 도장 처리 로직을 별도 메서드로 분리
+  void _processTaskCompletion(
+      String studentId, String taskName, bool completed, bool isGroupTask) {
+    // TaskProvider 참조
+    final taskProvider = Provider.of<TaskProvider>(context, listen: false);
+    final isOffline = taskProvider.isOffline;
 
     // 알림 대화상자 표시
     showDialog(
