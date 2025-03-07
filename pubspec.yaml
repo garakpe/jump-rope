@@ -1,0 +1,63 @@
+name: jump_rope_app
+description: A jump rope learning management application.
+publish_to: 'none' # Remove this line if you wish to publish to pub.dev
+
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.0.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  file_picker: ^9.0.2  # 파일 선택 기능 추가
+  excel: ^4.0.6        # 엑셀 파일 처리 기능 추가
+  
+  # UI 관련 패키지
+  cupertino_icons: ^1.0.5
+  
+  # 상태 관리
+  provider: ^6.1.2
+  
+  # 로컬 저장소
+  shared_preferences: ^2.5.2
+  
+  # Firebase 패키지들 (나중에 Firebase 연동 시 주석 해제)
+  firebase_core: ^3.12.1
+  firebase_auth: ^5.5.1
+  firebase_storage: ^12.4.4
+  cloud_firestore: ^5.6.5
+  firebase_auth_web: ^5.14.1
+  firebase_storage_web: ^3.10.11
+  cloud_firestore_web: ^4.4.5
+  js: ^0.6.7
+  # 유틸리티
+  intl: ^0.20.2
+  
+  # 웹 지원
+  url_launcher: ^6.3.1
+  flutter_web_plugins:
+    sdk: flutter
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^2.0.1
+
+flutter:
+  uses-material-design: true
+  
+  # 리소스 및 에셋
+  assets:
+    - assets/images/
+  
+  # 폰트
+  fonts:
+    - family: Pretendard
+      fonts:
+        - asset: assets/fonts/Pretendard-Regular.ttf
+        - asset: assets/fonts/Pretendard-Medium.ttf
+          weight: 500
+        - asset: assets/fonts/Pretendard-Bold.ttf
+          weight: 700
