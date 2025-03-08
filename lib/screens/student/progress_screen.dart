@@ -7,64 +7,58 @@ import '../../models/ui_models.dart';
 import '../../providers/auth_provider.dart';
 
 // 현재 학생의 진도 정보 찾기 (일관된 방식으로)
-// 변경 후
-// 변경 후
 StudentProgress getCurrentStudent(TaskProvider taskProvider, String studentId) {
   if (studentId.isEmpty) {
     return StudentProgress(
-        id: studentId, name: '', number: 0, group: 0, studentId: studentId);
+        id: studentId,
+        name: '',
+        number: 0,
+        group: 0,
+        studentId: studentId // 학번 정보 유지
+        );
   }
 
   // 캐시에서 먼저 확인
   final cachedStudent = taskProvider.getStudentFromCache(studentId);
   if (cachedStudent != null) {
     print('캐시에서 학생 데이터 찾음: $studentId, 이름: ${cachedStudent.name}');
-
-    // 학번이 비어있는지 확인
-    if (cachedStudent.studentId.isEmpty) {
-      print('경고: 캐시된 학생의 학번이 비어있음. ID 대체: $studentId');
-      return cachedStudent.copyWith(studentId: studentId);
-    }
-
     return cachedStudent;
   }
 
-  // 목록에서 검색 - ID 또는 studentId로 찾기
+  // 목록에서 검색
   try {
     final student = taskProvider.students.firstWhere(
-      (s) => s.id == studentId || s.studentId == studentId,
+      (s) => s.id == studentId,
       orElse: () => throw Exception('학생을 찾을 수 없음'),
     );
 
     print('학생 목록에서 데이터 찾음: $studentId');
-
-    // 학번이 비어있는지 확인
-    if (student.studentId.isEmpty) {
-      print('경고: 찾은 학생의 학번이 비어있음. ID 대체: $studentId');
-      return student.copyWith(studentId: studentId);
-    }
-
     return student;
   } catch (e) {
-    print('학생 검색 실패: $e, 기본 데이터 생성');
+    print('학생 검색 실패: $e, 기본 데이터 사용');
     return StudentProgress(
-        id: studentId,
-        name: '데이터 로딩 중',
-        number: 0,
-        group: 0,
-        studentId: studentId // 항상 studentId 설정
-        );
+        id: studentId, name: '데이터 로딩 중', number: 0, group: 0);
   }
 }
 
-class ProgressScreen extends StatelessWidget {
+class ProgressScreen extends StatefulWidget {
   const ProgressScreen({Key? key}) : super(key: key);
+
+  @override
+  _ProgressScreenState createState() => _ProgressScreenState();
+}
+
+class _ProgressScreenState extends State<ProgressScreen> {
+  List<StudentProgress> _filteredStudents = [];
+  int _moduStamps = 0;
 
   @override
   Widget build(BuildContext context) {
     final taskProvider = Provider.of<TaskProvider>(context);
+    final authProvider = Provider.of<AuthProvider>(context);
+    final user = authProvider.userInfo;
+
     final currentWeek = taskProvider.currentWeek;
-    final stampCount = taskProvider.stampCount;
     final students = taskProvider.students;
     final isLoading = taskProvider.isLoading;
     final error = taskProvider.error;
@@ -114,8 +108,6 @@ class ProgressScreen extends StatelessWidget {
               label: const Text('다시 시도'),
               onPressed: () {
                 // 데이터 새로고침 시도
-                final authProvider =
-                    Provider.of<AuthProvider>(context, listen: false);
                 final user = authProvider.userInfo;
                 final studentId = user?.studentId ?? '';
                 if (studentId.isNotEmpty) {
@@ -126,6 +118,50 @@ class ProgressScreen extends StatelessWidget {
           ],
         ),
       );
+    }
+
+    // 내 정보 가져오기
+    final myId = user?.studentId ?? '';
+    final myGroup = int.tryParse(user?.group ?? '1') ?? 1;
+    final classNum = user?.classNum ?? ''; // 반 정보 추가
+
+    // 같은 모둠, 같은 반 학생 필터링
+    _filteredStudents = students.where((s) {
+      // 1. 자기 자신은 항상 포함
+      if (s.id == myId || s.studentId == myId) return true;
+
+      // 2. 같은 그룹 학생 필터링
+      final sameGroup = s.group == myGroup;
+      if (!sameGroup) return false;
+
+      // 3. 같은 반 여부 확인
+      final myStudentId = user?.studentId ?? '';
+      final otherStudentId = s.studentId;
+
+      if (myStudentId.isNotEmpty && otherStudentId.isNotEmpty) {
+        if (myStudentId.length >= 3 && otherStudentId.length >= 3) {
+          final myPrefix = myStudentId.substring(0, 3);
+          final otherPrefix = otherStudentId.substring(0, 3);
+          return myPrefix == otherPrefix;
+        }
+      }
+
+      return false;
+    }).toList();
+
+    // 이름순 정렬
+    _filteredStudents.sort((a, b) => a.name.compareTo(b.name));
+
+    // 모둠 도장 수 계산
+    _moduStamps = 0;
+    for (var student in _filteredStudents) {
+      // 개인 과제 완료 개수
+      _moduStamps +=
+          student.individualProgress.values.where((p) => p.isCompleted).length;
+
+      // 단체 과제 완료 개수
+      _moduStamps +=
+          student.groupProgress.values.where((p) => p.isCompleted).length;
     }
 
     return Padding(
@@ -162,7 +198,7 @@ class ProgressScreen extends StatelessWidget {
                           borderRadius: BorderRadius.circular(20),
                         ),
                         child: Text(
-                          '확인 도장 개수: $stampCount개',
+                          '모둠 도장 개수: $_moduStamps개',
                           style: TextStyle(
                             color: Colors.blue.shade800,
                             fontWeight: FontWeight.bold,
@@ -188,7 +224,7 @@ class ProgressScreen extends StatelessWidget {
                 scrollDirection: Axis.horizontal,
                 child: SizedBox(
                   width: 1200, // 넓은 테이블을 위한 고정 너비
-                  child: buildProgressTable(context, students),
+                  child: buildProgressTable(context, _filteredStudents),
                 ),
               ),
             ),
@@ -237,82 +273,9 @@ class ProgressScreen extends StatelessWidget {
 
     // 내 학생 ID 및 그룹 정보 찾기
     final myId = user?.studentId ?? '';
-    final group = int.tryParse(user?.group ?? '1') ?? 1;
-    final classNum = user?.classNum ?? ''; // 반 정보 추가
-
-    print(
-        '진도표 구성: 학생ID=$myId, 그룹=$group, 반=$classNum, 전체 학생 수=${students.length}');
-
-    // 1. 현재 로그인한 학생 정보 가져오기
-    final myInfo = taskProvider.getStudentFromCache(myId);
-
-// 변경 후
-    var groupStudents = students.where((s) {
-      // 1. 같은 그룹 학생 필터링
-      final sameGroup = s.group == group;
-
-      // 2. 자기 자신은 항상 포함
-      if (s.id == myId) return true;
-
-      // 3. 같은 그룹이 아니면 제외
-      if (!sameGroup) return false;
-
-      // 4. 같은 반인지 확인 (studentId 필드 사용)
-      bool sameClass = false;
-
-      try {
-        // 현재 사용자의 학번 (반드시 있어야 함)
-        String myStudentId = user?.studentId ?? '';
-        if (myStudentId.isEmpty) {
-          print('내 학번이 비어있음! 필터링 불가능');
-          return false; // 내 학번이 없으면 필터링 불가능
-        }
-
-        // 비교할 학생의 학번
-        String otherStudentId = s.studentId;
-        if (otherStudentId.isEmpty) {
-          print('학생 ${s.name}의 학번이 비어있음, 제외');
-          return false; // 상대방 학번이 없으면 제외
-        }
-
-        // 학번에서 학년+반 코드 추출 (앞 3자리)
-        // 학번이 5자리라고 가정 (1학년 5반 16번 -> 10516)
-        if (myStudentId.length >= 3 && otherStudentId.length >= 3) {
-          String myClassCode = myStudentId.substring(0, 3);
-          String otherClassCode = otherStudentId.substring(0, 3);
-
-          sameClass = myClassCode == otherClassCode;
-
-          print(
-              '학생 ${s.name} - 반 비교: 내 반=$myClassCode, 학생=$otherClassCode, 일치=$sameClass');
-        } else {
-          // 학번 길이가 불충분하면 제외 (안전하게 같은 반으로 간주하지 않음)
-          print('학번 길이 부족: 내=$myStudentId, 학생=$otherStudentId, 제외');
-          return false;
-        }
-      } catch (e) {
-        print('학번 비교 오류: $e');
-        return false; // 오류 발생 시 제외 (안전하게 포함시키지 않음)
-      }
-
-      return sameGroup && sameClass;
-    }).toList();
-
-    print('필터링 후 모둠원 수: ${groupStudents.length}명 (그룹 $group, 반$classNum)');
-
-// 이름순 정렬
-    groupStudents.sort((a, b) => a.name.compareTo(b.name));
-
-    // 모둠 자격 조건 확인 (단체줄넘기 활성화 여부)
-    bool canDoGroupTask = false;
-    try {
-      canDoGroupTask = taskProvider.canStartGroupActivities(group);
-    } catch (e) {
-      print('단체줄넘기 자격 확인 오류: $e');
-    }
 
     // 데이터가 없는 경우 안내 메시지
-    if (groupStudents.isEmpty) {
+    if (students.isEmpty) {
       return Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
@@ -376,9 +339,10 @@ class ProgressScreen extends StatelessWidget {
               ),
             )),
       ],
-      rows: groupStudents.map((student) {
+      rows: students.map((student) {
         // 현재 학생 강조 표시
-        final isCurrentStudent = student.id == myId;
+        final isCurrentStudent =
+            student.id == myId || student.studentId == myId;
 
         return DataRow(
           color: isCurrentStudent
