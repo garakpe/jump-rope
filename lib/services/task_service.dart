@@ -159,42 +159,63 @@ class TaskService {
     }
   }
 
-// 학생의 그룹원 조회 메서드 추가
+// 이미 lib/services/task_service.dart에 구현되어 있는지 확인하세요
+// 없다면 다음 코드를 추가합니다
+
   Future<List<FirebaseStudentModel>> getGroupMembers(
       int groupId, String className) async {
     try {
-      print('그룹 $groupId의 학생 조회 시도');
+      print('그룹 $groupId의 학생 조회 시도 (class: $className)');
 
-      // 모둠원 조회
-      final querySnapshot = await _firestore
-          .collection('students')
-          .where('group', isEqualTo: groupId)
-          .where('className', isEqualTo: className)
-          .get();
+      List<FirebaseStudentModel> result = [];
 
-      if (querySnapshot.docs.isEmpty) {
-        print('그룹 $groupId에 학생이 없습니다 (className 기준)');
-
-        // classNum으로도 시도
-        final querySnapshot2 = await _firestore
+      // 1. classNum으로 시도
+      try {
+        final querySnapshot = await _firestore
             .collection('students')
             .where('group', isEqualTo: groupId)
             .where('classNum', isEqualTo: className)
             .get();
 
-        if (querySnapshot2.docs.isEmpty) {
-          print('그룹 $groupId에 학생이 없습니다 (classNum 기준)');
-          return [];
+        if (querySnapshot.docs.isNotEmpty) {
+          result = querySnapshot.docs
+              .map((doc) => FirebaseStudentModel.fromFirestore(doc))
+              .toList();
+          print('classNum으로 ${result.length}명 학생 찾음');
         }
-
-        return querySnapshot2.docs
-            .map((doc) => FirebaseStudentModel.fromFirestore(doc))
-            .toList();
+      } catch (e) {
+        print('classNum 쿼리 오류: $e');
       }
 
-      return querySnapshot.docs
-          .map((doc) => FirebaseStudentModel.fromFirestore(doc))
-          .toList();
+      // 2. 위에서 결과가 없으면 className으로 시도
+      if (result.isEmpty) {
+        try {
+          final querySnapshot = await _firestore
+              .collection('students')
+              .where('group', isEqualTo: groupId)
+              .where('className', isEqualTo: className)
+              .get();
+
+          if (querySnapshot.docs.isNotEmpty) {
+            result = querySnapshot.docs
+                .map((doc) => FirebaseStudentModel.fromFirestore(doc))
+                .toList();
+            print('className으로 ${result.length}명 학생 찾음');
+          }
+        } catch (e) {
+          print('className 쿼리 오류: $e');
+        }
+      }
+
+      // 3. 파이어베이스 오류 시 로컬 데이터 사용
+      if (result.isEmpty && _studentsByClass.containsKey(className)) {
+        result = _studentsByClass[className]!
+            .where((s) => s.group == groupId)
+            .toList();
+        print('로컬 데이터에서 ${result.length}명 학생 찾음');
+      }
+
+      return result;
     } catch (e) {
       print('그룹원 조회 오류: $e');
       return [];

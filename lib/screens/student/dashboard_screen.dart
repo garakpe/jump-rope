@@ -42,13 +42,12 @@ class _StudentDashboardState extends State<StudentDashboard>
   void initState() {
     super.initState();
     _tabController = TabController(length: 2, vsync: this);
-
     // 화면이 처음 로드될 때 데이터 강제 새로고침
     WidgetsBinding.instance.addPostFrameCallback((_) {
       // 사용자 정보를 이용해 학생 ID 가져오기
       final authProvider = Provider.of<AuthProvider>(context, listen: false);
-      final studentId = authProvider.userInfo?.studentId ?? '';
-
+      final user = authProvider.userInfo;
+      final studentId = user?.studentId ?? '';
       if (studentId.isNotEmpty) {
         // 강제로 서버에서 직접 데이터를 가져오는 함수 호출
         _loadStudentDataFromServer(studentId);
@@ -255,14 +254,30 @@ class _StudentDashboardState extends State<StudentDashboard>
     final cachedStudent = taskProvider.getStudentFromCache(studentId);
     if (cachedStudent != null) {
       currentStudent = cachedStudent;
-      print('캐시에서 학생 데이터 사용: $studentId');
+      print('캐시에서 학생 데이터 사용: $studentId, 이름: ${cachedStudent.name}');
     } else {
+      print('캐시에 학생 데이터 없음, 목록에서 검색: $studentId');
       // 캐시에 없으면 목록에서 검색
-      currentStudent = taskProvider.students.firstWhere(
-          (s) => s.id == studentId || s.id == user?.name,
-          orElse: () =>
-              StudentProgress(id: studentId, name: '', number: 0, group: 0));
+      try {
+        currentStudent = taskProvider.students.firstWhere(
+            (s) => s.id == studentId || s.id == user?.name, orElse: () {
+          print('학생 목록에서도 찾지 못함, 기본 데이터 생성: $studentId');
+          return StudentProgress(
+              id: studentId,
+              name: user?.name ?? '',
+              number: 0,
+              group: int.tryParse(user?.group ?? '1') ?? 1);
+        });
+      } catch (e) {
+        print('학생 데이터 검색 오류: $e');
+        currentStudent = StudentProgress(
+            id: studentId,
+            name: user?.name ?? '',
+            number: 0,
+            group: int.tryParse(user?.group ?? '1') ?? 1);
+      }
     }
+
     // 학생의 그룹 찾기
     final group = int.tryParse(user?.group ?? '1') ?? 1;
 
@@ -319,7 +334,7 @@ class _StudentDashboardState extends State<StudentDashboard>
         // 디버깅
         print('과제 상태: ${task.name}, 완료=$isCompleted');
 
-// 과제 활성화 로직 단순화
+        // 과제 활성화 로직 개선
         bool isActive;
 
         if (isIndividual) {
@@ -331,14 +346,34 @@ class _StudentDashboardState extends State<StudentDashboard>
           else if (task.level == 1) {
             isActive = true;
           }
-          // 이미 완료된 과제 수 + 1까지 활성화
+          // 이미 완료된 과제 수에 기반하여 활성화
           else {
-            final completedCount = currentStudent.individualProgress.values
-                .where((p) => p.isCompleted)
-                .length;
+            // 완료된 과제 리스트를 레벨 순으로 정렬
+            final completedTasks = currentStudent.individualProgress.entries
+                .where((entry) => entry.value.isCompleted)
+                .map((entry) {
+              final taskModel = individualTasks.firstWhere(
+                (t) => t.name == entry.key,
+                orElse: () =>
+                    TaskModel(id: 0, name: entry.key, count: '', level: 99),
+              );
+              return taskModel;
+            }).toList();
 
-            print('완료된 과제 수: $completedCount, 현재 과제 레벨: ${task.level}');
-            isActive = task.level <= completedCount + 1;
+            // 완료된 최고 레벨
+            int maxCompletedLevel = 0;
+            if (completedTasks.isNotEmpty) {
+              // 레벨을 기준으로 내림차순 정렬 (높은 레벨이 먼저)
+              completedTasks.sort((a, b) => b.level - a.level);
+              maxCompletedLevel = completedTasks.first.level;
+            }
+
+            // 완료된 최고 레벨 + 1까지 활성화 (최소 레벨 1은 항상 활성화)
+            int activationLevel = maxCompletedLevel + 1;
+
+            print(
+                '완료된 과제 수: ${completedTasks.length}, 최고 레벨: $maxCompletedLevel, 활성화 레벨: $activationLevel, 현재 과제 레벨: ${task.level}');
+            isActive = task.level <= activationLevel;
           }
         } else {
           // 단체 과제는 조건 충족 시 활성화
@@ -362,24 +397,31 @@ class _StudentDashboardState extends State<StudentDashboard>
     );
   }
 
+// 수정할 코드
   Future<void> _loadStudentDataFromServer(String studentId) async {
     if (studentId.isEmpty) return;
 
     try {
       // TaskProvider의 통합 메서드 사용
       final taskProvider = Provider.of<TaskProvider>(context, listen: false);
-      await taskProvider.syncStudentDataFromServer(studentId);
+      final studentProgress =
+          await taskProvider.syncStudentDataFromServer(studentId);
+
+      if (studentProgress != null) {
+        print('학생 데이터 로드 성공: ${studentProgress.name}, ${studentProgress.id}');
+        print(
+            '과제 완료 현황: 개인-${studentProgress.individualProgress.values.where((p) => p.isCompleted).length}개, '
+            '단체-${studentProgress.groupProgress.values.where((p) => p.isCompleted).length}개');
+      } else {
+        print('학생 데이터를 찾을 수 없음: $studentId');
+      }
 
       // 화면 갱신
       setState(() {});
     } catch (e) {
       print('학생 데이터 로드 오류: $e');
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('데이터 로드 오류: $e'),
-          backgroundColor: Colors.red,
-        ),
-      );
+      // 에러가 발생해도 UI 갱신
+      setState(() {});
     }
   }
 

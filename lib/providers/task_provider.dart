@@ -207,6 +207,108 @@ class TaskProvider extends ChangeNotifier {
     selectClass(_selectedClass);
   }
 
+// 다음 메서드를 TaskProvider 클래스에 추가합니다
+  Future<bool> loadGroupMembers(int groupId, String className) async {
+    if (groupId <= 0 || className.isEmpty) return false;
+
+    _isLoading = true;
+    notifyListeners();
+
+    try {
+      print('모둠원 데이터 로드 시작: $groupId모둠, $className학년');
+
+      // 서비스를 통해 모둠원 불러오기
+      final groupMembers =
+          await _taskService.getGroupMembers(groupId, className);
+
+      if (groupMembers.isEmpty) {
+        print('모둠원 데이터가 없습니다: $groupId모둠, $className학년');
+        _isLoading = false;
+        notifyListeners();
+        return false;
+      }
+
+      print('모둠원 ${groupMembers.length}명 로드됨: $groupId모둠, $className학년');
+
+      // 각 모둠원을 StudentProgress로 변환하여 저장
+      for (var memberData in groupMembers) {
+        // 진행 상태 데이터 변환
+        final individualProgress = <String, TaskProgress>{};
+        final groupProgress = <String, TaskProgress>{};
+
+        // 개인 과제 처리
+        for (var task in _individualTasks) {
+          final value = memberData.individualTasks[task.name];
+          final isCompleted = value is Map && value['completed'] == true;
+          final completedDate =
+              value is Map ? value['completedDate']?.toString() : null;
+
+          individualProgress[task.name] = TaskProgress(
+            taskName: task.name,
+            isCompleted: isCompleted,
+            completedDate: completedDate,
+          );
+        }
+
+        // 단체 과제 처리
+        for (var task in _groupTasks) {
+          final value = memberData.groupTasks[task.name];
+          final isCompleted = value is Map && value['completed'] == true;
+          final completedDate =
+              value is Map ? value['completedDate']?.toString() : null;
+
+          groupProgress[task.name] = TaskProgress(
+            taskName: task.name,
+            isCompleted: isCompleted,
+            completedDate: completedDate,
+          );
+        }
+
+        // 학생 진도 정보 생성
+        final memberProgress = StudentProgress(
+          id: memberData.id,
+          name: memberData.name,
+          number: int.tryParse(memberData.studentId.substring(
+                  memberData.studentId.length > 2
+                      ? memberData.studentId.length - 2
+                      : 0)) ??
+              0,
+          group: memberData.group,
+          individualProgress: individualProgress,
+          groupProgress: groupProgress,
+          attendance: memberData.attendance,
+        );
+
+        // 캐시 및 전역 상태 업데이트
+        _studentCache[memberData.id] = memberProgress;
+
+        // 이미 존재하는 학생이면 업데이트, 아니면 추가
+        final index = _students.indexWhere((s) => s.id == memberData.id);
+        if (index >= 0) {
+          final newStudents = List<StudentProgress>.from(_students);
+          newStudents[index] = memberProgress;
+          _students = newStudents;
+        } else {
+          _students = [..._students, memberProgress];
+        }
+      }
+
+      // 도장 개수 재계산
+      _calculateStampCount();
+      _calculateGroupStampCounts();
+
+      _isLoading = false;
+      notifyListeners();
+      return true;
+    } catch (e) {
+      print('모둠원 데이터 로드 오류: $e');
+      _error = '모둠원 데이터 로드 오류: $e';
+      _isLoading = false;
+      notifyListeners();
+      return false;
+    }
+  }
+
   // 저장된 설정 로드
   Future<void> _loadSavedSettings() async {
     try {
@@ -402,7 +504,7 @@ class TaskProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  // 서버에서 학생 데이터 동기화 (통합 메서드)
+// 수정할 코드
   Future<StudentProgress?> syncStudentDataFromServer(String studentId) async {
     if (studentId.isEmpty) return null;
 
@@ -413,8 +515,19 @@ class TaskProvider extends ChangeNotifier {
     try {
       print('서버에서 학생 데이터 동기화 시작: $studentId');
 
-      // 서버에서 학생 데이터 직접 가져오기
-      final studentData = await _taskService.getStudentDataDirectly(studentId);
+      // 서버에서 학생 데이터 가져오기 시도
+      FirebaseStudentModel? studentData;
+      try {
+        studentData = await _taskService.getStudentDataDirectly(studentId);
+      } catch (e) {
+        print('Firebase 데이터 가져오기 실패, 로컬 데이터 사용: $e');
+        // Firebase에서 실패하면 로컬 캐시 확인
+        final cachedStudent = _studentCache[studentId];
+        if (cachedStudent != null) {
+          print('로컬 캐시에서 학생 데이터 사용: $studentId');
+          return cachedStudent;
+        }
+      }
 
       if (studentData != null) {
         print('서버에서 가져온 학생: ${studentData.name}');
@@ -433,7 +546,7 @@ class TaskProvider extends ChangeNotifier {
         final individualProgress = <String, TaskProgress>{};
         final groupProgress = <String, TaskProgress>{};
 
-        // 개인 과제 처리
+        // 모든 개인 과제에 대해 상태 초기화
         for (var task in _individualTasks) {
           final value = studentData.individualTasks[task.name];
           final isCompleted = value is Map && value['completed'] == true;
@@ -449,7 +562,7 @@ class TaskProvider extends ChangeNotifier {
           print('과제 상태 설정: ${task.name}, 완료: $isCompleted, 날짜: $completedDate');
         }
 
-        // 단체 과제 처리
+        // 모든 단체 과제에 대해 상태 초기화
         for (var task in _groupTasks) {
           final value = studentData.groupTasks[task.name];
           final isCompleted = value is Map && value['completed'] == true;
@@ -478,7 +591,8 @@ class TaskProvider extends ChangeNotifier {
           attendance: studentData.attendance,
         );
 
-        // 통합 상태 업데이트 (중요)
+        // 캐시 및 전역 상태 업데이트
+        _studentCache[studentId] = student;
         setStudentProgress(student);
 
         print('학생 데이터 동기화 완료: ${student.id}');
@@ -488,16 +602,50 @@ class TaskProvider extends ChangeNotifier {
             '단체 과제 완료: ${groupProgress.values.where((p) => p.isCompleted).length}개');
 
         return student;
+      } else {
+        // 데이터를 가져오지 못한 경우 샘플 데이터 생성
+        print('학생 데이터를 가져오지 못함, 기본 데이터 사용: $studentId');
+
+        // 기본 개인 과제 상태
+        final individualProgress = <String, TaskProgress>{};
+        for (var task in _individualTasks) {
+          individualProgress[task.name] = TaskProgress(
+            taskName: task.name,
+            isCompleted: false,
+          );
+        }
+
+        // 기본 단체 과제 상태
+        final groupProgress = <String, TaskProgress>{};
+        for (var task in _groupTasks) {
+          groupProgress[task.name] = TaskProgress(
+            taskName: task.name,
+            isCompleted: false,
+          );
+        }
+
+        final defaultStudent = StudentProgress(
+          id: studentId,
+          name: '학생',
+          number: 0,
+          group: 1,
+          individualProgress: individualProgress,
+          groupProgress: groupProgress,
+        );
+
+        // 캐시 업데이트
+        _studentCache[studentId] = defaultStudent;
+
+        return defaultStudent;
       }
     } catch (e) {
       print('학생 데이터 동기화 오류: $e');
       _error = '데이터 동기화 오류: $e';
+      return null;
     } finally {
       _isLoading = false;
       notifyListeners();
     }
-
-    return null;
   }
 // 2. task_provider.dart의 _convertToStudentProgress 메서드 수정
 
