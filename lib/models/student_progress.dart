@@ -19,6 +19,7 @@ class StudentProgress {
   final Map<String, TaskProgress> individualProgress;
   final Map<String, TaskProgress> groupProgress;
   final bool attendance;
+  final String studentId; // 추가
 
   StudentProgress({
     required this.id,
@@ -29,6 +30,7 @@ class StudentProgress {
     this.individualProgress = const {},
     this.groupProgress = const {},
     this.attendance = true,
+    this.studentId = '', // 기본값 추가
   });
 
   StudentProgress copyWith({
@@ -40,6 +42,7 @@ class StudentProgress {
     Map<String, TaskProgress>? individualProgress,
     Map<String, TaskProgress>? groupProgress,
     bool? attendance,
+    String? studentId, // 추가
   }) {
     return StudentProgress(
       id: id ?? this.id,
@@ -50,6 +53,7 @@ class StudentProgress {
       individualProgress: individualProgress ?? this.individualProgress,
       groupProgress: groupProgress ?? this.groupProgress,
       attendance: attendance ?? this.attendance,
+      studentId: studentId ?? this.studentId, // 추가
     );
   }
 }

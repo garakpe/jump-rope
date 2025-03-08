@@ -19,52 +19,10 @@ class TaskService {
   }
 
   void _initializeSampleData() {
-    // 샘플 학생 데이터 생성
-    final students = [
-      FirebaseStudentModel(
-        id: '101',
-        name: '김철수',
-        studentId: '12345',
-        className: '1',
-        classNum: '1',
-        group: 1,
-        individualTasks: {
-          '양발모아 뛰기': {
-            'completed': true,
-            'completedDate': '2023-09-10 10:00:00'
-          },
-          '구보로 뛰기': {'completed': false, 'completedDate': null},
-        },
-        groupTasks: {},
-        attendance: true,
-      ),
-      FirebaseStudentModel(
-        id: '102',
-        name: '홍길동',
-        studentId: '67890',
-        className: '1',
-        classNum: '1',
-        group: 2,
-        individualTasks: {
-          '양발모아 뛰기': {
-            'completed': true,
-            'completedDate': '2023-09-11 11:00:00'
-          },
-        },
-        groupTasks: {},
-        attendance: true,
-      ),
-    ];
-
-    // 데이터 저장
-    for (var student in students) {
-      _students[student.id] = student;
-
-      if (!_studentsByClass.containsKey(student.className)) {
-        _studentsByClass[student.className] = [];
-      }
-      _studentsByClass[student.className]!.add(student);
-    }
+    // 샘플 데이터 제거, 필요한 초기화만 수행
+    _students.clear();
+    _studentsByClass.clear();
+    print('데이터 저장소 초기화 완료');
   }
 
   // 앱 시작 시 저장된 보류 중인 업데이트 로드
@@ -98,46 +56,81 @@ class TaskService {
 
 // task_service.dart 파일에 다음 메서드 추가
 
-// 학생 데이터 직접 가져오기 (새로고침용)
+// getStudentDataDirectly 함수 수정
   Future<FirebaseStudentModel?> getStudentDataDirectly(String studentId) async {
+    if (studentId.isEmpty) {
+      print('잘못된 학생 ID: 빈 문자열');
+      return null;
+    }
+
     try {
       print('서버에서 학생 데이터 직접 요청: $studentId');
 
-      // Firebase에서 학생 데이터 직접 가져오기
-      QuerySnapshot querySnapshot = await _firestore
-          .collection('students')
-          .where('studentId', isEqualTo: studentId)
-          .limit(1)
-          .get();
+      // 최대 2번까지 재시도하는 로직 추가
+      int retryCount = 0;
+      const maxRetries = 2;
 
-      if (querySnapshot.docs.isEmpty) {
-        print('학생 정보를 찾을 수 없습니다: $studentId');
-        return null;
+      while (true) {
+        try {
+          // Firebase에서 학생 데이터 직접 가져오기
+          QuerySnapshot querySnapshot = await _firestore
+              .collection('students')
+              .where('studentId', isEqualTo: studentId)
+              .limit(1)
+              .get()
+              .timeout(const Duration(seconds: 5)); // 타임아웃 추가
+
+          if (querySnapshot.docs.isEmpty) {
+            print('학생 정보를 찾을 수 없습니다: $studentId');
+            // studentId로 찾지 못했다면 id로도 시도
+            querySnapshot = await _firestore
+                .collection('students')
+                .where('id', isEqualTo: studentId)
+                .limit(1)
+                .get()
+                .timeout(const Duration(seconds: 5));
+
+            if (querySnapshot.docs.isEmpty) {
+              print('id로도 학생 정보를 찾을 수 없습니다: $studentId');
+              return null;
+            }
+          }
+
+          // 학생 정보 파싱
+          final student =
+              FirebaseStudentModel.fromFirestore(querySnapshot.docs.first);
+
+          // 로컬 캐시 업데이트
+          _students[student.id] = student;
+
+          // 학급별 캐시도 업데이트
+          if (!_studentsByClass.containsKey(student.className)) {
+            _studentsByClass[student.className] = [];
+          }
+
+          // 기존 학생 정보가 있는지 확인
+          final index = _studentsByClass[student.className]!
+              .indexWhere((s) => s.id == student.id);
+          if (index >= 0) {
+            _studentsByClass[student.className]![index] = student;
+          } else {
+            _studentsByClass[student.className]!.add(student);
+          }
+
+          print('학생 데이터 직접 가져오기 성공: ${student.name} (${student.studentId})');
+          return student;
+        } catch (e) {
+          retryCount++;
+          print('학생 데이터 요청 실패 ($retryCount/$maxRetries): $e');
+
+          if (retryCount >= maxRetries) {
+            throw Exception('여러 번 시도 후에도 데이터를 가져오지 못했습니다: $e');
+          }
+
+          // 재시도 전 잠시 대기
+          await Future.delayed(Duration(milliseconds: 500 * retryCount));
+        }
       }
-
-      // 학생 정보 파싱
-      final student =
-          FirebaseStudentModel.fromFirestore(querySnapshot.docs.first);
-
-      // 로컬 캐시 업데이트
-      _students[student.id] = student;
-
-      // 학급별 캐시도 업데이트
-      if (!_studentsByClass.containsKey(student.className)) {
-        _studentsByClass[student.className] = [];
-      }
-
-      // 기존 학생 정보가 있는지 확인
-      final index = _studentsByClass[student.className]!
-          .indexWhere((s) => s.id == student.id);
-      if (index >= 0) {
-        _studentsByClass[student.className]![index] = student;
-      } else {
-        _studentsByClass[student.className]!.add(student);
-      }
-
-      print('학생 데이터 직접 가져오기 성공: ${student.name} (${student.studentId})');
-      return student;
     } catch (e) {
       print('학생 데이터 직접 가져오기 오류: $e');
 
@@ -155,7 +148,7 @@ class TaskService {
         }
       }
 
-      return null;
+      throw Exception('학생 데이터를 가져올 수 없습니다: $e');
     }
   }
 

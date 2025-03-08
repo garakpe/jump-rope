@@ -8,17 +8,31 @@ import '../../providers/auth_provider.dart';
 
 // 현재 학생의 진도 정보 찾기 (일관된 방식으로)
 StudentProgress getCurrentStudent(TaskProvider taskProvider, String studentId) {
+  if (studentId.isEmpty) {
+    return StudentProgress(id: '', name: '로그인 필요', number: 0, group: 0);
+  }
+
   // 캐시에서 먼저 확인
   final cachedStudent = taskProvider.getStudentFromCache(studentId);
   if (cachedStudent != null) {
+    print('캐시에서 학생 데이터 찾음: $studentId, 이름: ${cachedStudent.name}');
     return cachedStudent;
   }
 
-  // 없으면 목록에서 검색
-  return taskProvider.students.firstWhere(
-      (s) => s.id == studentId || s.id == studentId,
-      orElse: () =>
-          StudentProgress(id: studentId, name: '', number: 0, group: 0));
+  // 목록에서 검색
+  try {
+    final student = taskProvider.students.firstWhere(
+      (s) => s.id == studentId,
+      orElse: () => throw Exception('학생을 찾을 수 없음'),
+    );
+
+    print('학생 목록에서 데이터 찾음: $studentId');
+    return student;
+  } catch (e) {
+    print('학생 검색 실패: $e, 기본 데이터 사용');
+    return StudentProgress(
+        id: studentId, name: '데이터 로딩 중', number: 0, group: 0);
+  }
 }
 
 class ProgressScreen extends StatelessWidget {
@@ -31,10 +45,64 @@ class ProgressScreen extends StatelessWidget {
     final stampCount = taskProvider.stampCount;
     final students = taskProvider.students;
     final isLoading = taskProvider.isLoading;
+    final error = taskProvider.error;
 
+    // 로딩 중 표시
     if (isLoading) {
       return const Center(
-        child: CircularProgressIndicator(),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            CircularProgressIndicator(),
+            SizedBox(height: 16),
+            Text('데이터를 불러오는 중입니다...'),
+          ],
+        ),
+      );
+    }
+
+    // 에러 메시지가 있고 학생 데이터가 없는 경우 오류 UI 표시
+    if (error.isNotEmpty && students.isEmpty) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Icon(Icons.error_outline, size: 48, color: Colors.orange),
+            const SizedBox(height: 16),
+            Text(
+              '데이터 불러오기 오류',
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+                color: Colors.orange.shade800,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 32),
+              child: Text(
+                error,
+                textAlign: TextAlign.center,
+                style: TextStyle(color: Colors.grey.shade700),
+              ),
+            ),
+            const SizedBox(height: 24),
+            ElevatedButton.icon(
+              icon: const Icon(Icons.refresh),
+              label: const Text('다시 시도'),
+              onPressed: () {
+                // 데이터 새로고침 시도
+                final authProvider =
+                    Provider.of<AuthProvider>(context, listen: false);
+                final user = authProvider.userInfo;
+                final studentId = user?.studentId ?? '';
+                if (studentId.isNotEmpty) {
+                  taskProvider.refreshStudentData(studentId);
+                }
+              },
+            ),
+          ],
+        ),
       );
     }
 
@@ -144,14 +212,42 @@ class ProgressScreen extends StatelessWidget {
     final taskProvider = Provider.of<TaskProvider>(context);
     final authProvider = Provider.of<AuthProvider>(context);
     final user = authProvider.userInfo;
+
+    // 그룹 정보 가져오기 (기본값 1)
     final group = int.tryParse(user?.group ?? '1') ?? 1;
 
     // 내 학생 ID 찾기
     final myId = user?.studentId ?? '';
 
     // 모둠 정보를 가져와서 모둠원 필터링
-    final groupStudents = students.where((s) => s.group == group).toList();
-    groupStudents.sort((a, b) => a.name.compareTo(b.name)); // 이름순 정렬
+    var groupStudents = students.where((s) => s.group == group).toList();
+
+    // 그룹 멤버가 없을 경우 현재 로그인한 학생 추가
+    if (groupStudents.isEmpty && myId.isNotEmpty) {
+      // 캐시에서 학생 정보 찾기
+      final myInfo = taskProvider.getStudentFromCache(myId);
+      if (myInfo != null) {
+        groupStudents = [myInfo];
+        print('모둠원이 없어 현재 학생만 표시: ${myInfo.name} (그룹: ${myInfo.group})');
+      } else {
+        // 학생 데이터 다시 요청 (백그라운드로 처리)
+        print('모둠원 데이터가 없어 현재 학생 정보 요청: $myId');
+        Future.microtask(() => taskProvider.syncStudentDataFromServer(myId));
+
+        // 임시 학생 데이터 생성 (빈 화면 방지)
+        groupStudents = [
+          StudentProgress(
+            id: myId,
+            name: user?.name ?? '로딩 중...',
+            number: 0,
+            group: group,
+          )
+        ];
+      }
+    }
+
+    // 이름순 정렬
+    groupStudents.sort((a, b) => a.name.compareTo(b.name));
 
     // 모둠 자격 조건 확인 (단체줄넘기 활성화 여부)
     bool canDoGroupTask = false;
@@ -159,6 +255,34 @@ class ProgressScreen extends StatelessWidget {
       canDoGroupTask = taskProvider.canStartGroupActivities(group);
     } catch (e) {
       print('단체줄넘기 자격 확인 오류: $e');
+    }
+
+    // 데이터가 없는 경우 안내 메시지
+    if (groupStudents.isEmpty) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.group_off, size: 64, color: Colors.grey.shade300),
+            const SizedBox(height: 16),
+            Text(
+              '모둠원 데이터를 찾을 수 없습니다',
+              style: TextStyle(color: Colors.grey.shade600),
+            ),
+            const SizedBox(height: 24),
+            ElevatedButton.icon(
+              icon: const Icon(Icons.refresh),
+              label: const Text('새로고침'),
+              onPressed: () {
+                // 데이터 새로고침 시도
+                if (myId.isNotEmpty) {
+                  taskProvider.refreshStudentData(myId);
+                }
+              },
+            ),
+          ],
+        ),
+      );
     }
 
     return DataTable(

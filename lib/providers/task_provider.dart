@@ -354,54 +354,13 @@ class TaskProvider extends ChangeNotifier {
     }
   }
 
-  // 샘플 학생 데이터 로드
+// 변경 후
   void _loadSampleStudents() {
-    // 샘플 데이터 - 실제로는 Firebase에서 가져와야 함
-    final sampleStudents = [
-      StudentProgress(
-        id: '101',
-        name: '김철수',
-        number: 1,
-        group: 1,
-        individualProgress: {
-          '양발모아 뛰기': TaskProgress(
-              taskName: '양발모아 뛰기',
-              isCompleted: true,
-              completedDate: '2023-09-10'),
-          '구보로 뛰기': TaskProgress(taskName: '구보로 뛰기', isCompleted: false),
-        },
-        groupProgress: {},
-      ),
-      StudentProgress(
-        id: '102',
-        name: '홍길동',
-        number: 2,
-        group: 1,
-        individualProgress: {
-          '양발모아 뛰기': TaskProgress(taskName: '양발모아 뛰기', isCompleted: false),
-        },
-        groupProgress: {},
-      ),
-      StudentProgress(
-        id: '103',
-        name: '이영희',
-        number: 3,
-        group: 2,
-        individualProgress: {
-          '양발모아 뛰기': TaskProgress(
-              taskName: '양발모아 뛰기',
-              isCompleted: true,
-              completedDate: '2023-09-11'),
-          '구보로 뛰기': TaskProgress(
-              taskName: '구보로 뛰기',
-              isCompleted: true,
-              completedDate: '2023-09-12'),
-        },
-        groupProgress: {},
-      ),
-    ];
-
-    _students = sampleStudents;
+    // 샘플 데이터 제거
+    _students = [];
+    _error = '데이터를 불러올 수 없습니다. 네트워크 연결을 확인하세요.';
+    _isOffline = true;
+    print('샘플 데이터 대신 빈 목록 사용');
     _calculateStampCount();
     notifyListeners();
   }
@@ -504,9 +463,15 @@ class TaskProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-// 수정할 코드
+// 변경 후
   Future<StudentProgress?> syncStudentDataFromServer(String studentId) async {
     if (studentId.isEmpty) return null;
+
+    // 이미 로딩 중이면 중복 작업 방지
+    if (_isLoading) {
+      print('이미 데이터 동기화 중입니다. 기존 요청의 완료를 기다립니다');
+      return _studentCache[studentId];
+    }
 
     _isLoading = true;
     _error = '';
@@ -515,18 +480,33 @@ class TaskProvider extends ChangeNotifier {
     try {
       print('서버에서 학생 데이터 동기화 시작: $studentId');
 
-      // 서버에서 학생 데이터 가져오기 시도
+      // 서버에서 학생 데이터 가져오기 시도 (타임아웃 설정)
       FirebaseStudentModel? studentData;
       try {
-        studentData = await _taskService.getStudentDataDirectly(studentId);
+        studentData = await _taskService
+            .getStudentDataDirectly(studentId)
+            .timeout(const Duration(seconds: 10), onTimeout: () {
+          print('데이터 요청 시간 초과 (10초)');
+          throw TimeoutException('서버 응답 시간 초과. 나중에 다시 시도하세요.');
+        });
       } catch (e) {
-        print('Firebase 데이터 가져오기 실패, 로컬 데이터 사용: $e');
-        // Firebase에서 실패하면 로컬 캐시 확인
+        print('Firebase 데이터 가져오기 실패: $e');
+
+        // Firebase에서 실패했지만 캐시된 데이터가 있는 경우
         final cachedStudent = _studentCache[studentId];
         if (cachedStudent != null) {
           print('로컬 캐시에서 학생 데이터 사용: $studentId');
+          _error = '서버 연결 문제로 로컬 데이터를 사용합니다';
+          _isLoading = false;
+          notifyListeners();
           return cachedStudent;
         }
+
+        // 캐시도 없는 경우 에러 표시
+        _error = '학생 데이터를 가져올 수 없습니다: $e';
+        _isLoading = false;
+        notifyListeners();
+        return null;
       }
 
       if (studentData != null) {
@@ -878,13 +858,34 @@ class TaskProvider extends ChangeNotifier {
     return _groupStampCounts[groupNum] ?? 0;
   }
 
-  // 단체줄넘기 시작 가능 여부 확인
+// 변경 후
   bool canStartGroupActivities(int groupId) {
-    // 같은 그룹의 모든 학생 찾기
-    final groupStudents = _students.where((s) => s.group == groupId).toList();
+    // 유효한 그룹 ID 확인
+    if (groupId <= 0) {
+      print('잘못된 그룹 ID: $groupId');
+      return false;
+    }
 
+    // 같은 그룹의 모든 학생 찾기 (학생이 없으면 현재 로그인한 학생이라도 포함)
+    List<StudentProgress> groupStudents =
+        _students.where((s) => s.group == groupId).toList();
+
+    // 학생이 없는 경우 캐시에서 검색
     if (groupStudents.isEmpty) {
-      print('그룹 $groupId에 학생이 없습니다.');
+      print('그룹 $groupId에 학생이 없어 캐시에서 검색합니다');
+
+      // 캐시에서 해당 그룹의 학생 찾기
+      _studentCache.forEach((id, student) {
+        if (student.group == groupId &&
+            !groupStudents.any((s) => s.id == student.id)) {
+          groupStudents.add(student);
+        }
+      });
+    }
+
+    // 여전히 학생이 없는 경우
+    if (groupStudents.isEmpty) {
+      print('그룹 $groupId에 학생을 찾을 수 없습니다');
       return false;
     }
 
@@ -899,7 +900,7 @@ class TaskProvider extends ChangeNotifier {
     int neededSuccesses = groupStudents.length * 5;
 
     print(
-        '단체줄넘기 자격 확인 - 그룹 $groupId: 성공 $totalSuccesses개, 필요 $neededSuccesses개');
+        '단체줄넘기 자격 확인 - 그룹 $groupId: 학생 ${groupStudents.length}명, 성공 $totalSuccesses개, 필요 $neededSuccesses개');
 
     return totalSuccesses >= neededSuccesses;
   }
