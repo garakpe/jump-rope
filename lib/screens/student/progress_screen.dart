@@ -8,37 +8,52 @@ import '../../providers/auth_provider.dart';
 
 // 현재 학생의 진도 정보 찾기 (일관된 방식으로)
 // 변경 후
+// 변경 후
 StudentProgress getCurrentStudent(TaskProvider taskProvider, String studentId) {
   if (studentId.isEmpty) {
     return StudentProgress(
-        id: studentId,
-        name: '',
-        number: 0,
-        group: 0,
-        studentId: studentId // 학번 정보 유지
-        );
+        id: studentId, name: '', number: 0, group: 0, studentId: studentId);
   }
 
   // 캐시에서 먼저 확인
   final cachedStudent = taskProvider.getStudentFromCache(studentId);
   if (cachedStudent != null) {
     print('캐시에서 학생 데이터 찾음: $studentId, 이름: ${cachedStudent.name}');
+
+    // 학번이 비어있는지 확인
+    if (cachedStudent.studentId.isEmpty) {
+      print('경고: 캐시된 학생의 학번이 비어있음. ID 대체: $studentId');
+      return cachedStudent.copyWith(studentId: studentId);
+    }
+
     return cachedStudent;
   }
 
-  // 목록에서 검색
+  // 목록에서 검색 - ID 또는 studentId로 찾기
   try {
     final student = taskProvider.students.firstWhere(
-      (s) => s.id == studentId,
+      (s) => s.id == studentId || s.studentId == studentId,
       orElse: () => throw Exception('학생을 찾을 수 없음'),
     );
 
     print('학생 목록에서 데이터 찾음: $studentId');
+
+    // 학번이 비어있는지 확인
+    if (student.studentId.isEmpty) {
+      print('경고: 찾은 학생의 학번이 비어있음. ID 대체: $studentId');
+      return student.copyWith(studentId: studentId);
+    }
+
     return student;
   } catch (e) {
-    print('학생 검색 실패: $e, 기본 데이터 사용');
+    print('학생 검색 실패: $e, 기본 데이터 생성');
     return StudentProgress(
-        id: studentId, name: '데이터 로딩 중', number: 0, group: 0);
+        id: studentId,
+        name: '데이터 로딩 중',
+        number: 0,
+        group: 0,
+        studentId: studentId // 항상 studentId 설정
+        );
   }
 }
 
@@ -231,6 +246,7 @@ class ProgressScreen extends StatelessWidget {
     // 1. 현재 로그인한 학생 정보 가져오기
     final myInfo = taskProvider.getStudentFromCache(myId);
 
+// 변경 후
     var groupStudents = students.where((s) {
       // 1. 같은 그룹 학생 필터링
       final sameGroup = s.group == group;
@@ -245,44 +261,46 @@ class ProgressScreen extends StatelessWidget {
       bool sameClass = false;
 
       try {
-        // 현재 사용자의 학번
+        // 현재 사용자의 학번 (반드시 있어야 함)
         String myStudentId = user?.studentId ?? '';
+        if (myStudentId.isEmpty) {
+          print('내 학번이 비어있음! 필터링 불가능');
+          return false; // 내 학번이 없으면 필터링 불가능
+        }
 
         // 비교할 학생의 학번
         String otherStudentId = s.studentId;
+        if (otherStudentId.isEmpty) {
+          print('학생 ${s.name}의 학번이 비어있음, 제외');
+          return false; // 상대방 학번이 없으면 제외
+        }
 
+        // 학번에서 학년+반 코드 추출 (앞 3자리)
+        // 학번이 5자리라고 가정 (1학년 5반 16번 -> 10516)
         if (myStudentId.length >= 3 && otherStudentId.length >= 3) {
-          // 학번 앞 3자리가 학년+반 정보를 나타냄
           String myClassCode = myStudentId.substring(0, 3);
           String otherClassCode = otherStudentId.substring(0, 3);
 
           sameClass = myClassCode == otherClassCode;
 
           print(
-              '학생 ${s.name} - 같은 반 여부: 내 학번=$myStudentId($myClassCode), 학생=$otherStudentId($otherClassCode), 일치=$sameClass');
+              '학생 ${s.name} - 반 비교: 내 반=$myClassCode, 학생=$otherClassCode, 일치=$sameClass');
         } else {
-          // 학번 길이가 불충분하면, 안전하게 같은 반으로 간주
-          sameClass = true;
-          print('학번 길이 부족: 내=$myStudentId, 학생=${s.studentId}, 같은 반으로 간주');
+          // 학번 길이가 불충분하면 제외 (안전하게 같은 반으로 간주하지 않음)
+          print('학번 길이 부족: 내=$myStudentId, 학생=$otherStudentId, 제외');
+          return false;
         }
       } catch (e) {
         print('학번 비교 오류: $e');
-        // 오류 시 안전하게 같은 반으로 간주
-        sameClass = true;
+        return false; // 오류 발생 시 제외 (안전하게 포함시키지 않음)
       }
 
       return sameGroup && sameClass;
     }).toList();
 
-    print('필터링 후 모둠원 수: ${groupStudents.length}명 (그룹 $group, 반 $classNum)');
+    print('필터링 후 모둠원 수: ${groupStudents.length}명 (그룹 $group, 반$classNum)');
 
-    // 조회된 그룹원이 없는 경우 자신만 표시
-    if (groupStudents.isEmpty && myInfo != null) {
-      groupStudents = [myInfo];
-      print('같은 반 모둠원 없음. 현재 학생만 표시: ${myInfo.name}');
-    }
-
-    // 이름순 정렬
+// 이름순 정렬
     groupStudents.sort((a, b) => a.name.compareTo(b.name));
 
     // 모둠 자격 조건 확인 (단체줄넘기 활성화 여부)

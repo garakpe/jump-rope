@@ -17,6 +17,7 @@ class StudentProgress {
   final String name;
   final int number;
   final int group;
+  final String classNum; // 추가
   final int currentLevel;
   final Map<String, TaskProgress> individualProgress;
   final Map<String, TaskProgress> groupProgress;
@@ -28,6 +29,7 @@ class StudentProgress {
     required this.name,
     required this.number,
     required this.group,
+    this.classNum = '', // 추가
     this.currentLevel = 1,
     this.individualProgress = const {},
     this.groupProgress = const {},
@@ -41,6 +43,7 @@ class StudentProgress {
     int? number,
     int? group,
     int? currentLevel,
+    String? classNum, // 추가
     Map<String, TaskProgress>? individualProgress,
     Map<String, TaskProgress>? groupProgress,
     bool? attendance,
@@ -51,6 +54,7 @@ class StudentProgress {
       name: name ?? this.name,
       number: number ?? this.number,
       group: group ?? this.group,
+      classNum: classNum ?? this.classNum, // 추가
       currentLevel: currentLevel ?? this.currentLevel,
       individualProgress: individualProgress ?? this.individualProgress,
       groupProgress: groupProgress ?? this.groupProgress,

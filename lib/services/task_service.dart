@@ -180,6 +180,7 @@ class TaskService {
     }
   }
 
+// 변경 후
   Future<List<FirebaseStudentModel>> getGroupMembers(
       int groupId, String className) async {
     if (groupId <= 0) {
@@ -192,7 +193,7 @@ class TaskService {
       List<FirebaseStudentModel> result = [];
 
       try {
-        // 단순하게 같은 그룹 멤버만 조회
+        // 단순 쿼리로 변경 - 오직 group 필드만으로 조회
         final querySnapshot = await _firestore
             .collection('students')
             .where('group', isEqualTo: groupId)
@@ -200,26 +201,48 @@ class TaskService {
             .timeout(const Duration(seconds: 10));
 
         if (querySnapshot.docs.isNotEmpty) {
-          result = querySnapshot.docs
-              .map((doc) => FirebaseStudentModel.fromFirestore(doc))
-              .toList();
+          print('그룹 $groupId 학생 ${querySnapshot.docs.length}명 조회됨');
 
-          print('그룹 $groupId의 모든 멤버 ${result.length}명 로드됨');
+          for (var doc in querySnapshot.docs) {
+            try {
+              final student = FirebaseStudentModel.fromFirestore(doc);
 
-          // 캐시에 저장
-          for (var student in result) {
-            _students[student.id] = student;
+              // 메모리에 캐시
+              _students[student.id] = student;
+
+              // 같은 학년/반인 경우만 결과에 포함 (클라이언트 측 필터링)
+              if (className.isEmpty ||
+                  (student.studentId.isNotEmpty &&
+                      student.studentId.length >= 3 &&
+                      student.studentId.substring(0, 1) == className)) {
+                result.add(student);
+                print('학생 추가: ${student.name} (${student.studentId})');
+              }
+            } catch (e) {
+              print('학생 파싱 오류: $e');
+            }
           }
+
+          print('필터링 후 그룹 $groupId의 모둠원 ${result.length}명 추가됨');
         } else {
           print('그룹 $groupId에 해당하는 학생이 없습니다');
         }
       } catch (e) {
-        print('모둠원 조회 오류: $e');
+        print('모둠원 조회 쿼리 오류: $e');
+
+        // 로컬 캐시에서 조회 시도
+        if (_students.isNotEmpty) {
+          print('로컬 캐시에서 모둠원 조회 시도 - 캐시된 학생 수: ${_students.length}명');
+          result = _students.values
+              .where((student) => student.group == groupId)
+              .toList();
+          print('로컬 캐시에서 그룹 $groupId 모둠원 ${result.length}명 찾음');
+        }
       }
 
       return result;
     } catch (e) {
-      print('모둠원 조회 오류: $e');
+      print('모둠원 통합 조회 오류: $e');
       return [];
     }
   }

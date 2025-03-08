@@ -313,20 +313,28 @@ class TaskProvider extends ChangeNotifier {
           );
         }
 
-        // 학생 진도 정보 생성
+// 변경 후
+// 학번 유효성 검사
+        String studentId = memberData.studentId;
+        if (studentId.isEmpty) {
+          print('경고: ${memberData.name}의 학번이 비어있습니다. 임시 학번 생성');
+          // 임시 학번 생성: 학년(className) + 01 + 카운터
+          studentId = '${className}01${memberData.id.substring(0, 2)}';
+        }
+
+// 학생 진도 정보 생성
         final memberProgress = StudentProgress(
           id: memberData.id,
           name: memberData.name,
-          number: int.tryParse(memberData.studentId.substring(
-                  memberData.studentId.length > 2
-                      ? memberData.studentId.length - 2
-                      : 0)) ??
+          number: int.tryParse(studentId.length > 2
+                  ? studentId.substring(studentId.length - 2)
+                  : "0") ??
               0,
           group: memberData.group,
           individualProgress: individualProgress,
           groupProgress: groupProgress,
           attendance: memberData.attendance,
-          studentId: '',
+          studentId: studentId, // 검증된 학번 사용
         );
 
         // 캐시 및 전역 상태 업데이트
