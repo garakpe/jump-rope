@@ -142,6 +142,31 @@ class TaskProvider extends ChangeNotifier {
     return _studentCache[studentId];
   }
 
+// task_provider.dart 클래스 내에 다음 메서드 추가
+
+  bool isInSameClass(StudentProgress student1, StudentProgress student2) {
+    // 1. 기본 확인 - 같은 학생이면 당연히 같은 반
+    if (student1.id == student2.id) return true;
+
+    // 2. 학번 체계 기반 비교 (학번 앞 3자리로 비교) - 가장 안정적인 방법
+    if (student1.studentId.length >= 5 && student2.studentId.length >= 5) {
+      try {
+        // 학번에서 반 정보 추출 (앞 3자리)
+        final classInfo1 = student1.studentId.substring(0, 3);
+        final classInfo2 = student2.studentId.substring(0, 3);
+
+        print(
+            '반 정보 비교: 학생1=${student1.name}($classInfo1), 학생2=${student2.name}($classInfo2), 일치=${classInfo1 == classInfo2}');
+        return classInfo1 == classInfo2;
+      } catch (e) {
+        print('학번 비교 실패: ${student1.studentId} vs ${student2.studentId} - $e');
+      }
+    }
+
+    // 학번으로 비교할 수 없는 경우 안전하게 false 리턴
+    return false;
+  }
+
   // 사용자 변경 시 호출되는 메서드 (AuthProvider에서 호출)
   void handleUserChanged(String? newStudentId, int? groupId) {
     print('사용자 변경됨: 학생ID=$newStudentId, 그룹=$groupId');
@@ -301,6 +326,7 @@ class TaskProvider extends ChangeNotifier {
           individualProgress: individualProgress,
           groupProgress: groupProgress,
           attendance: memberData.attendance,
+          studentId: '',
         );
 
         // 캐시 및 전역 상태 업데이트
@@ -580,7 +606,7 @@ class TaskProvider extends ChangeNotifier {
           );
         }
 
-        // 학생 진도 정보 생성
+// 변경 후
         final student = StudentProgress(
           id: studentData.id,
           name: studentData.name,
@@ -593,18 +619,24 @@ class TaskProvider extends ChangeNotifier {
           individualProgress: individualProgress,
           groupProgress: groupProgress,
           attendance: studentData.attendance,
+          studentId: studentData.studentId, // 추가: 실제 학번
         );
 
         // 캐시 및 전역 상태 업데이트
         _studentCache[studentId] = student;
         setStudentProgress(student);
 
-        // 모둠원 데이터 함께 로드 (그룹 ID가 있는 경우)
+// 변경 후
         final groupId = studentData.group;
         if (groupId > 0) {
-          print('학생 $studentId의 그룹 멤버 로드: 그룹 $groupId');
+          // 학급 정보 결정 (classNum 우선, 없으면 className)
+          final classInfo = studentData.classNum.isNotEmpty
+              ? studentData.classNum
+              : studentData.className;
+
+          print('학생 $studentId의 그룹 멤버 로드: 그룹 $groupId, 반 $classInfo');
           // 그룹 멤버 로드 (비동기 실행)
-          loadGroupMembers(groupId, studentData.className);
+          loadGroupMembers(groupId, classInfo);
         }
 
         print('학생 데이터 동기화 완료: ${student.id}');
@@ -698,6 +730,7 @@ class TaskProvider extends ChangeNotifier {
         print('학번 파싱 오류: ${student.studentId} - $e');
       }
 
+// 변경 후
       progressList.add(StudentProgress(
         id: student.id,
         name: student.name,
@@ -706,6 +739,7 @@ class TaskProvider extends ChangeNotifier {
         individualProgress: individualProgress,
         groupProgress: groupProgress,
         attendance: student.attendance,
+        studentId: student.studentId, // studentId 필드 추가
       ));
     }
 
@@ -995,6 +1029,7 @@ class TaskProvider extends ChangeNotifier {
           individualProgress: individualProgress,
           groupProgress: groupProgress,
           attendance: studentData.attendance,
+          studentId: '',
         );
 
         // 학생 목록에 추가
@@ -1056,6 +1091,18 @@ class TaskProvider extends ChangeNotifier {
     } else {
       _error = '네트워크 연결을 확인해주세요.';
       notifyListeners();
+    }
+  }
+
+  // task_provider.dart에 추가
+// 학생 ID로 원본 Firebase 학생 데이터 가져오기
+  FirebaseStudentModel? getOriginalStudentData(String studentId) {
+    try {
+      // _taskService의 캐시된 학생 데이터 접근
+      return _taskService.getCachedStudentData(studentId);
+    } catch (e) {
+      print('원본 학생 데이터 조회 오류: $e');
+      return null;
     }
   }
 }

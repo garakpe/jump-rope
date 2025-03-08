@@ -650,7 +650,8 @@ class _ProgressManagementState extends State<ProgressManagement> {
       // 해당 학생 찾기
       final student = taskProvider.students.firstWhere(
         (s) => s.id == studentId,
-        orElse: () => StudentProgress(id: "", name: "", number: 0, group: 0),
+        orElse: () => StudentProgress(
+            id: "", name: "", number: 0, group: 0, studentId: ''),
       );
 
       // 이미 완료된 과제인지 확인

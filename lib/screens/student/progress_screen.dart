@@ -7,9 +7,16 @@ import '../../models/ui_models.dart';
 import '../../providers/auth_provider.dart';
 
 // 현재 학생의 진도 정보 찾기 (일관된 방식으로)
+// 변경 후
 StudentProgress getCurrentStudent(TaskProvider taskProvider, String studentId) {
   if (studentId.isEmpty) {
-    return StudentProgress(id: '', name: '로그인 필요', number: 0, group: 0);
+    return StudentProgress(
+        id: studentId,
+        name: '',
+        number: 0,
+        group: 0,
+        studentId: studentId // 학번 정보 유지
+        );
   }
 
   // 캐시에서 먼저 확인
@@ -207,7 +214,6 @@ class ProgressScreen extends StatelessWidget {
     );
   }
 
-// 변경 후
   Widget buildProgressTable(
       BuildContext context, List<StudentProgress> students) {
     final taskProvider = Provider.of<TaskProvider>(context);
@@ -217,47 +223,63 @@ class ProgressScreen extends StatelessWidget {
     // 내 학생 ID 및 그룹 정보 찾기
     final myId = user?.studentId ?? '';
     final group = int.tryParse(user?.group ?? '1') ?? 1;
+    final classNum = user?.classNum ?? ''; // 반 정보 추가
 
-    print('진도표 구성: 학생ID=$myId, 그룹=$group, 전체 학생 수=${students.length}');
+    print(
+        '진도표 구성: 학생ID=$myId, 그룹=$group, 반=$classNum, 전체 학생 수=${students.length}');
 
-    // 1. 캐시된 그룹원 먼저 확인
-    var groupStudents = students.where((s) => s.group == group).toList();
+    // 1. 현재 로그인한 학생 정보 가져오기
+    final myInfo = taskProvider.getStudentFromCache(myId);
 
-    // 2. 그룹원이 없을 경우 서버에서 다시 로드 시도
-    if (groupStudents.isEmpty && myId.isNotEmpty && !taskProvider.isLoading) {
-      print('모둠원 데이터가 없어서 서버에서 로드 시도: 그룹=$group, 학생ID=$myId');
+    var groupStudents = students.where((s) {
+      // 1. 같은 그룹 학생 필터링
+      final sameGroup = s.group == group;
 
-      // 현재 학생 로드 + 모둠원 함께 로드 (백그라운드 실행)
-      Future.microtask(() {
-        taskProvider.syncStudentDataFromServer(myId).then((_) {
-          if (group > 0) {
-            taskProvider.loadGroupMembers(group, user?.className ?? '1');
-          }
-        });
-      });
+      // 2. 자기 자신은 항상 포함
+      if (s.id == myId) return true;
 
-      // 임시로 현재 학생 정보만 표시
-      final myInfo = taskProvider.getStudentFromCache(myId);
-      if (myInfo != null) {
-        groupStudents = [myInfo];
-        print('현재는 로그인한 학생만 표시: ${myInfo.name}');
-      } else {
-        groupStudents = [
-          StudentProgress(
-            id: myId,
-            name: user?.name ?? '데이터 로딩 중...',
-            number: 0,
-            group: group,
-          )
-        ];
+      // 3. 같은 그룹이 아니면 제외
+      if (!sameGroup) return false;
+
+      // 4. 같은 반인지 확인 (studentId 필드 사용)
+      bool sameClass = false;
+
+      try {
+        // 현재 사용자의 학번
+        String myStudentId = user?.studentId ?? '';
+
+        // 비교할 학생의 학번
+        String otherStudentId = s.studentId;
+
+        if (myStudentId.length >= 3 && otherStudentId.length >= 3) {
+          // 학번 앞 3자리가 학년+반 정보를 나타냄
+          String myClassCode = myStudentId.substring(0, 3);
+          String otherClassCode = otherStudentId.substring(0, 3);
+
+          sameClass = myClassCode == otherClassCode;
+
+          print(
+              '학생 ${s.name} - 같은 반 여부: 내 학번=$myStudentId($myClassCode), 학생=$otherStudentId($otherClassCode), 일치=$sameClass');
+        } else {
+          // 학번 길이가 불충분하면, 안전하게 같은 반으로 간주
+          sameClass = true;
+          print('학번 길이 부족: 내=$myStudentId, 학생=${s.studentId}, 같은 반으로 간주');
+        }
+      } catch (e) {
+        print('학번 비교 오류: $e');
+        // 오류 시 안전하게 같은 반으로 간주
+        sameClass = true;
       }
-    }
 
-    // 3. 다른 로그인 사용자의 학생 데이터가 섞여 있는지 확인하고 필터링
-    if (groupStudents.isNotEmpty && myId.isNotEmpty) {
-      // 자신과 같은 그룹에 속한 학생만 필터링
-      groupStudents = groupStudents.where((s) => s.group == group).toList();
-      print('필터링 후 모둠원 수: ${groupStudents.length}명 (그룹 $group)');
+      return sameGroup && sameClass;
+    }).toList();
+
+    print('필터링 후 모둠원 수: ${groupStudents.length}명 (그룹 $group, 반 $classNum)');
+
+    // 조회된 그룹원이 없는 경우 자신만 표시
+    if (groupStudents.isEmpty && myInfo != null) {
+      groupStudents = [myInfo];
+      print('같은 반 모둠원 없음. 현재 학생만 표시: ${myInfo.name}');
     }
 
     // 이름순 정렬

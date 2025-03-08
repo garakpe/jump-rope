@@ -19,11 +19,15 @@ StudentProgress getCurrentStudent(TaskProvider taskProvider, String studentId) {
     return cachedStudent;
   }
 
-  // 없으면 목록에서 검색
   return taskProvider.students.firstWhere(
       (s) => s.id == studentId || s.id == studentId,
-      orElse: () =>
-          StudentProgress(id: studentId, name: '', number: 0, group: 0));
+      orElse: () => StudentProgress(
+          id: studentId,
+          name: '',
+          number: 0,
+          group: 0,
+          studentId: studentId // 추가: 학번을 ID와 동일하게 설정
+          ));
 }
 
 class StudentDashboard extends StatefulWidget {
@@ -266,7 +270,8 @@ class _StudentDashboardState extends State<StudentDashboard>
               id: studentId,
               name: user?.name ?? '',
               number: 0,
-              group: int.tryParse(user?.group ?? '1') ?? 1);
+              group: int.tryParse(user?.group ?? '1') ?? 1,
+              studentId: '');
         });
       } catch (e) {
         print('학생 데이터 검색 오류: $e');
@@ -274,7 +279,8 @@ class _StudentDashboardState extends State<StudentDashboard>
             id: studentId,
             name: user?.name ?? '',
             number: 0,
-            group: int.tryParse(user?.group ?? '1') ?? 1);
+            group: int.tryParse(user?.group ?? '1') ?? 1,
+            studentId: '');
       }
     }
 

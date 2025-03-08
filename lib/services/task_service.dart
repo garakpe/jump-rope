@@ -17,6 +17,50 @@ class TaskService {
     _initializeSampleData();
     loadPendingUpdates();
   }
+  // task_service.dart에 추가
+// 로컬 캐시에서 학생 데이터 조회
+  FirebaseStudentModel? getCachedStudentData(String studentId) {
+    return _students[studentId];
+  }
+
+// task_service.dart 클래스 내에 다음 메서드 추가
+
+  bool areStudentsInSameClass(String id1, String id2) {
+    // 1. id가 같으면 당연히 같은 학생
+    if (id1 == id2) return true;
+
+    // 2. 학번 비교 (학번의 앞 3자리를 비교)
+    if (id1.length >= 5 && id2.length >= 5) {
+      try {
+        final classCode1 = id1.substring(0, 3);
+        final classCode2 = id2.substring(0, 3);
+        print(
+            '학급 비교: $id1($classCode1) vs $id2($classCode2), 결과=${classCode1 == classCode2}');
+        return classCode1 == classCode2;
+      } catch (e) {
+        print('학번 비교 오류: $e');
+      }
+    }
+
+    // 3. 캐시된 Firebase 모델을 활용한 비교
+    final model1 = _students[id1];
+    final model2 = _students[id2];
+
+    if (model1 != null && model2 != null) {
+      // classNum이 있으면 그것을 비교
+      if (model1.classNum.isNotEmpty && model2.classNum.isNotEmpty) {
+        return model1.classNum == model2.classNum;
+      }
+
+      // className이 있으면 그것을 비교
+      if (model1.className.isNotEmpty && model2.className.isNotEmpty) {
+        return model1.className == model2.className;
+      }
+    }
+
+    // 정보가 부족해 비교 불가능
+    return false;
+  }
 
   void _initializeSampleData() {
     // 샘플 데이터 제거, 필요한 초기화만 수행
@@ -53,8 +97,6 @@ class TaskService {
       print('보류 중인 업데이트 저장 오류: $e');
     }
   }
-
-// task_service.dart 파일에 다음 메서드 추가
 
 // getStudentDataDirectly 함수 수정
   Future<FirebaseStudentModel?> getStudentDataDirectly(String studentId) async {
@@ -103,20 +145,6 @@ class TaskService {
           // 로컬 캐시 업데이트
           _students[student.id] = student;
 
-          // 학급별 캐시도 업데이트
-          if (!_studentsByClass.containsKey(student.className)) {
-            _studentsByClass[student.className] = [];
-          }
-
-          // 기존 학생 정보가 있는지 확인
-          final index = _studentsByClass[student.className]!
-              .indexWhere((s) => s.id == student.id);
-          if (index >= 0) {
-            _studentsByClass[student.className]![index] = student;
-          } else {
-            _studentsByClass[student.className]!.add(student);
-          }
-
           print('학생 데이터 직접 가져오기 성공: ${student.name} (${student.studentId})');
           return student;
         } catch (e) {
@@ -152,7 +180,6 @@ class TaskService {
     }
   }
 
-// 변경 후
   Future<List<FirebaseStudentModel>> getGroupMembers(
       int groupId, String className) async {
     if (groupId <= 0) {
@@ -164,55 +191,38 @@ class TaskService {
       print('모둠원 데이터 조회: 그룹=$groupId, 학년=$className');
       List<FirebaseStudentModel> result = [];
 
-      // 그룹 필터만 사용하여 쿼리 (다른 조건 제거)
       try {
-        // 일관성을 위해 그룹 ID만으로 검색
+        // 단순하게 같은 그룹 멤버만 조회
         final querySnapshot = await _firestore
             .collection('students')
             .where('group', isEqualTo: groupId)
             .get()
             .timeout(const Duration(seconds: 10));
 
-        // 결과가 있으면 추출
         if (querySnapshot.docs.isNotEmpty) {
           result = querySnapshot.docs
               .map((doc) => FirebaseStudentModel.fromFirestore(doc))
               .toList();
-          print('파이어베이스에서 모둠원 ${result.length}명 찾음 (그룹 $groupId)');
 
-          // 모둠원 정보 로컬 캐시에 저장
+          print('그룹 $groupId의 모든 멤버 ${result.length}명 로드됨');
+
+          // 캐시에 저장
           for (var student in result) {
-            // 학생 ID로 캐시 저장
             _students[student.id] = student;
-
-            // 학급별 캐시도 업데이트
-            String studentClass = student.className;
-            if (!_studentsByClass.containsKey(studentClass)) {
-              _studentsByClass[studentClass] = [];
-            }
-
-            // 중복 방지를 위해 기존 학생 정보 제거
-            _studentsByClass[studentClass]!
-                .removeWhere((s) => s.id == student.id);
-            // 새 정보 추가
-            _studentsByClass[studentClass]!.add(student);
           }
         } else {
-          print('모둠원 데이터 없음: 그룹 $groupId');
+          print('그룹 $groupId에 해당하는 학생이 없습니다');
         }
       } catch (e) {
-        print('파이어베이스 모둠원 쿼리 오류: $e');
+        print('모둠원 조회 오류: $e');
       }
 
-      // 결과 반환 (빈 배열일 수 있음)
       return result;
     } catch (e) {
       print('모둠원 조회 오류: $e');
       return [];
     }
   }
-
-// task_service.dart 파일의 updateTaskStatus 메서드에서 날짜 생성 부분 수정
 
   Future<void> updateTaskStatus(String studentId, String taskName,
       bool isCompleted, bool isGroupTask) async {
@@ -392,8 +402,7 @@ class TaskService {
     }
   }
 
-// task_service.dart 파일 수정
-// getClassTasksStream 메서드 수정
+  // getClassTasksStream 메서드
   Stream<List<FirebaseStudentModel>> getClassTasksStream(String className) {
     try {
       final streamController = StreamController<List<FirebaseStudentModel>>();

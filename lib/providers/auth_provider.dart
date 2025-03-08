@@ -130,11 +130,14 @@ class AuthProvider extends ChangeNotifier {
     try {
       _firebaseStudent = await _authService.studentLogin(studentId, name);
 
+// 변경 후 (studentLogin 함수) - 동일하지만 확실히 체크
       _currentUser = UserModel(
         name: _firebaseStudent!.name,
         studentId: _firebaseStudent!.studentId,
         className: _firebaseStudent!.className,
-        classNum: _firebaseStudent!.classNum, // classNum 추가
+        classNum: _firebaseStudent!.classNum.isNotEmpty
+            ? _firebaseStudent!.classNum
+            : _firebaseStudent!.className, // classNum 우선, 없으면 className 사용
         group: _firebaseStudent!.group.toString(),
         isTeacher: false,
       );

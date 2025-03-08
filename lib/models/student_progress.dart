@@ -10,6 +10,7 @@ class TaskProgress {
   });
 }
 
+// 변경 후
 class StudentProgress {
   final String id;
   final String name;
@@ -19,7 +20,7 @@ class StudentProgress {
   final Map<String, TaskProgress> individualProgress;
   final Map<String, TaskProgress> groupProgress;
   final bool attendance;
-  final String studentId; // 추가
+  final String studentId; // 추가: 실제 학번 (예: "10101")
 
   StudentProgress({
     required this.id,
@@ -42,7 +43,7 @@ class StudentProgress {
     Map<String, TaskProgress>? individualProgress,
     Map<String, TaskProgress>? groupProgress,
     bool? attendance,
-    String? studentId, // 추가
+    String? studentId, // copyWith에도 추가
   }) {
     return StudentProgress(
       id: id ?? this.id,
@@ -53,7 +54,7 @@ class StudentProgress {
       individualProgress: individualProgress ?? this.individualProgress,
       groupProgress: groupProgress ?? this.groupProgress,
       attendance: attendance ?? this.attendance,
-      studentId: studentId ?? this.studentId, // 추가
+      studentId: studentId ?? this.studentId, // 필드 추가
     );
   }
 }
