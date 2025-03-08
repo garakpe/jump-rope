@@ -142,6 +142,30 @@ class TaskProvider extends ChangeNotifier {
     return _studentCache[studentId];
   }
 
+  // 사용자 변경 시 호출되는 메서드 (AuthProvider에서 호출)
+  void handleUserChanged(String? newStudentId, int? groupId) {
+    print('사용자 변경됨: 학생ID=$newStudentId, 그룹=$groupId');
+
+    // 데이터 초기화
+    _students = [];
+    _studentCache.clear();
+    _error = '';
+    _isLoading = false;
+
+    // 새 사용자 ID가 있을 경우 데이터 로드
+    if (newStudentId != null && newStudentId.isNotEmpty) {
+      // 1. 학생 자신의 데이터 로드
+      syncStudentDataFromServer(newStudentId);
+
+      // 2. 학생의 모둠원 데이터 로드 (그룹 ID가 있는 경우)
+      if (groupId != null && groupId > 0) {
+        loadGroupMembers(groupId, '1'); // 1학년으로 가정 (필요시 동적으로 변경)
+      }
+    }
+
+    notifyListeners();
+  }
+
   // 생성자에서 임시 데이터 로드
   TaskProvider() {
     _loadTasks();
@@ -321,13 +345,24 @@ class TaskProvider extends ChangeNotifier {
       if (_selectedClass.isNotEmpty) {
         selectClass(_selectedClass);
       } else {
-        _loadSampleStudents();
+        _handleDataLoadError('데이터를 불러올 수 없습니다. 네트워크 연결을 확인하세요.');
       }
 
       notifyListeners();
     } catch (e) {
       print('설정 로드 오류: $e');
     }
+  }
+
+  // 에러 처리로 대체
+  void _handleDataLoadError(String errorMessage) {
+    _students = [];
+    _error = errorMessage;
+    _isOffline = true;
+    _isLoading = false;
+    notifyListeners();
+
+    print('데이터 로드 오류: $errorMessage');
   }
 
   // 1. task_provider.dart의 _loadTasks 메서드 수정
@@ -352,17 +387,6 @@ class TaskProvider extends ChangeNotifier {
       _error = e.toString();
       notifyListeners();
     }
-  }
-
-// 변경 후
-  void _loadSampleStudents() {
-    // 샘플 데이터 제거
-    _students = [];
-    _error = '데이터를 불러올 수 없습니다. 네트워크 연결을 확인하세요.';
-    _isOffline = true;
-    print('샘플 데이터 대신 빈 목록 사용');
-    _calculateStampCount();
-    notifyListeners();
   }
 
   // 현재 레벨 설정
@@ -419,7 +443,7 @@ class TaskProvider extends ChangeNotifier {
         notifyListeners();
 
         // 오류 발생 시 로컬 데이터 사용
-        _loadSampleStudents();
+        _handleDataLoadError('데이터를 불러올 수 없습니다. 네트워크 연결을 확인하세요.');
       });
     } catch (e) {
       print('학급 데이터 구독 예외: $e');
@@ -428,8 +452,8 @@ class TaskProvider extends ChangeNotifier {
       _isOffline = true;
       notifyListeners();
 
-      // 오류 발생 시 샘플 데이터 로드
-      _loadSampleStudents();
+      // 오류 발생 시 에러 처리
+      _handleDataLoadError('데이터 연결 오류: $e');
     }
   }
 
@@ -463,7 +487,7 @@ class TaskProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-// 변경 후
+// 수정할 코드
   Future<StudentProgress?> syncStudentDataFromServer(String studentId) async {
     if (studentId.isEmpty) return null;
 
@@ -575,56 +599,37 @@ class TaskProvider extends ChangeNotifier {
         _studentCache[studentId] = student;
         setStudentProgress(student);
 
+        // 모둠원 데이터 함께 로드 (그룹 ID가 있는 경우)
+        final groupId = studentData.group;
+        if (groupId > 0) {
+          print('학생 $studentId의 그룹 멤버 로드: 그룹 $groupId');
+          // 그룹 멤버 로드 (비동기 실행)
+          loadGroupMembers(groupId, studentData.className);
+        }
+
         print('학생 데이터 동기화 완료: ${student.id}');
         print(
             '개인 과제 완료: ${individualProgress.values.where((p) => p.isCompleted).length}개');
         print(
             '단체 과제 완료: ${groupProgress.values.where((p) => p.isCompleted).length}개');
 
+        _isLoading = false;
+        notifyListeners();
         return student;
       } else {
-        // 데이터를 가져오지 못한 경우 샘플 데이터 생성
-        print('학생 데이터를 가져오지 못함, 기본 데이터 사용: $studentId');
-
-        // 기본 개인 과제 상태
-        final individualProgress = <String, TaskProgress>{};
-        for (var task in _individualTasks) {
-          individualProgress[task.name] = TaskProgress(
-            taskName: task.name,
-            isCompleted: false,
-          );
-        }
-
-        // 기본 단체 과제 상태
-        final groupProgress = <String, TaskProgress>{};
-        for (var task in _groupTasks) {
-          groupProgress[task.name] = TaskProgress(
-            taskName: task.name,
-            isCompleted: false,
-          );
-        }
-
-        final defaultStudent = StudentProgress(
-          id: studentId,
-          name: '학생',
-          number: 0,
-          group: 1,
-          individualProgress: individualProgress,
-          groupProgress: groupProgress,
-        );
-
-        // 캐시 업데이트
-        _studentCache[studentId] = defaultStudent;
-
-        return defaultStudent;
+        // 데이터를 가져오지 못한 경우 에러 표시
+        print('학생 데이터를 가져오지 못함: $studentId');
+        _error = '학생 정보를 찾을 수 없습니다';
+        _isLoading = false;
+        notifyListeners();
+        return null;
       }
     } catch (e) {
       print('학생 데이터 동기화 오류: $e');
       _error = '데이터 동기화 오류: $e';
-      return null;
-    } finally {
       _isLoading = false;
       notifyListeners();
+      return null;
     }
   }
 // 2. task_provider.dart의 _convertToStudentProgress 메서드 수정
@@ -858,7 +863,7 @@ class TaskProvider extends ChangeNotifier {
     return _groupStampCounts[groupNum] ?? 0;
   }
 
-// 변경 후
+  // 단체줄넘기 시작 가능 여부 확인
   bool canStartGroupActivities(int groupId) {
     // 유효한 그룹 ID 확인
     if (groupId <= 0) {
@@ -910,7 +915,7 @@ class TaskProvider extends ChangeNotifier {
 // task_provider.dart에 추가할 메서드 수정
 
 // 특정 학생 데이터 새로고침 (개선된 버전)
-  Future<void> refreshStudentData(String studentId) async {
+  Future<void> refreshStudentData(String studentId, {int? groupId}) async {
     if (studentId.isEmpty) return;
 
     _isLoading = true;
@@ -995,6 +1000,9 @@ class TaskProvider extends ChangeNotifier {
         // 학생 목록에 추가
         _students = [..._students, updatedStudent];
 
+        // 캐시에도 업데이트
+        _studentCache[studentIdToUse] = updatedStudent;
+
         // 디버깅 정보 출력
         print('학생 데이터 새로고침 성공: $studentId');
         print(
@@ -1005,6 +1013,14 @@ class TaskProvider extends ChangeNotifier {
         // 도장 개수 재계산
         _calculateStampCount();
         _calculateGroupStampCounts();
+
+        // 추가: 모둠원 데이터도 함께 로드
+        final studentGroup = studentData.group;
+        if (studentGroup > 0) {
+          print('학생 $studentId의 그룹 멤버 로드 시작: 그룹 $studentGroup');
+          // 그룹 멤버 로드 (클래스는 일단 '1'로 고정, 필요시 수정)
+          await loadGroupMembers(studentGroup, '1');
+        }
       }
     } catch (e) {
       print('학생 데이터 새로고침 오류: $e');

@@ -10,6 +10,9 @@ import 'providers/reflection_provider.dart';
 import 'providers/student_provider.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
+// 전역 네비게이터 키 추가
+final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
+
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   setUrlStrategy(PathUrlStrategy()); // 웹 URL에서 해시 제거

@@ -5,6 +5,7 @@ import 'screens/student/dashboard_screen.dart';
 import 'screens/teacher/teacher_dashboard.dart';
 import 'providers/auth_provider.dart';
 import 'utils/theme.dart';
+import 'main.dart'; // navigatorKey 가져오기 위해 추가
 
 class JumpRopeApp extends StatelessWidget {
   const JumpRopeApp({Key? key}) : super(key: key);
@@ -14,6 +15,7 @@ class JumpRopeApp extends StatelessWidget {
     return MaterialApp(
       title: '줄넘기 학습 관리',
       theme: appTheme,
+      navigatorKey: navigatorKey, // 글로벌 navigatorKey 사용
       debugShowCheckedModeBanner: false,
       home: Consumer<AuthProvider>(
         builder: (context, authProvider, _) {

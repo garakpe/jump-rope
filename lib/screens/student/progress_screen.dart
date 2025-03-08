@@ -207,43 +207,57 @@ class ProgressScreen extends StatelessWidget {
     );
   }
 
+// 변경 후
   Widget buildProgressTable(
       BuildContext context, List<StudentProgress> students) {
     final taskProvider = Provider.of<TaskProvider>(context);
     final authProvider = Provider.of<AuthProvider>(context);
     final user = authProvider.userInfo;
 
-    // 그룹 정보 가져오기 (기본값 1)
+    // 내 학생 ID 및 그룹 정보 찾기
+    final myId = user?.studentId ?? '';
     final group = int.tryParse(user?.group ?? '1') ?? 1;
 
-    // 내 학생 ID 찾기
-    final myId = user?.studentId ?? '';
+    print('진도표 구성: 학생ID=$myId, 그룹=$group, 전체 학생 수=${students.length}');
 
-    // 모둠 정보를 가져와서 모둠원 필터링
+    // 1. 캐시된 그룹원 먼저 확인
     var groupStudents = students.where((s) => s.group == group).toList();
 
-    // 그룹 멤버가 없을 경우 현재 로그인한 학생 추가
-    if (groupStudents.isEmpty && myId.isNotEmpty) {
-      // 캐시에서 학생 정보 찾기
+    // 2. 그룹원이 없을 경우 서버에서 다시 로드 시도
+    if (groupStudents.isEmpty && myId.isNotEmpty && !taskProvider.isLoading) {
+      print('모둠원 데이터가 없어서 서버에서 로드 시도: 그룹=$group, 학생ID=$myId');
+
+      // 현재 학생 로드 + 모둠원 함께 로드 (백그라운드 실행)
+      Future.microtask(() {
+        taskProvider.syncStudentDataFromServer(myId).then((_) {
+          if (group > 0) {
+            taskProvider.loadGroupMembers(group, user?.className ?? '1');
+          }
+        });
+      });
+
+      // 임시로 현재 학생 정보만 표시
       final myInfo = taskProvider.getStudentFromCache(myId);
       if (myInfo != null) {
         groupStudents = [myInfo];
-        print('모둠원이 없어 현재 학생만 표시: ${myInfo.name} (그룹: ${myInfo.group})');
+        print('현재는 로그인한 학생만 표시: ${myInfo.name}');
       } else {
-        // 학생 데이터 다시 요청 (백그라운드로 처리)
-        print('모둠원 데이터가 없어 현재 학생 정보 요청: $myId');
-        Future.microtask(() => taskProvider.syncStudentDataFromServer(myId));
-
-        // 임시 학생 데이터 생성 (빈 화면 방지)
         groupStudents = [
           StudentProgress(
             id: myId,
-            name: user?.name ?? '로딩 중...',
+            name: user?.name ?? '데이터 로딩 중...',
             number: 0,
             group: group,
           )
         ];
       }
+    }
+
+    // 3. 다른 로그인 사용자의 학생 데이터가 섞여 있는지 확인하고 필터링
+    if (groupStudents.isNotEmpty && myId.isNotEmpty) {
+      // 자신과 같은 그룹에 속한 학생만 필터링
+      groupStudents = groupStudents.where((s) => s.group == group).toList();
+      print('필터링 후 모둠원 수: ${groupStudents.length}명 (그룹 $group)');
     }
 
     // 이름순 정렬
