@@ -17,56 +17,54 @@ class TaskService {
     _initializeSampleData();
     loadPendingUpdates();
   }
-  // task_service.dart에 추가
-// 로컬 캐시에서 학생 데이터 조회
-  FirebaseStudentModel? getCachedStudentData(String studentId) {
-    return _students[studentId];
-  }
-
-// task_service.dart 클래스 내에 다음 메서드 추가
-
-  bool areStudentsInSameClass(String id1, String id2) {
-    // 1. id가 같으면 당연히 같은 학생
-    if (id1 == id2) return true;
-
-    // 2. 학번 비교 (학번의 앞 3자리를 비교)
-    if (id1.length >= 5 && id2.length >= 5) {
-      try {
-        final classCode1 = id1.substring(0, 3);
-        final classCode2 = id2.substring(0, 3);
-        print(
-            '학급 비교: $id1($classCode1) vs $id2($classCode2), 결과=${classCode1 == classCode2}');
-        return classCode1 == classCode2;
-      } catch (e) {
-        print('학번 비교 오류: $e');
-      }
-    }
-
-    // 3. 캐시된 Firebase 모델을 활용한 비교
-    final model1 = _students[id1];
-    final model2 = _students[id2];
-
-    if (model1 != null && model2 != null) {
-      // classNum이 있으면 그것을 비교
-      if (model1.classNum.isNotEmpty && model2.classNum.isNotEmpty) {
-        return model1.classNum == model2.classNum;
-      }
-
-      // className이 있으면 그것을 비교
-      if (model1.className.isNotEmpty && model2.className.isNotEmpty) {
-        return model1.className == model2.className;
-      }
-    }
-
-    // 정보가 부족해 비교 불가능
-    return false;
-  }
 
   void _initializeSampleData() {
-    // 샘플 데이터 제거, 필요한 초기화만 수행
-    _students.clear();
-    _studentsByClass.clear();
-    print('데이터 저장소 초기화 완료');
+    // 샘플 학생 데이터 생성
+    final students = [
+      FirebaseStudentModel(
+        id: '101',
+        name: '김철수',
+        studentId: '12345',
+        className: '1',
+        classNum: '1',
+        group: 1,
+        individualTasks: {
+          '양발모아 뛰기': {
+            'completed': true,
+            'completedDate': '2023-09-10 10:00:00'
+          },
+          '구보로 뛰기': {'completed': false, 'completedDate': null},
+        },
+        groupTasks: {},
+        attendance: true,
+      ),
+      FirebaseStudentModel(
+        id: '102',
+        name: '홍길동',
+        studentId: '67890',
+        className: '1',
+        classNum: '1',
+        group: 2,
+        individualTasks: {
+          '양발모아 뛰기': {
+            'completed': true,
+            'completedDate': '2023-09-11 11:00:00'
+          },
+        },
+        groupTasks: {},
+        attendance: true,
+      ),
+    ];
+
+    // 데이터 저장
+    for (var student in students) {
+      _students[student.id] = student;
+
+      if (!_studentsByClass.containsKey(student.className)) {
+        _studentsByClass[student.className] = [];
+      }
+      _studentsByClass[student.className]!.add(student);
+    }
   }
 
   // 앱 시작 시 저장된 보류 중인 업데이트 로드
@@ -98,275 +96,93 @@ class TaskService {
     }
   }
 
-// getStudentDataDirectly 함수 수정
-  Future<FirebaseStudentModel?> getStudentDataDirectly(String studentId) async {
-    if (studentId.isEmpty) {
-      print('잘못된 학생 ID: 빈 문자열');
-      return null;
-    }
-
-    try {
-      print('서버에서 학생 데이터 직접 요청: $studentId');
-
-      // 최대 2번까지 재시도하는 로직 추가
-      int retryCount = 0;
-      const maxRetries = 2;
-
-      while (true) {
-        try {
-          // Firebase에서 학생 데이터 직접 가져오기
-          QuerySnapshot querySnapshot = await _firestore
-              .collection('students')
-              .where('studentId', isEqualTo: studentId)
-              .limit(1)
-              .get()
-              .timeout(const Duration(seconds: 5)); // 타임아웃 추가
-
-          if (querySnapshot.docs.isEmpty) {
-            print('학생 정보를 찾을 수 없습니다: $studentId');
-            // studentId로 찾지 못했다면 id로도 시도
-            querySnapshot = await _firestore
-                .collection('students')
-                .where('id', isEqualTo: studentId)
-                .limit(1)
-                .get()
-                .timeout(const Duration(seconds: 5));
-
-            if (querySnapshot.docs.isEmpty) {
-              print('id로도 학생 정보를 찾을 수 없습니다: $studentId');
-              return null;
-            }
-          }
-
-          // 학생 정보 파싱
-          final student =
-              FirebaseStudentModel.fromFirestore(querySnapshot.docs.first);
-
-          // 로컬 캐시 업데이트
-          _students[student.id] = student;
-
-          print('학생 데이터 직접 가져오기 성공: ${student.name} (${student.studentId})');
-          return student;
-        } catch (e) {
-          retryCount++;
-          print('학생 데이터 요청 실패 ($retryCount/$maxRetries): $e');
-
-          if (retryCount >= maxRetries) {
-            throw Exception('여러 번 시도 후에도 데이터를 가져오지 못했습니다: $e');
-          }
-
-          // 재시도 전 잠시 대기
-          await Future.delayed(Duration(milliseconds: 500 * retryCount));
-        }
-      }
-    } catch (e) {
-      print('학생 데이터 직접 가져오기 오류: $e');
-
-      // Firebase 연결 오류 시 로컬 데이터 반환
-      if (_students.containsKey(studentId)) {
-        print('로컬 캐시에서 학생 데이터 사용: $studentId');
-        return _students[studentId];
-      }
-
-      // 임시 학생 데이터 찾기 시도 (studentId 기준)
-      for (var student in _students.values) {
-        if (student.studentId == studentId) {
-          print('studentId로 로컬 캐시에서 학생 찾음: $studentId');
-          return student;
-        }
-      }
-
-      throw Exception('학생 데이터를 가져올 수 없습니다: $e');
-    }
-  }
-
-// 변경 후
-  Future<List<FirebaseStudentModel>> getGroupMembers(
-      int groupId, String className) async {
-    if (groupId <= 0) {
-      print('잘못된 그룹 ID: $groupId');
-      return [];
-    }
-
-    try {
-      print('모둠원 데이터 조회: 그룹=$groupId, 학년=$className');
-      List<FirebaseStudentModel> result = [];
-
-      try {
-        // 단순 쿼리로 변경 - 오직 group 필드만으로 조회
-        final querySnapshot = await _firestore
-            .collection('students')
-            .where('group', isEqualTo: groupId)
-            .get()
-            .timeout(const Duration(seconds: 10));
-
-        if (querySnapshot.docs.isNotEmpty) {
-          print('그룹 $groupId 학생 ${querySnapshot.docs.length}명 조회됨');
-
-          for (var doc in querySnapshot.docs) {
-            try {
-              final student = FirebaseStudentModel.fromFirestore(doc);
-
-              // 메모리에 캐시
-              _students[student.id] = student;
-
-              // 같은 학년/반인 경우만 결과에 포함 (클라이언트 측 필터링)
-              if (className.isEmpty ||
-                  (student.studentId.isNotEmpty &&
-                      student.studentId.length >= 3 &&
-                      student.studentId.substring(0, 1) == className)) {
-                result.add(student);
-                print('학생 추가: ${student.name} (${student.studentId})');
-              }
-            } catch (e) {
-              print('학생 파싱 오류: $e');
-            }
-          }
-
-          print('필터링 후 그룹 $groupId의 모둠원 ${result.length}명 추가됨');
-        } else {
-          print('그룹 $groupId에 해당하는 학생이 없습니다');
-        }
-      } catch (e) {
-        print('모둠원 조회 쿼리 오류: $e');
-
-        // 로컬 캐시에서 조회 시도
-        if (_students.isNotEmpty) {
-          print('로컬 캐시에서 모둠원 조회 시도 - 캐시된 학생 수: ${_students.length}명');
-          result = _students.values
-              .where((student) => student.group == groupId)
-              .toList();
-          print('로컬 캐시에서 그룹 $groupId 모둠원 ${result.length}명 찾음');
-        }
-      }
-
-      return result;
-    } catch (e) {
-      print('모둠원 통합 조회 오류: $e');
-      return [];
-    }
-  }
+// lib/services/task_service.dart - updateTaskStatus 메서드
 
   Future<void> updateTaskStatus(String studentId, String taskName,
       bool isCompleted, bool isGroupTask) async {
     final taskPath = isGroupTask ? 'groupTasks' : 'individualTasks';
 
+    // 현재 날짜/시간 저장
+    final completedDate = isCompleted ? DateTime.now().toIso8601String() : null;
+
+    // 업데이트 데이터 구성
+    final updateData = {
+      'studentId': studentId,
+      'taskName': taskName,
+      'isCompleted': isCompleted,
+      'isGroupTask': isGroupTask,
+      'timestamp': DateTime.now().toIso8601String(),
+    };
+
     try {
-      // 현재 상태 확인
-      DocumentSnapshot studentDoc =
-          await _firestore.collection('students').doc(studentId).get();
-
-      if (!studentDoc.exists) {
-        throw Exception("학생 정보를 찾을 수 없습니다");
-      }
-
-      Map<String, dynamic> studentData =
-          studentDoc.data() as Map<String, dynamic>;
-      Map<String, dynamic>? tasks =
-          studentData[taskPath] as Map<String, dynamic>?;
-
-      // 이미 완료된 과제인지 확인
-      String? completedDate;
-
-      if (tasks != null && tasks.containsKey(taskName)) {
-        Map<String, dynamic>? taskData =
-            tasks[taskName] as Map<String, dynamic>?;
-        if (taskData != null && taskData['completed'] == true && isCompleted) {
-          // 이미 완료된 과제라면 기존 날짜 유지
-          completedDate = taskData['completedDate']?.toString();
-          print('기존 완료된 과제의 날짜 유지: $taskName, $completedDate');
+      // Firestore 업데이트
+      await _firestore.collection('students').doc(studentId).update({
+        '$taskPath.$taskName': {
+          'completed': isCompleted,
+          'completedDate': completedDate,
         }
-      }
-
-      // 날짜 결정
-      if (isCompleted && completedDate == null) {
-        // 새로 완료하는 과제라면 현재 날짜 사용 (ISO 형식으로 저장)
-        completedDate = DateTime.now().toIso8601String();
-        print('새로운 완료 날짜 생성: $taskName, $completedDate');
-      } else if (!isCompleted) {
-        // 완료 취소 시
-        completedDate = null;
-        print('도장 취소: $taskName');
-      }
-
-      // 중요: 해당 필드만 업데이트
-      Map<String, dynamic> updateData = {};
-      updateData['$taskPath.$taskName'] = {
-        'completed': isCompleted,
-        'completedDate': completedDate,
-      };
-
-      // Firebase 업데이트 시 특정 필드만 업데이트
-      await _firestore.collection('students').doc(studentId).update(updateData);
+      });
 
       print('Firebase에 과제 상태 업데이트 성공: $studentId, $taskName, $isCompleted');
     } catch (e) {
       print('과제 상태 업데이트 오류: $e');
 
-      // 오류 발생 시 보류 중인 업데이트 목록에 추가
-      _pendingUpdates.add({
-        'studentId': studentId,
-        'taskName': taskName,
-        'isCompleted': isCompleted,
-        'isGroupTask': isGroupTask,
-        'timestamp': DateTime.now().toIso8601String(),
-      });
-
+      // 오프라인인 경우 보류 중인 업데이트에 추가
+      _pendingUpdates.add(updateData);
       await _savePendingUpdates();
 
-      throw Exception("Firebase 업데이트 실패: $e");
-    }
-  }
+      print('업데이트가 보류 중인 목록에 추가됨: ${_pendingUpdates.length}개');
 
-  // 로컬 데이터 업데이트 헬퍼 메서드 (코드 중복 방지)
-  void _updateLocalStudentData(String studentId, String taskName,
-      bool isCompleted, String? completedDate, bool isGroupTask) {
-    if (!_students.containsKey(studentId)) return;
+      // 로컬 데이터도 업데이트
+      if (_students.containsKey(studentId)) {
+        final student = _students[studentId]!;
 
-    final student = _students[studentId]!;
+        // 깊은 복사를 위해 새 맵 생성
+        final Map<String, dynamic> updatedIndividualTasks =
+            Map.from(student.individualTasks);
+        final Map<String, dynamic> updatedGroupTasks =
+            Map.from(student.groupTasks);
 
-    // 깊은 복사로 데이터 변경 준비
-    final Map<String, dynamic> updatedIndividualTasks =
-        Map<String, dynamic>.from(student.individualTasks);
-    final Map<String, dynamic> updatedGroupTasks =
-        Map<String, dynamic>.from(student.groupTasks);
+        if (isGroupTask) {
+          updatedGroupTasks[taskName] = {
+            'completed': isCompleted,
+            'completedDate': completedDate,
+          };
+        } else {
+          updatedIndividualTasks[taskName] = {
+            'completed': isCompleted,
+            'completedDate': completedDate,
+          };
+        }
 
-    // 적절한 맵 업데이트
-    if (isGroupTask) {
-      updatedGroupTasks[taskName] = {
-        'completed': isCompleted,
-        'completedDate': completedDate,
-      };
-    } else {
-      updatedIndividualTasks[taskName] = {
-        'completed': isCompleted,
-        'completedDate': completedDate,
-      };
-    }
+        // 학생 정보 업데이트
+        final updatedStudent = FirebaseStudentModel(
+          id: student.id,
+          name: student.name,
+          studentId: student.studentId,
+          className: student.className,
+          classNum: student.classNum,
+          group: student.group,
+          individualTasks: updatedIndividualTasks,
+          groupTasks: updatedGroupTasks,
+          attendance: student.attendance,
+        );
 
-    // 업데이트된 학생 객체 생성
-    final updatedStudent = FirebaseStudentModel(
-      id: student.id,
-      name: student.name,
-      studentId: student.studentId,
-      className: student.className,
-      classNum: student.classNum,
-      group: student.group,
-      individualTasks: updatedIndividualTasks,
-      groupTasks: updatedGroupTasks,
-      attendance: student.attendance,
-    );
+        // 저장
+        _students[studentId] = updatedStudent;
 
-    // 캐시 업데이트
-    _students[studentId] = updatedStudent;
-
-    // 학급별 캐시도 업데이트
-    if (_studentsByClass.containsKey(student.className)) {
-      final index = _studentsByClass[student.className]!
-          .indexWhere((s) => s.id == studentId);
-      if (index >= 0) {
-        _studentsByClass[student.className]![index] = updatedStudent;
+        // 학급 목록도 업데이트
+        if (_studentsByClass.containsKey(student.className)) {
+          final index = _studentsByClass[student.className]!
+              .indexWhere((s) => s.id == studentId);
+          if (index >= 0) {
+            _studentsByClass[student.className]![index] = updatedStudent;
+          }
+        }
       }
+
+      // Firebase 오류는 계속 전파하여 UI에서 처리
+      throw Exception("Firebase 업데이트 실패: $e");
     }
   }
 
@@ -425,7 +241,8 @@ class TaskService {
     }
   }
 
-  // getClassTasksStream 메서드
+// task_service.dart 파일 수정
+// getClassTasksStream 메서드 수정
   Stream<List<FirebaseStudentModel>> getClassTasksStream(String className) {
     try {
       final streamController = StreamController<List<FirebaseStudentModel>>();

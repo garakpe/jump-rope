@@ -5,9 +5,6 @@ import '../models/user_model.dart';
 import '../models/firebase_models.dart';
 import '../services/auth_service.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'task_provider.dart'; // TaskProvider 직접 import
-import 'package:provider/provider.dart';
-import '../main.dart'; // navigatorKey 사용
 
 class AuthProvider extends ChangeNotifier {
   final AuthService _authService = AuthService();
@@ -109,9 +106,6 @@ class AuthProvider extends ChangeNotifier {
       await prefs.setString(
           'password', password); // 실제 앱에서는 보안상 비밀번호 저장은 권장하지 않음
 
-      // TaskProvider에 사용자 변경 알림 (교사 로그인)
-      _notifyTaskProviderForUserChange(null, null);
-
       _isLoading = false;
       notifyListeners();
     } catch (e) {
@@ -130,14 +124,11 @@ class AuthProvider extends ChangeNotifier {
     try {
       _firebaseStudent = await _authService.studentLogin(studentId, name);
 
-// 변경 후 (studentLogin 함수) - 동일하지만 확실히 체크
       _currentUser = UserModel(
         name: _firebaseStudent!.name,
         studentId: _firebaseStudent!.studentId,
         className: _firebaseStudent!.className,
-        classNum: _firebaseStudent!.classNum.isNotEmpty
-            ? _firebaseStudent!.classNum
-            : _firebaseStudent!.className, // classNum 우선, 없으면 className 사용
+        classNum: _firebaseStudent!.classNum, // classNum 추가
         group: _firebaseStudent!.group.toString(),
         isTeacher: false,
       );
@@ -148,32 +139,12 @@ class AuthProvider extends ChangeNotifier {
       await prefs.setString('studentId', studentId);
       await prefs.setString('name', name);
 
-      // TaskProvider에 사용자 변경 알림 (학생 로그인)
-      int? groupId = int.tryParse(_firebaseStudent!.group.toString());
-      _notifyTaskProviderForUserChange(studentId, groupId);
-
       _isLoading = false;
       notifyListeners();
     } catch (e) {
       _isLoading = false;
       _error = e.toString();
       notifyListeners();
-    }
-  }
-
-  // TaskProvider에 사용자 변경 알림
-  void _notifyTaskProviderForUserChange(String? studentId, int? groupId) {
-    try {
-      // navigatorKey를 통해 context 가져오기
-      final context = navigatorKey.currentContext;
-      if (context != null) {
-        // TaskProvider에 접근하여 사용자 변경 알림
-        final taskProvider = Provider.of<TaskProvider>(context, listen: false);
-        taskProvider.handleUserChanged(studentId, groupId);
-        print('TaskProvider에 사용자 변경 알림 성공: 학생ID=$studentId, 그룹=$groupId');
-      }
-    } catch (e) {
-      print('TaskProvider 알림 실패: $e');
     }
   }
 
@@ -211,9 +182,6 @@ class AuthProvider extends ChangeNotifier {
       // 로컬 저장된 로그인 정보 삭제
       final prefs = await SharedPreferences.getInstance();
       await prefs.clear();
-
-      // TaskProvider에 로그아웃 알림
-      _notifyTaskProviderForUserChange(null, null);
 
       _currentUser = null;
       _firebaseUser = null;

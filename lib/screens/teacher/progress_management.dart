@@ -417,8 +417,6 @@ class _ProgressManagementState extends State<ProgressManagement> {
                             ),
 // lib/screens/teacher/progress_management.dart의 _buildProgressTable 내부에서 DataCell 부분 수정
 
-// progress_management.dart 파일의 _buildProgressTable 메서드 내부 DataCell 부분 수정
-
                             ...tasks.map((task) {
                               final isIndividual = _viewMode == 'individual';
                               final progress = isIndividual
@@ -475,9 +473,8 @@ class _ProgressManagementState extends State<ProgressManagement> {
                                           : null,
                                       child: Center(
                                         child: isCompleted
-                                            ? Column(
-                                                mainAxisAlignment:
-                                                    MainAxisAlignment.center,
+                                            ? Stack(
+                                                alignment: Alignment.center,
                                                 children: [
                                                   Icon(
                                                     Icons.check_circle,
@@ -487,40 +484,15 @@ class _ProgressManagementState extends State<ProgressManagement> {
                                                     size: 24,
                                                   ),
                                                   if (completionDate != null)
-                                                    Container(
-                                                      margin:
-                                                          const EdgeInsets.only(
-                                                              top: 4),
-                                                      padding: const EdgeInsets
-                                                          .symmetric(
-                                                          horizontal: 4,
-                                                          vertical: 2),
-                                                      decoration: BoxDecoration(
-                                                        color: isIndividual
-                                                            ? Colors
-                                                                .blue.shade100
-                                                                .withOpacity(
-                                                                    0.7)
-                                                            : Colors
-                                                                .green.shade100
-                                                                .withOpacity(
-                                                                    0.7),
-                                                        borderRadius:
-                                                            BorderRadius
-                                                                .circular(4),
-                                                      ),
+                                                    Positioned(
+                                                      bottom: 0,
                                                       child: Text(
                                                         _formatDate(
                                                             completionDate),
                                                         style: TextStyle(
                                                           fontSize: 9,
-                                                          fontWeight:
-                                                              FontWeight.bold,
-                                                          color: isIndividual
-                                                              ? Colors
-                                                                  .blue.shade800
-                                                              : Colors.green
-                                                                  .shade800,
+                                                          color: Colors
+                                                              .grey.shade600,
                                                         ),
                                                       ),
                                                     ),
@@ -605,22 +577,16 @@ class _ProgressManagementState extends State<ProgressManagement> {
     );
   }
 
-// 날짜 포맷팅 함수 개선
+  // 날짜 포맷팅 함수
   String _formatDate(String? dateString) {
     if (dateString == null) return '';
 
     try {
       final dateTime = DateTime.parse(dateString);
-
-      // 년/월/일 형식으로 표시 (더 직관적으로)
-      final y = dateTime.year.toString().substring(2); // 년도 뒤 2자리
-      final m = dateTime.month.toString().padLeft(2, '0');
-      final d = dateTime.day.toString().padLeft(2, '0');
-
-      return '$y/$m/$d';
+      return DateFormat('yy/MM/dd').format(dateTime);
     } catch (e) {
-      // 날짜 형식이 아닌 경우 원본 그대로 반환 (최대 10자)
-      return dateString.length > 10 ? dateString.substring(0, 10) : dateString;
+      // 날짜 형식이 아닌 경우 원본 그대로 반환
+      return dateString.substring(0, min(10, dateString.length));
     }
   }
 
@@ -629,7 +595,7 @@ class _ProgressManagementState extends State<ProgressManagement> {
     return a < b ? a : b;
   }
 
-// lib/screens/teacher/progress_management.dart의 _toggleTaskCompletion 메서드
+// lib/screens/teacher/progress_management.dart 파일의 _toggleTaskCompletion 메서드 수정
 
   void _toggleTaskCompletion(
       String studentId, String taskName, bool completed, bool isGroupTask) {
@@ -638,124 +604,6 @@ class _ProgressManagementState extends State<ProgressManagement> {
     final isOffline = taskProvider.isOffline;
 
     print('도장 토글: 학생=$studentId, 과제=$taskName, 완료=$completed, 그룹=$isGroupTask');
-
-    // 개인줄넘기 과제의 경우, 순차적 진행 여부 확인
-    if (!isGroupTask && completed) {
-      // 현재 과제의 레벨 찾기
-      final currentTask = individualTasks.firstWhere(
-        (task) => task.name == taskName,
-        orElse: () => TaskModel(id: 0, name: "", count: "", level: 0),
-      );
-
-      // 해당 학생 찾기
-      final student = taskProvider.students.firstWhere(
-        (s) => s.id == studentId,
-        orElse: () => StudentProgress(
-            id: "", name: "", number: 0, group: 0, studentId: ''),
-      );
-
-      // 이미 완료된 과제인지 확인
-      final isAlreadyCompleted =
-          student.individualProgress[taskName]?.isCompleted ?? false;
-
-      // 이미 완료된 경우 추가 확인 없이 진행
-      if (isAlreadyCompleted) {
-        _processTaskCompletion(studentId, taskName, completed, isGroupTask);
-        return;
-      }
-
-      // 이전 단계 과제들을 모두 완료했는지 확인
-      bool hasSkippedTasks = false;
-      List<String> skippedTaskNames = [];
-
-      for (var task in individualTasks) {
-        // 현재 과제보다 낮은 레벨의 과제만 확인
-        if (task.level < currentTask.level) {
-          // 이전 단계 과제가 완료되지 않았는지 확인
-          final isCompleted =
-              student.individualProgress[task.name]?.isCompleted ?? false;
-          if (!isCompleted) {
-            hasSkippedTasks = true;
-            skippedTaskNames.add(task.name);
-          }
-        }
-      }
-
-      // 건너뛴 과제가 있으면 경고 대화상자 표시
-      if (hasSkippedTasks) {
-        showDialog(
-          context: context,
-          builder: (context) => AlertDialog(
-            title:
-                const Text('단계 순서 확인', style: TextStyle(color: Colors.orange)),
-            content: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text('${student.name} 학생은 이전 단계를 아직 완료하지 않았습니다:'),
-                const SizedBox(height: 12),
-                Container(
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                    color: Colors.orange.shade50,
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: Colors.orange.shade200),
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: skippedTaskNames
-                        .map((name) => Padding(
-                              padding: const EdgeInsets.symmetric(vertical: 4),
-                              child: Row(
-                                children: [
-                                  Icon(Icons.warning,
-                                      color: Colors.orange.shade700, size: 16),
-                                  const SizedBox(width: 8),
-                                  Text(name,
-                                      style: const TextStyle(
-                                          fontWeight: FontWeight.bold)),
-                                ],
-                              ),
-                            ))
-                        .toList(),
-                  ),
-                ),
-                const SizedBox(height: 12),
-                const Text('개인줄넘기는 단계적으로 진행하는 것이 권장됩니다. 그래도 도장을 부여하시겠습니까?'),
-              ],
-            ),
-            actions: [
-              TextButton(
-                child: const Text('취소'),
-                onPressed: () => Navigator.of(context).pop(),
-              ),
-              TextButton(
-                child: const Text('진행', style: TextStyle(color: Colors.orange)),
-                onPressed: () {
-                  Navigator.of(context).pop();
-                  _processTaskCompletion(
-                      studentId, taskName, completed, isGroupTask);
-                },
-              ),
-            ],
-          ),
-        );
-      } else {
-        // 건너뛴 과제가 없으면 바로 진행
-        _processTaskCompletion(studentId, taskName, completed, isGroupTask);
-      }
-    } else {
-      // 단체줄넘기거나 도장 취소의 경우 바로 진행
-      _processTaskCompletion(studentId, taskName, completed, isGroupTask);
-    }
-  }
-
-// 실제 도장 처리 로직을 별도 메서드로 분리
-  void _processTaskCompletion(
-      String studentId, String taskName, bool completed, bool isGroupTask) {
-    // TaskProvider 참조
-    final taskProvider = Provider.of<TaskProvider>(context, listen: false);
-    final isOffline = taskProvider.isOffline;
 
     // 알림 대화상자 표시
     showDialog(
@@ -775,25 +623,24 @@ class _ProgressManagementState extends State<ProgressManagement> {
             onPressed: () async {
               Navigator.of(context).pop();
 
-              // 로딩 표시 - 타임아웃 설정
-              final snackBar = SnackBar(
-                content: Row(
-                  children: [
-                    const SizedBox(
-                      width: 20,
-                      height: 20,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    ),
-                    const SizedBox(width: 16),
-                    Text('${completed ? '도장 부여' : '도장 취소'} 중...'),
-                  ],
+              // 로딩 표시
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Row(
+                    children: [
+                      const SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      ),
+                      const SizedBox(width: 16),
+                      Text('${completed ? '도장 부여' : '도장 취소'} 중...'),
+                    ],
+                  ),
+                  duration: const Duration(seconds: 60), // 긴 시간 설정
+                  backgroundColor: Colors.blue.shade700,
                 ),
-                duration: const Duration(seconds: 3), // 최대 3초 표시
-                backgroundColor: Colors.blue.shade700,
               );
-
-              // 스낵바 표시
-              ScaffoldMessenger.of(context).showSnackBar(snackBar);
 
               try {
                 // TaskProvider를 통해 상태 업데이트
@@ -837,9 +684,6 @@ class _ProgressManagementState extends State<ProgressManagement> {
                         : null,
                   ),
                 );
-
-                // 오류가 발생해도 UI 갱신 (로컬 상태는 업데이트되었을 수 있음)
-                setState(() {});
               }
             },
           ),

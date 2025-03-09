@@ -1,6 +1,5 @@
 // lib/providers/reflection_provider.dart
 import 'package:flutter/material.dart';
-import 'dart:async';
 import '../models/reflection_model.dart';
 import '../models/firebase_models.dart';
 import '../services/reflection_service.dart';
@@ -14,59 +13,22 @@ class ReflectionProvider extends ChangeNotifier {
   String _selectedClass = '';
   int _selectedWeek = 1;
   bool _isLoading = false;
-  bool _isOffline = false;
   String _error = '';
   String? _downloadUrl;
 
-  // 구독 관리
-  StreamSubscription? _reflectionsSubscription;
-
-  // 현재 선택된 반의 주차별 제출 현황
-  final Map<String, bool> _submissionStatus = {};
-
-  // 게터
   List<FirebaseReflectionModel> get submissions => _submissions;
   List<ReflectionModel> get reflectionCards => _reflectionCards;
   int get selectedReflectionId => _selectedReflectionId;
   bool get isLoading => _isLoading;
-  bool get isOffline => _isOffline;
   String get error => _error;
   String? get downloadUrl => _downloadUrl;
-  Map<String, bool> get submissionStatus => _submissionStatus;
-  int get currentWeek => _selectedWeek;
 
   // 생성자에서 성찰 질문 로드
   ReflectionProvider() {
     _loadReflectionQuestions();
+
     // 샘플 데이터 생성 (개발용)
     _reflectionService.createSampleReflections();
-  }
-
-  @override
-  void dispose() {
-    _reflectionsSubscription?.cancel();
-    super.dispose();
-  }
-
-  // 네트워크 상태 확인
-  Future<void> checkNetworkStatus() async {
-    final wasOffline = _isOffline;
-    _isOffline = !(await _reflectionService.isNetworkAvailable());
-
-    // 오프라인에서 온라인으로 전환 시 동기화
-    if (wasOffline && !_isOffline) {
-      try {
-        await _reflectionService.syncOfflineData();
-        // 학급 데이터 다시 로드
-        if (_selectedClass.isNotEmpty) {
-          selectClassAndWeek(_selectedClass, _selectedWeek);
-        }
-      } catch (e) {
-        print('자동 동기화 오류: $e');
-      }
-    }
-
-    notifyListeners();
   }
 
   // 성찰 질문 목록 로드
@@ -95,53 +57,26 @@ class ReflectionProvider extends ChangeNotifier {
 
   // 학급과 주차 선택 및 성찰 데이터 구독
   void selectClassAndWeek(String className, int week) {
-    // 이전 구독 취소
-    _reflectionsSubscription?.cancel();
-
     _selectedClass = className;
     _selectedWeek = week;
     _isLoading = true;
-    _error = '';
     notifyListeners();
 
-    // 네트워크 상태 확인
-    _reflectionService.isNetworkAvailable().then((isOnline) {
-      _isOffline = !isOnline;
-
-      // 성찰 데이터 구독
-      _reflectionsSubscription =
-          _reflectionService.getClassReflections(className, week).listen(
+    _reflectionService.getClassReflections(className, week).listen(
         (submissionsList) {
-          _submissions = submissionsList;
-          _updateSubmissionStatus(submissionsList);
-          _isLoading = false;
-          notifyListeners();
-        },
-        onError: (e) {
-          _isLoading = false;
-          _error = e.toString();
-          _isOffline = true;
-          notifyListeners();
-        },
-      );
+      _submissions = submissionsList;
+      _isLoading = false;
+      notifyListeners();
+    }, onError: (e) {
+      _isLoading = false;
+      _error = e.toString();
+      notifyListeners();
     });
-  }
-
-  // 제출 현황 업데이트
-  void _updateSubmissionStatus(List<FirebaseReflectionModel> submissions) {
-    _submissionStatus.clear();
-
-    for (var submission in submissions) {
-      _submissionStatus[submission.studentId] = true;
-    }
-
-    notifyListeners();
   }
 
   // 성찰 보고서 제출
   Future<void> submitReflection(ReflectionSubmission submission) async {
     _isLoading = true;
-    _error = '';
     notifyListeners();
 
     try {
@@ -159,16 +94,11 @@ class ReflectionProvider extends ChangeNotifier {
         answers: submission.answers,
       );
 
-      // 제출 상태 업데이트
-      _submissionStatus[submission.studentId] = true;
-
       _isLoading = false;
       notifyListeners();
     } catch (e) {
       _isLoading = false;
-      _error = _isOffline
-          ? "오프라인 상태: 변경사항은 로컬에 저장되었으며 네트워크 연결 시 동기화됩니다."
-          : "제출 오류: $e";
+      _error = e.toString();
       notifyListeners();
     }
   }
@@ -220,44 +150,13 @@ class ReflectionProvider extends ChangeNotifier {
     }
   }
 
-  // 오프라인 데이터 동기화
-  Future<void> syncOfflineData() async {
-    if (!_isOffline) return;
-
-    _isLoading = true;
-    _error = '';
-    notifyListeners();
-
-    try {
-      await _reflectionService.syncOfflineData();
-
-      // 성공 후 데이터 다시 로드
-      if (_selectedClass.isNotEmpty) {
-        selectClassAndWeek(_selectedClass, _selectedWeek);
-      }
-
-      _isOffline = false;
-      _isLoading = false;
-      notifyListeners();
-    } catch (e) {
-      _isLoading = false;
-      _error = "동기화 오류: $e";
-      notifyListeners();
-    }
-  }
-
   // 성찰 보고서 엑셀 다운로드 URL 생성
   Future<String> generateExcelDownloadUrl() async {
     if (_selectedClass.isEmpty) {
       throw Exception("학급이 선택되지 않았습니다");
     }
 
-    if (_isOffline) {
-      throw Exception("네트워크 연결이 필요합니다");
-    }
-
     _isLoading = true;
-    _error = '';
     notifyListeners();
 
     try {
@@ -271,17 +170,6 @@ class ReflectionProvider extends ChangeNotifier {
       _error = e.toString();
       notifyListeners();
       rethrow;
-    }
-  }
-
-  // 현재 주차 설정
-  void setCurrentWeek(int week) {
-    _selectedWeek = week;
-    notifyListeners();
-
-    // 성찰 데이터 다시 로드
-    if (_selectedClass.isNotEmpty) {
-      selectClassAndWeek(_selectedClass, week);
     }
   }
 }
