@@ -19,6 +19,8 @@ class ReflectionManagement extends StatefulWidget {
 
 class _ReflectionManagementState extends State<ReflectionManagement> {
   ReflectionSubmission? _selectedSubmission;
+  String _statusMessage = ''; // 변수 선언 추가
+  bool _isLoading = false; // 변수 선언 추가
 
   @override
   Widget build(BuildContext context) {
@@ -29,6 +31,7 @@ class _ReflectionManagementState extends State<ReflectionManagement> {
     // 학생 목록 가져오기
     final taskProvider = Provider.of<TaskProvider>(context);
     final students = taskProvider.students;
+    final currentWeek = taskProvider.currentWeek;
 
     // 학생이 없는 경우 메시지 표시
     if (students.isEmpty) {
@@ -50,18 +53,63 @@ class _ReflectionManagementState extends State<ReflectionManagement> {
     return Column(
       children: [
         // 헤더 영역
-        _buildHeaderCard(),
+        _buildHeaderCard(currentWeek), // 매개변수 추가
         const SizedBox(height: 16),
+
+        // 상태 메시지
+        if (_statusMessage.isNotEmpty)
+          Container(
+            margin: const EdgeInsets.only(bottom: 16),
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: _statusMessage.contains('성공')
+                  ? Colors.green.shade50
+                  : Colors.orange.shade50,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                color: _statusMessage.contains('성공')
+                    ? Colors.green.shade200
+                    : Colors.orange.shade200,
+              ),
+            ),
+            child: Row(
+              children: [
+                Icon(
+                  _statusMessage.contains('성공')
+                      ? Icons.check_circle
+                      : Icons.info_outline,
+                  color: _statusMessage.contains('성공')
+                      ? Colors.green.shade600
+                      : Colors.orange.shade600,
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(_statusMessage),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.close, size: 16),
+                  onPressed: () {
+                    setState(() {
+                      _statusMessage = '';
+                    });
+                  },
+                ),
+              ],
+            ),
+          ),
 
         // 성찰 카드 그리드
         Expanded(
-          child: _buildReflectionGrid(),
+          child: _buildReflectionGrid(currentWeek), // 매개변수 추가
         ),
       ],
     );
   }
 
-  Widget _buildHeaderCard() {
+  // 헤더 카드 (중복 메서드 제거 및 통합)
+  Widget _buildHeaderCard(int currentWeek) {
+    final taskProvider = Provider.of<TaskProvider>(context, listen: false);
+
     return Card(
       elevation: 2,
       shape: RoundedRectangleBorder(
@@ -70,16 +118,71 @@ class _ReflectionManagementState extends State<ReflectionManagement> {
       child: Padding(
         padding: const EdgeInsets.all(16.0),
         child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            Icon(Icons.book, color: Colors.amber.shade700),
-            const SizedBox(width: 8),
-            Text(
-              '성찰 관리',
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-                color: Colors.amber.shade700,
-              ),
+            Row(
+              children: [
+                Icon(Icons.book, color: Colors.amber.shade700),
+                const SizedBox(width: 8),
+                Text(
+                  '성찰 관리',
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.amber.shade700,
+                  ),
+                ),
+              ],
+            ),
+
+            // 주차 설정 UI
+            Row(
+              children: [
+                Text(
+                  '현재 주차:',
+                  style: TextStyle(
+                    fontWeight: FontWeight.w500,
+                    color: Colors.grey.shade700,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 4),
+                  decoration: BoxDecoration(
+                    color: Colors.amber.shade50,
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: Colors.amber.shade200),
+                  ),
+                  child: DropdownButtonHideUnderline(
+                    child: DropdownButton<int>(
+                      value: currentWeek,
+                      items: [1, 2, 3].map((week) {
+                        return DropdownMenuItem<int>(
+                          value: week,
+                          child: Padding(
+                            padding:
+                                const EdgeInsets.symmetric(horizontal: 8.0),
+                            child: Text(
+                              '$week주차',
+                              style: TextStyle(
+                                fontWeight: currentWeek == week
+                                    ? FontWeight.bold
+                                    : FontWeight.normal,
+                                color: Colors.amber.shade900,
+                              ),
+                            ),
+                          ),
+                        );
+                      }).toList(),
+                      onChanged: (value) {
+                        if (value != null) {
+                          _updateCurrentWeek(value);
+                        }
+                      },
+                    ),
+                  ),
+                ),
+              ],
             ),
           ],
         ),
@@ -87,7 +190,32 @@ class _ReflectionManagementState extends State<ReflectionManagement> {
     );
   }
 
-  Widget _buildReflectionGrid() {
+  // 현재 주차 업데이트 메서드
+  void _updateCurrentWeek(int newWeek) async {
+    setState(() {
+      _isLoading = true;
+      _statusMessage = '주차 정보 업데이트 중...';
+    });
+
+    try {
+      final taskProvider = Provider.of<TaskProvider>(context, listen: false);
+      taskProvider.setCurrentWeek(newWeek);
+
+      setState(() {
+        _isLoading = false;
+        _statusMessage =
+            '성공: $newWeek주차로 설정되었습니다. 이제 학생들은 $newWeek주차 성찰까지 작성할 수 있습니다.';
+      });
+    } catch (e) {
+      setState(() {
+        _isLoading = false;
+        _statusMessage = '오류: 주차 정보 업데이트 실패 - $e';
+      });
+    }
+  }
+
+  // 성찰 그리드 (중복 메서드 제거 및 통합)
+  Widget _buildReflectionGrid(int currentWeek) {
     return GridView.builder(
       gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
         crossAxisCount: 3,
@@ -98,6 +226,7 @@ class _ReflectionManagementState extends State<ReflectionManagement> {
       itemCount: 3, // 3주차 성찰
       itemBuilder: (context, index) {
         final weekNum = index + 1;
+        final bool isActive = weekNum <= currentWeek;
 
         return Card(
           elevation: 2,
@@ -112,7 +241,9 @@ class _ReflectionManagementState extends State<ReflectionManagement> {
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
                   gradient: LinearGradient(
-                    colors: [Colors.amber.shade500, Colors.orange.shade400],
+                    colors: isActive
+                        ? [Colors.amber.shade500, Colors.orange.shade400]
+                        : [Colors.grey.shade300, Colors.grey.shade400],
                     begin: Alignment.topLeft,
                     end: Alignment.bottomRight,
                   ),
@@ -121,25 +252,72 @@ class _ReflectionManagementState extends State<ReflectionManagement> {
                     topRight: Radius.circular(16),
                   ),
                 ),
-                child: Text(
-                  '$weekNum주차 성찰',
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.bold,
-                    fontSize: 16,
-                  ),
-                  textAlign: TextAlign.center,
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      '$weekNum주차 성찰',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 16,
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+
+                    // 활성화 상태 아이콘
+                    Icon(
+                      isActive ? Icons.lock_open : Icons.lock,
+                      size: 16,
+                      color: Colors.white,
+                    ),
+                  ],
                 ),
               ),
 
               // 학생 목록
               Expanded(
-                child: _buildStudentList(weekNum),
+                child: isActive
+                    ? _buildStudentList(weekNum)
+                    : _buildInactiveWeekView(weekNum),
               ),
             ],
           ),
         );
       },
+    );
+  }
+
+  // 비활성화된 주차 표시
+  Widget _buildInactiveWeekView(int weekNum) {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(
+            Icons.lock_outline,
+            size: 32,
+            color: Colors.grey.shade400,
+          ),
+          const SizedBox(height: 8),
+          Text(
+            '비활성화됨',
+            style: TextStyle(
+              color: Colors.grey.shade500,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            '현재 주차를 변경하여 활성화',
+            style: TextStyle(
+              fontSize: 12,
+              color: Colors.grey.shade500,
+            ),
+            textAlign: TextAlign.center,
+          ),
+        ],
+      ),
     );
   }
 
