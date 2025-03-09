@@ -1,9 +1,21 @@
+/// 줄넘기 과제를 표현하는 모델 클래스
 class TaskModel {
+  /// 과제 고유 ID
   final int id;
+
+  /// 과제명
   final String name;
+
+  /// 과제 목표 횟수
   final String count;
+
+  /// 과제 난이도 레벨 (1~6)
   final int level;
+
+  /// 개인 과제 여부 (false면 단체 과제)
   final bool isIndividual;
+
+  /// 과제 설명
   final String description;
 
   TaskModel({
@@ -16,7 +28,7 @@ class TaskModel {
   });
 }
 
-// 과제 데이터
+/// 개인 줄넘기 과제 목록
 final List<TaskModel> individualTasks = [
   TaskModel(
       id: 1,
@@ -56,6 +68,7 @@ final List<TaskModel> individualTasks = [
       description: "한 번 뛰어오를 때 줄을 두 번 돌리는 동작입니다. 높이 점프하여 시간을 확보하세요."),
 ];
 
+/// 단체 줄넘기 과제 목록
 final List<TaskModel> groupTasks = [
   TaskModel(
       id: 1,

@@ -1,6 +1,7 @@
 // lib/models/firebase_models.dart
 import 'package:cloud_firestore/cloud_firestore.dart';
 
+/// 교사 사용자 모델
 class FirebaseUserModel {
   final String uid;
   final String name;
@@ -16,6 +17,7 @@ class FirebaseUserModel {
     this.teacherCode,
   });
 
+  /// Firestore 문서로부터 모델 생성
   factory FirebaseUserModel.fromFirestore(DocumentSnapshot doc) {
     Map<String, dynamic> data = doc.data() as Map<String, dynamic>;
     return FirebaseUserModel(
@@ -27,7 +29,7 @@ class FirebaseUserModel {
     );
   }
 
-  // 로컬 구현
+  /// 로컬 구현용 Map에서 모델 생성
   factory FirebaseUserModel.fromMap(Map<String, dynamic> data, String id) {
     return FirebaseUserModel(
       uid: id,
@@ -38,6 +40,7 @@ class FirebaseUserModel {
     );
   }
 
+  /// Map으로 변환
   Map<String, dynamic> toMap() {
     return {
       'name': name,
@@ -48,14 +51,13 @@ class FirebaseUserModel {
   }
 }
 
-// lib/models/firebase_models.dart에서 FirebaseStudentModel 클래스 개선
-
+/// 학생 모델
 class FirebaseStudentModel {
   final String id;
   final String name;
   final String studentId;
   final String className;
-  final String classNum; // 추가: 반 정보
+  final String classNum; // 학급 번호
   final int group;
   final Map<String, dynamic> individualTasks;
   final Map<String, dynamic> groupTasks;
@@ -73,15 +75,12 @@ class FirebaseStudentModel {
     this.attendance = true,
   });
 
-  // 타임스탬프 처리 개선
+  /// Firestore 문서로부터 모델 생성 (타임스탬프 처리 포함)
   factory FirebaseStudentModel.fromFirestore(DocumentSnapshot doc) {
     Map<String, dynamic> data = doc.data() as Map<String, dynamic>;
 
-    // individualTasks와 groupTasks 처리 개선
+    // 개인 줄넘기 과제 처리
     Map<String, dynamic> processedIndividualTasks = {};
-    Map<String, dynamic> processedGroupTasks = {};
-
-    // individualTasks 처리
     Map<String, dynamic> rawIndividualTasks = data['individualTasks'] ?? {};
     rawIndividualTasks.forEach((key, value) {
       if (value is Map<String, dynamic>) {
@@ -103,7 +102,8 @@ class FirebaseStudentModel {
       }
     });
 
-    // groupTasks 처리 (동일한 방식)
+    // 단체 줄넘기 과제 처리
+    Map<String, dynamic> processedGroupTasks = {};
     Map<String, dynamic> rawGroupTasks = data['groupTasks'] ?? {};
     rawGroupTasks.forEach((key, value) {
       if (value is Map<String, dynamic>) {
@@ -124,24 +124,27 @@ class FirebaseStudentModel {
         };
       }
     });
+
     return FirebaseStudentModel(
       id: doc.id,
       name: data['name'] ?? '',
       studentId: data['studentId'] ?? '',
       className: data['className'] ?? '',
-      classNum: data['classNum'] ?? '', // 파싱 추가
+      classNum: data['classNum'] ?? '', // 반 정보 파싱
       group: data['group'] ?? 1,
-      individualTasks: data['individualTasks'] ?? {},
-      groupTasks: data['groupTasks'] ?? {},
+      individualTasks: processedIndividualTasks,
+      groupTasks: processedGroupTasks,
       attendance: data['attendance'] ?? true,
     );
   }
 
+  /// 속성 변경된 새 인스턴스 생성
   FirebaseStudentModel copyWith({
     String? id,
     String? name,
     String? studentId,
     String? className,
+    String? classNum,
     int? group,
     Map<String, dynamic>? individualTasks,
     Map<String, dynamic>? groupTasks,
@@ -152,6 +155,7 @@ class FirebaseStudentModel {
       name: name ?? this.name,
       studentId: studentId ?? this.studentId,
       className: className ?? this.className,
+      classNum: classNum ?? this.classNum,
       group: group ?? this.group,
       individualTasks: individualTasks ?? this.individualTasks,
       groupTasks: groupTasks ?? this.groupTasks,
@@ -159,13 +163,14 @@ class FirebaseStudentModel {
     );
   }
 
-  // 로컬 구현
+  /// 로컬 구현용 Map에서 모델 생성
   factory FirebaseStudentModel.fromMap(Map<String, dynamic> data, String id) {
     return FirebaseStudentModel(
       id: id,
       name: data['name'] ?? '',
       studentId: data['studentId'] ?? '',
       className: data['className'] ?? '',
+      classNum: data['classNum'] ?? '',
       group: data['group'] ?? 1,
       individualTasks: data['individualTasks'] ?? {},
       groupTasks: data['groupTasks'] ?? {},
@@ -173,11 +178,13 @@ class FirebaseStudentModel {
     );
   }
 
+  /// Map으로 변환
   Map<String, dynamic> toMap() {
     return {
       'name': name,
       'studentId': studentId,
       'className': className,
+      'classNum': classNum,
       'group': group,
       'individualTasks': individualTasks,
       'groupTasks': groupTasks,
@@ -186,6 +193,7 @@ class FirebaseStudentModel {
   }
 }
 
+/// 성찰 모델
 class FirebaseReflectionModel {
   final String id;
   final String studentId;
@@ -209,10 +217,11 @@ class FirebaseReflectionModel {
     required this.submittedDate,
   });
 
+  /// Firestore 문서로부터 모델 생성
   factory FirebaseReflectionModel.fromFirestore(DocumentSnapshot doc) {
     Map<String, dynamic> data = doc.data() as Map<String, dynamic>;
 
-    // submittedDate가 null이거나 타입이 맞지 않는 경우 기본값 제공
+    // submittedDate 처리 (null 또는 타입 불일치 처리)
     DateTime date = DateTime.now();
     if (data['submittedDate'] != null) {
       if (data['submittedDate'] is Timestamp) {
@@ -233,7 +242,7 @@ class FirebaseReflectionModel {
     );
   }
 
-  // 로컬 구현
+  /// 로컬 구현용 Map에서 모델 생성
   factory FirebaseReflectionModel.fromMap(
       Map<String, dynamic> data, String id) {
     return FirebaseReflectionModel(
@@ -251,6 +260,7 @@ class FirebaseReflectionModel {
     );
   }
 
+  /// Map으로 변환
   Map<String, dynamic> toMap() {
     return {
       'studentId': studentId,
@@ -265,7 +275,7 @@ class FirebaseReflectionModel {
   }
 }
 
-// 기존 ReflectionSubmission 클래스와 호환되는 형태로 추가
+/// 성찰 제출 모델 (클라이언트용)
 class ReflectionSubmission {
   final String studentId;
   final int reflectionId;

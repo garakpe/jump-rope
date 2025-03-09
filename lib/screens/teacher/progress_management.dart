@@ -1,11 +1,11 @@
-// lib/screens/teacher/progress_management.dart 파일 전체 코드
-
+// lib/screens/teacher/progress_management.dart
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:intl/intl.dart';
 import '../../models/task_model.dart';
 import '../../providers/task_provider.dart';
 import '../../models/ui_models.dart';
-import 'package:intl/intl.dart';
+import '../../utils/constants.dart';
 
 class ProgressManagement extends StatefulWidget {
   final int selectedClassId;
@@ -31,7 +31,6 @@ class _ProgressManagementState extends State<ProgressManagement> {
       if (widget.selectedClassId > 0) {
         final taskProvider = Provider.of<TaskProvider>(context, listen: false);
         taskProvider.selectClass(widget.selectedClassId.toString());
-        print('ProgressManagement - 선택된 학급: ${widget.selectedClassId}');
       }
     });
   }
@@ -42,10 +41,6 @@ class _ProgressManagementState extends State<ProgressManagement> {
     final students = taskProvider.students;
     final isLoading = taskProvider.isLoading;
     final isOffline = taskProvider.isOffline;
-
-    // 디버그 정보 출력
-    print(
-        '학습 현황 - 선택된 학급: ${widget.selectedClassId}, 학생 수: ${students.length}');
 
     // 학생이 없는 경우 로딩 표시 또는 메시지 표시
     if (isLoading) {
@@ -60,65 +55,24 @@ class _ProgressManagementState extends State<ProgressManagement> {
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Icon(Icons.school_outlined, size: 64, color: Colors.grey.shade300),
-            const SizedBox(height: 16),
-            Text(
-              '학급을 선택하고 학생을 추가해주세요',
-              style: TextStyle(color: Colors.grey.shade600),
+            const SizedBox(height: AppSpacing.md),
+            const Text(
+              AppStrings.noClassSelected,
+              style: TextStyle(color: AppColors.textSecondary),
             ),
           ],
         ),
       );
     }
 
-    // 모둠 정보 계산
-    final currentGroups = <int>{};
-    for (var student in students) {
-      currentGroups.add(student.group);
-    }
-
-    final sortedGroups = currentGroups.toList()..sort();
-
     return Column(
       children: [
-        // 헤더 영역
+        // 헤더 카드
         _buildHeaderCard(),
-        const SizedBox(height: 16),
+        const SizedBox(height: AppSpacing.md),
 
         // 오프라인 모드 알림
-        if (isOffline)
-          Container(
-            margin: const EdgeInsets.symmetric(vertical: 8),
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: Colors.orange.shade50,
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: Colors.orange.shade200),
-            ),
-            child: Row(
-              children: [
-                Icon(Icons.info_outline, color: Colors.orange.shade700),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    '오프라인 모드: 변경 사항은 네트워크 연결이 복구되면 동기화됩니다',
-                    style: TextStyle(color: Colors.orange.shade700),
-                  ),
-                ),
-                TextButton(
-                  onPressed: () {
-                    taskProvider.syncData();
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('데이터 동기화 중...')),
-                    );
-                  },
-                  child: Text(
-                    '동기화',
-                    style: TextStyle(color: Colors.orange.shade700),
-                  ),
-                ),
-              ],
-            ),
-          ),
+        if (isOffline) _buildOfflineAlert(taskProvider),
 
         // 모둠별 진도 현황
         Expanded(
@@ -132,10 +86,10 @@ class _ProgressManagementState extends State<ProgressManagement> {
     return Card(
       elevation: 2,
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(AppSizes.borderRadius),
       ),
       child: Padding(
-        padding: const EdgeInsets.all(16.0),
+        padding: const EdgeInsets.all(AppSpacing.md),
         child: Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
@@ -144,97 +98,136 @@ class _ProgressManagementState extends State<ProgressManagement> {
                 Icon(
                   Icons.school,
                   color: _viewMode == 'individual'
-                      ? Colors.blue.shade700
-                      : Colors.green.shade700,
+                      ? AppColors.individualPrimary
+                      : AppColors.groupPrimary,
                 ),
-                const SizedBox(width: 8),
+                const SizedBox(width: AppSpacing.sm),
                 Text(
                   '${widget.selectedClassId}반 학습 현황',
                   style: TextStyle(
-                    fontSize: 18,
+                    fontSize: AppSizes.fontSizeLG,
                     fontWeight: FontWeight.bold,
                     color: _viewMode == 'individual'
-                        ? Colors.blue.shade700
-                        : Colors.green.shade700,
+                        ? AppColors.individualPrimary
+                        : AppColors.groupPrimary,
                   ),
                 ),
               ],
             ),
-            Container(
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(24),
-                gradient: LinearGradient(
-                  colors: [Colors.blue.shade400, Colors.green.shade400],
-                  begin: Alignment.centerLeft,
-                  end: Alignment.centerRight,
-                ),
-              ),
-              padding: const EdgeInsets.all(2),
-              child: Row(
-                children: [
-                  GestureDetector(
-                    onTap: () {
-                      setState(() {
-                        _viewMode = 'individual';
-                      });
-                    },
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 12,
-                        vertical: 8,
-                      ),
-                      decoration: BoxDecoration(
-                        color: _viewMode == 'individual'
-                            ? Colors.white
-                            : Colors.transparent,
-                        borderRadius: BorderRadius.circular(22),
-                      ),
-                      child: Text(
-                        '개인줄넘기',
-                        style: TextStyle(
-                          color: _viewMode == 'individual'
-                              ? Colors.blue.shade700
-                              : Colors.white,
-                          fontWeight: FontWeight.bold,
-                          fontSize: 14,
-                        ),
-                      ),
-                    ),
-                  ),
-                  GestureDetector(
-                    onTap: () {
-                      setState(() {
-                        _viewMode = 'group';
-                      });
-                    },
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 12,
-                        vertical: 8,
-                      ),
-                      decoration: BoxDecoration(
-                        color: _viewMode == 'group'
-                            ? Colors.white
-                            : Colors.transparent,
-                        borderRadius: BorderRadius.circular(22),
-                      ),
-                      child: Text(
-                        '단체줄넘기',
-                        style: TextStyle(
-                          color: _viewMode == 'group'
-                              ? Colors.green.shade700
-                              : Colors.white,
-                          fontWeight: FontWeight.bold,
-                          fontSize: 14,
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
+            _buildViewModeSelector(),
           ],
         ),
+      ),
+    );
+  }
+
+  Container _buildViewModeSelector() {
+    return Container(
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(24),
+        gradient: LinearGradient(
+          colors: [Colors.blue.shade400, Colors.green.shade400],
+          begin: Alignment.centerLeft,
+          end: Alignment.centerRight,
+        ),
+      ),
+      padding: const EdgeInsets.all(2),
+      child: Row(
+        children: [
+          GestureDetector(
+            onTap: () {
+              setState(() {
+                _viewMode = 'individual';
+              });
+            },
+            child: Container(
+              padding: const EdgeInsets.symmetric(
+                horizontal: 12,
+                vertical: 8,
+              ),
+              decoration: BoxDecoration(
+                color: _viewMode == 'individual'
+                    ? AppColors.white
+                    : Colors.transparent,
+                borderRadius: BorderRadius.circular(22),
+              ),
+              child: Text(
+                AppStrings.individualJumpRope,
+                style: TextStyle(
+                  color: _viewMode == 'individual'
+                      ? AppColors.individualPrimary
+                      : AppColors.white,
+                  fontWeight: FontWeight.bold,
+                  fontSize: AppSizes.fontSizeSM,
+                ),
+              ),
+            ),
+          ),
+          GestureDetector(
+            onTap: () {
+              setState(() {
+                _viewMode = 'group';
+              });
+            },
+            child: Container(
+              padding: const EdgeInsets.symmetric(
+                horizontal: 12,
+                vertical: 8,
+              ),
+              decoration: BoxDecoration(
+                color:
+                    _viewMode == 'group' ? AppColors.white : Colors.transparent,
+                borderRadius: BorderRadius.circular(22),
+              ),
+              child: Text(
+                AppStrings.groupJumpRope,
+                style: TextStyle(
+                  color: _viewMode == 'group'
+                      ? AppColors.groupPrimary
+                      : AppColors.white,
+                  fontWeight: FontWeight.bold,
+                  fontSize: AppSizes.fontSizeSM,
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildOfflineAlert(TaskProvider taskProvider) {
+    return Container(
+      margin: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.orange.shade50,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.orange.shade200),
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.info_outline, color: Colors.orange.shade700),
+          const SizedBox(width: AppSpacing.sm),
+          Expanded(
+            child: Text(
+              AppStrings.offlineMode,
+              style: TextStyle(color: Colors.orange.shade700),
+            ),
+          ),
+          TextButton(
+            onPressed: () {
+              taskProvider.syncData();
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text(AppStrings.syncInProgress)),
+              );
+            },
+            child: Text(
+              '동기화',
+              style: TextStyle(color: Colors.orange.shade700),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -264,500 +257,339 @@ class _ProgressManagementState extends State<ProgressManagement> {
           // 모둠의 단체줄넘기 자격 여부 확인
           final qualification = _checkGroupQualification(groupStudents);
 
-          return Card(
-            elevation: 2,
-            margin: const EdgeInsets.only(bottom: 16),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(16),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // 모둠 헤더
-                Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: _viewMode == 'individual'
-                        ? Colors.blue.shade100
-                        : Colors.green.shade100,
-                    borderRadius: const BorderRadius.only(
-                      topLeft: Radius.circular(16),
-                      topRight: Radius.circular(16),
-                    ),
-                  ),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text(
-                        '$groupNum모둠 (${groupStudents.length}명)',
-                        style: TextStyle(
-                          fontWeight: FontWeight.bold,
-                          fontSize: 16,
-                          color: _viewMode == 'individual'
-                              ? Colors.blue.shade800
-                              : Colors.green.shade800,
-                        ),
-                      ),
-                      if (_viewMode == 'group')
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 12,
-                            vertical: 6,
-                          ),
-                          decoration: BoxDecoration(
-                            color: qualification.qualified
-                                ? Colors.green.shade200
-                                : Colors.grey.shade200,
-                            borderRadius: BorderRadius.circular(16),
-                          ),
-                          child: Text(
-                            qualification.qualified
-                                ? '단체줄넘기 시작 가능!'
-                                : '개인 성공 ${qualification.count}/${qualification.needed}',
-                            style: TextStyle(
-                              color: qualification.qualified
-                                  ? Colors.green.shade900
-                                  : Colors.grey.shade800,
-                              fontSize: 12,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                        ),
-                    ],
-                  ),
-                ),
-
-                // 진도표
-                SingleChildScrollView(
-                  scrollDirection: Axis.horizontal,
-                  child: SingleChildScrollView(
-                    child: DataTable(
-                      columnSpacing: 10,
-                      headingRowColor: WidgetStateProperty.all(
-                        _viewMode == 'individual'
-                            ? Colors.blue.shade50
-                            : Colors.green.shade50,
-                      ),
-                      dataRowColor: WidgetStateProperty.all(Colors.white),
-                      border: TableBorder.all(
-                        color: Colors.grey.shade300,
-                        width: 1,
-                      ),
-                      columns: [
-                        const DataColumn(
-                          label: Text('모둠원',
-                              style: TextStyle(fontWeight: FontWeight.bold)),
-                        ),
-                        const DataColumn(
-                          label: Center(
-                            child: Text('출석',
-                                style: TextStyle(fontWeight: FontWeight.bold)),
-                          ),
-                        ),
-                        ...tasks.map((task) => DataColumn(
-                              label: Padding(
-                                padding: const EdgeInsets.all(4.0),
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.center,
-                                  children: [
-                                    Text(
-                                      task.name,
-                                      style: const TextStyle(
-                                          fontWeight: FontWeight.bold,
-                                          fontSize: 12),
-                                      textAlign: TextAlign.center,
-                                      overflow: TextOverflow.ellipsis,
-                                    ),
-                                    Text(
-                                      task.count,
-                                      style: const TextStyle(fontSize: 11),
-                                      textAlign: TextAlign.center,
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            )),
-                      ],
-                      rows: groupStudents.map((student) {
-                        return DataRow(
-                          cells: [
-                            DataCell(
-                              Row(
-                                children: [
-                                  Container(
-                                    padding: const EdgeInsets.all(8),
-                                    decoration: BoxDecoration(
-                                      color: Colors.grey.shade100,
-                                      shape: BoxShape.circle,
-                                    ),
-                                    child: Text(
-                                      '${student.number}',
-                                      style: const TextStyle(
-                                          fontWeight: FontWeight.bold),
-                                    ),
-                                  ),
-                                  const SizedBox(width: 8),
-                                  Text(
-                                    student.name,
-                                    style: const TextStyle(
-                                        fontWeight: FontWeight.bold),
-                                  ),
-                                ],
-                              ),
-                            ),
-                            DataCell(
-                              Center(
-                                child: student.attendance
-                                    ? Icon(Icons.check_circle,
-                                        color: Colors.green.shade600)
-                                    : Icon(Icons.cancel,
-                                        color: Colors.red.shade400),
-                              ),
-                            ),
-// lib/screens/teacher/progress_management.dart의 _buildProgressTable 내부에서 DataCell 부분 수정
-
-// progress_management.dart 파일의 _buildProgressTable 메서드 내부 DataCell 부분 수정
-
-                            ...tasks.map((task) {
-                              final isIndividual = _viewMode == 'individual';
-                              final progress = isIndividual
-                                  ? student.individualProgress[task.name]
-                                  : student.groupProgress[task.name];
-                              final isCompleted =
-                                  progress?.isCompleted ?? false;
-                              final completionDate = progress?.completedDate;
-
-                              return DataCell(
-                                Material(
-                                  color: Colors.transparent,
-                                  child: InkWell(
-                                    onTap: () {
-                                      // 단체줄넘기는 자격 있을 때만 체크 가능
-                                      bool canToggle = true;
-                                      if (!isIndividual && !isCompleted) {
-                                        // 단체줄넘기는 자격 조건 확인
-                                        canToggle = qualification.qualified;
-                                      }
-
-                                      if (student.attendance && canToggle) {
-                                        // 도장 부여/취소 로직 호출
-                                        _toggleTaskCompletion(
-                                            student.id,
-                                            task.name,
-                                            !isCompleted,
-                                            !isIndividual);
-
-                                        // 디버깅용
-                                        print(
-                                            '도장 상태 변경 시도: 학생=${student.id}, 과제=${task.name}, 완료=${!isCompleted}');
-                                      } else if (!canToggle &&
-                                          !isIndividual &&
-                                          !isCompleted) {
-                                        // 단체줄넘기 자격이 없는 경우 안내
-                                        ScaffoldMessenger.of(context)
-                                            .showSnackBar(
-                                          SnackBar(
-                                            content: Text(
-                                                '단체줄넘기는 개인줄넘기 성공 도장 ${qualification.needed}개 이상 획득 시 시작할 수 있습니다.'),
-                                            backgroundColor: Colors.orange,
-                                          ),
-                                        );
-                                      }
-                                    },
-                                    child: Ink(
-                                      width: double.infinity,
-                                      height: double.infinity,
-                                      color: isCompleted
-                                          ? (isIndividual
-                                              ? Colors.blue.shade50
-                                              : Colors.green.shade50)
-                                          : null,
-                                      child: Center(
-                                        child: isCompleted
-                                            ? Column(
-                                                mainAxisAlignment:
-                                                    MainAxisAlignment.center,
-                                                children: [
-                                                  Icon(
-                                                    Icons.check_circle,
-                                                    color: isIndividual
-                                                        ? Colors.blue
-                                                        : Colors.green,
-                                                    size: 24,
-                                                  ),
-                                                  if (completionDate != null)
-                                                    Container(
-                                                      margin:
-                                                          const EdgeInsets.only(
-                                                              top: 4),
-                                                      padding: const EdgeInsets
-                                                          .symmetric(
-                                                          horizontal: 4,
-                                                          vertical: 2),
-                                                      decoration: BoxDecoration(
-                                                        color: isIndividual
-                                                            ? Colors
-                                                                .blue.shade100
-                                                                .withOpacity(
-                                                                    0.7)
-                                                            : Colors
-                                                                .green.shade100
-                                                                .withOpacity(
-                                                                    0.7),
-                                                        borderRadius:
-                                                            BorderRadius
-                                                                .circular(4),
-                                                      ),
-                                                      child: Text(
-                                                        _formatDate(
-                                                            completionDate),
-                                                        style: TextStyle(
-                                                          fontSize: 9,
-                                                          fontWeight:
-                                                              FontWeight.bold,
-                                                          color: isIndividual
-                                                              ? Colors
-                                                                  .blue.shade800
-                                                              : Colors.green
-                                                                  .shade800,
-                                                        ),
-                                                      ),
-                                                    ),
-                                                ],
-                                              )
-                                            : Column(
-                                                mainAxisAlignment:
-                                                    MainAxisAlignment.center,
-                                                children: [
-                                                  Icon(
-                                                    Icons.add_circle_outline,
-                                                    color: Colors.grey.shade400,
-                                                    size: 20,
-                                                  ),
-                                                  Text(
-                                                    "클릭하여 도장 부여",
-                                                    style: TextStyle(
-                                                      fontSize: 8,
-                                                      color:
-                                                          Colors.grey.shade500,
-                                                    ),
-                                                  ),
-                                                ],
-                                              ),
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                              );
-                            }),
-                          ],
-                        );
-                      }).toList(),
-                    ),
-                  ),
-                ),
-
-                // 단체줄넘기 자격 알림 (개인줄넘기 탭에서만 표시)
-                if (_viewMode == 'individual' && !qualification.qualified)
-                  Container(
-                    width: double.infinity,
-                    margin: const EdgeInsets.all(12),
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: Colors.blue.shade50,
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Row(
-                      children: [
-                        const Icon(Icons.info_outline, color: Colors.blue),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: RichText(
-                            text: TextSpan(
-                              style: TextStyle(
-                                  color: Colors.blue.shade700, fontSize: 14),
-                              children: [
-                                const TextSpan(
-                                  text: '개인줄넘기 목표: ',
-                                  style: TextStyle(fontWeight: FontWeight.bold),
-                                ),
-                                TextSpan(
-                                  text:
-                                      '${qualification.count}/${qualification.needed} 완료',
-                                ),
-                                TextSpan(
-                                  text:
-                                      ' - 단체줄넘기 시작을 위해 ${qualification.needed - qualification.count}개가 더 필요합니다',
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-              ],
-            ),
-          );
+          return _buildGroupCard(groupNum, groupStudents, tasks, qualification);
         }).toList(),
       ),
     );
   }
 
-// 날짜 포맷팅 함수 개선
-  String _formatDate(String? dateString) {
-    if (dateString == null) return '';
+  Card _buildGroupCard(int groupNum, List<StudentProgress> groupStudents,
+      List<TaskModel> tasks, QualificationStatus qualification) {
+    return Card(
+      elevation: 2,
+      margin: const EdgeInsets.only(bottom: AppSpacing.md),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(AppSizes.borderRadius),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // 모둠 헤더
+          _buildGroupHeader(groupNum, groupStudents, qualification),
 
-    try {
-      final dateTime = DateTime.parse(dateString);
-
-      // 년/월/일 형식으로 표시 (더 직관적으로)
-      final y = dateTime.year.toString().substring(2); // 년도 뒤 2자리
-      final m = dateTime.month.toString().padLeft(2, '0');
-      final d = dateTime.day.toString().padLeft(2, '0');
-
-      return '$y/$m/$d';
-    } catch (e) {
-      // 날짜 형식이 아닌 경우 원본 그대로 반환 (최대 10자)
-      return dateString.length > 10 ? dateString.substring(0, 10) : dateString;
-    }
-  }
-
-  // 날짜 문자열 길이 제한 함수
-  int min(int a, int b) {
-    return a < b ? a : b;
-  }
-
-// lib/screens/teacher/progress_management.dart의 _toggleTaskCompletion 메서드
-
-  void _toggleTaskCompletion(
-      String studentId, String taskName, bool completed, bool isGroupTask) {
-    // TaskProvider 참조
-    final taskProvider = Provider.of<TaskProvider>(context, listen: false);
-    final isOffline = taskProvider.isOffline;
-
-    print('도장 토글: 학생=$studentId, 과제=$taskName, 완료=$completed, 그룹=$isGroupTask');
-
-    // 개인줄넘기 과제의 경우, 순차적 진행 여부 확인
-    if (!isGroupTask && completed) {
-      // 현재 과제의 레벨 찾기
-      final currentTask = individualTasks.firstWhere(
-        (task) => task.name == taskName,
-        orElse: () => TaskModel(id: 0, name: "", count: "", level: 0),
-      );
-
-      // 해당 학생 찾기
-      final student = taskProvider.students.firstWhere(
-        (s) => s.id == studentId,
-        orElse: () => StudentProgress(
-            id: "", name: "", number: 0, group: 0, studentId: ''),
-      );
-
-      // 이미 완료된 과제인지 확인
-      final isAlreadyCompleted =
-          student.individualProgress[taskName]?.isCompleted ?? false;
-
-      // 이미 완료된 경우 추가 확인 없이 진행
-      if (isAlreadyCompleted) {
-        _processTaskCompletion(studentId, taskName, completed, isGroupTask);
-        return;
-      }
-
-      // 이전 단계 과제들을 모두 완료했는지 확인
-      bool hasSkippedTasks = false;
-      List<String> skippedTaskNames = [];
-
-      for (var task in individualTasks) {
-        // 현재 과제보다 낮은 레벨의 과제만 확인
-        if (task.level < currentTask.level) {
-          // 이전 단계 과제가 완료되지 않았는지 확인
-          final isCompleted =
-              student.individualProgress[task.name]?.isCompleted ?? false;
-          if (!isCompleted) {
-            hasSkippedTasks = true;
-            skippedTaskNames.add(task.name);
-          }
-        }
-      }
-
-      // 건너뛴 과제가 있으면 경고 대화상자 표시
-      if (hasSkippedTasks) {
-        showDialog(
-          context: context,
-          builder: (context) => AlertDialog(
-            title:
-                const Text('단계 순서 확인', style: TextStyle(color: Colors.orange)),
-            content: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text('${student.name} 학생은 이전 단계를 아직 완료하지 않았습니다:'),
-                const SizedBox(height: 12),
-                Container(
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                    color: Colors.orange.shade50,
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: Colors.orange.shade200),
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: skippedTaskNames
-                        .map((name) => Padding(
-                              padding: const EdgeInsets.symmetric(vertical: 4),
-                              child: Row(
-                                children: [
-                                  Icon(Icons.warning,
-                                      color: Colors.orange.shade700, size: 16),
-                                  const SizedBox(width: 8),
-                                  Text(name,
-                                      style: const TextStyle(
-                                          fontWeight: FontWeight.bold)),
-                                ],
-                              ),
-                            ))
-                        .toList(),
-                  ),
-                ),
-                const SizedBox(height: 12),
-                const Text('개인줄넘기는 단계적으로 진행하는 것이 권장됩니다. 그래도 도장을 부여하시겠습니까?'),
-              ],
+          // 진도표
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: SingleChildScrollView(
+              child: _buildGroupDataTable(groupStudents, tasks),
             ),
-            actions: [
-              TextButton(
-                child: const Text('취소'),
-                onPressed: () => Navigator.of(context).pop(),
-              ),
-              TextButton(
-                child: const Text('진행', style: TextStyle(color: Colors.orange)),
-                onPressed: () {
-                  Navigator.of(context).pop();
-                  _processTaskCompletion(
-                      studentId, taskName, completed, isGroupTask);
-                },
-              ),
-            ],
           ),
+
+          // 단체줄넘기 자격 알림 (개인줄넘기 탭에서만 표시)
+          if (_viewMode == 'individual' && !qualification.qualified)
+            _buildQualificationAlert(qualification),
+        ],
+      ),
+    );
+  }
+
+  Container _buildGroupHeader(int groupNum, List<StudentProgress> groupStudents,
+      QualificationStatus qualification) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(AppSpacing.md),
+      decoration: BoxDecoration(
+        color: _viewMode == 'individual'
+            ? AppColors.individualLight
+            : AppColors.groupLight,
+        borderRadius: const BorderRadius.only(
+          topLeft: Radius.circular(AppSizes.borderRadius),
+          topRight: Radius.circular(AppSizes.borderRadius),
+        ),
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(
+            '$groupNum모둠 (${groupStudents.length}명)',
+            style: TextStyle(
+              fontWeight: FontWeight.bold,
+              fontSize: AppSizes.fontSizeMD,
+              color: _viewMode == 'individual'
+                  ? AppColors.individualPrimary
+                  : AppColors.groupPrimary,
+            ),
+          ),
+          if (_viewMode == 'group')
+            Container(
+              padding: const EdgeInsets.symmetric(
+                horizontal: 12,
+                vertical: 6,
+              ),
+              decoration: BoxDecoration(
+                color: qualification.qualified
+                    ? AppColors.groupLight
+                    : Colors.grey.shade200,
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: Text(
+                qualification.qualified
+                    ? '단체줄넘기 시작 가능!'
+                    : '개인 성공 ${qualification.count}/${qualification.needed}',
+                style: TextStyle(
+                  color: qualification.qualified
+                      ? AppColors.groupPrimary
+                      : Colors.grey.shade800,
+                  fontSize: AppSizes.fontSizeXS,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  DataTable _buildGroupDataTable(
+      List<StudentProgress> groupStudents, List<TaskModel> tasks) {
+    return DataTable(
+      columnSpacing: 10,
+      headingRowColor: WidgetStateProperty.all(
+        _viewMode == 'individual'
+            ? AppColors.individualLight
+            : AppColors.groupLight,
+      ),
+      dataRowColor: WidgetStateProperty.all(AppColors.white),
+      border: TableBorder.all(
+        color: Colors.grey.shade300,
+        width: 1,
+      ),
+      columns: [
+        const DataColumn(
+          label: Text('모둠원', style: TextStyle(fontWeight: FontWeight.bold)),
+        ),
+        const DataColumn(
+          label: Center(
+            child: Text('출석', style: TextStyle(fontWeight: FontWeight.bold)),
+          ),
+        ),
+        ...tasks.map((task) => DataColumn(
+              label: Padding(
+                padding: const EdgeInsets.all(4.0),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    Text(
+                      task.name,
+                      style: const TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: AppSizes.fontSizeXS),
+                      textAlign: TextAlign.center,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    Text(
+                      task.count,
+                      style: const TextStyle(fontSize: 11),
+                      textAlign: TextAlign.center,
+                    ),
+                  ],
+                ),
+              ),
+            )),
+      ],
+      rows: groupStudents.map((student) {
+        return DataRow(
+          cells: [
+            _buildStudentNameCell(student),
+            _buildAttendanceCell(student),
+            ...tasks.map((task) => _buildTaskCell(student, task)),
+          ],
         );
-      } else {
-        // 건너뛴 과제가 없으면 바로 진행
-        _processTaskCompletion(studentId, taskName, completed, isGroupTask);
-      }
-    } else {
-      // 단체줄넘기거나 도장 취소의 경우 바로 진행
-      _processTaskCompletion(studentId, taskName, completed, isGroupTask);
+      }).toList(),
+    );
+  }
+
+  DataCell _buildStudentNameCell(StudentProgress student) {
+    return DataCell(
+      Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: Colors.grey.shade100,
+              shape: BoxShape.circle,
+            ),
+            child: Text(
+              '${student.number}',
+              style: const TextStyle(fontWeight: FontWeight.bold),
+            ),
+          ),
+          const SizedBox(width: AppSpacing.sm),
+          Text(
+            student.name,
+            style: const TextStyle(fontWeight: FontWeight.bold),
+          ),
+        ],
+      ),
+    );
+  }
+
+  DataCell _buildAttendanceCell(StudentProgress student) {
+    return DataCell(
+      Center(
+        child: student.attendance
+            ? const Icon(Icons.check_circle, color: AppColors.success)
+            : const Icon(Icons.cancel, color: AppColors.error),
+      ),
+    );
+  }
+
+  DataCell _buildTaskCell(StudentProgress student, TaskModel task) {
+    final isIndividual = _viewMode == 'individual';
+    final progress = isIndividual
+        ? student.individualProgress[task.name]
+        : student.groupProgress[task.name];
+    final isCompleted = progress?.isCompleted ?? false;
+    final completionDate = progress?.completedDate;
+
+    return DataCell(
+      Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: () =>
+              _handleTaskClick(student, task, isCompleted, isIndividual),
+          child: Ink(
+            width: double.infinity,
+            height: double.infinity,
+            color: isCompleted
+                ? (isIndividual
+                    ? AppColors.individualLight
+                    : AppColors.groupLight)
+                : null,
+            child: Center(
+              child: isCompleted
+                  ? Stack(
+                      alignment: Alignment.center,
+                      children: [
+                        Icon(
+                          Icons.check_circle,
+                          color: isIndividual
+                              ? AppColors.individualPrimary
+                              : AppColors.groupPrimary,
+                          size: 24,
+                        ),
+                        if (completionDate != null)
+                          Positioned(
+                            bottom: 0,
+                            child: Text(
+                              _formatDate(completionDate),
+                              style: const TextStyle(
+                                fontSize: 9,
+                                color: AppColors.textSecondary,
+                              ),
+                            ),
+                          ),
+                      ],
+                    )
+                  : Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(
+                          Icons.add_circle_outline,
+                          color: Colors.grey.shade400,
+                          size: 20,
+                        ),
+                        Text(
+                          "클릭하여 도장 부여",
+                          style: TextStyle(
+                            fontSize: 8,
+                            color: Colors.grey.shade500,
+                          ),
+                        ),
+                      ],
+                    ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Container _buildQualificationAlert(QualificationStatus qualification) {
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.all(12),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: AppColors.individualLight,
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.info_outline, color: AppColors.individualPrimary),
+          const SizedBox(width: AppSpacing.sm),
+          Expanded(
+            child: RichText(
+              text: TextSpan(
+                style: const TextStyle(
+                    color: AppColors.individualPrimary,
+                    fontSize: AppSizes.fontSizeSM),
+                children: [
+                  const TextSpan(
+                    text: '개인줄넘기 목표: ',
+                    style: TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                  TextSpan(
+                    text: '${qualification.count}/${qualification.needed} 완료',
+                  ),
+                  TextSpan(
+                    text:
+                        ' - 단체줄넘기 시작을 위해 ${qualification.needed - qualification.count}개가 더 필요합니다',
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _handleTaskClick(StudentProgress student, TaskModel task,
+      bool isCompleted, bool isIndividual) {
+    final taskProvider = Provider.of<TaskProvider>(context, listen: false);
+    final qualification = _checkGroupQualification([student]);
+
+    // 단체줄넘기는 자격 있을 때만 체크 가능
+    bool canToggle = true;
+    if (!isIndividual && !isCompleted) {
+      // 단체줄넘기는 자격 조건 확인 (전체 모둠으로 확인)
+      final groupStudents =
+          taskProvider.students.where((s) => s.group == student.group).toList();
+      final groupQualification = _checkGroupQualification(groupStudents);
+      canToggle = groupQualification.qualified;
+    }
+
+    if (student.attendance && canToggle) {
+      // 도장 토글 다이얼로그 표시
+      _showToggleTaskDialog(student.id, task.name, !isCompleted, !isIndividual);
+    } else if (!canToggle && !isIndividual && !isCompleted) {
+      // 단체줄넘기 자격이 없는 경우 안내
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+              '단체줄넘기는 개인줄넘기 성공 도장 ${qualification.needed}개 이상 획득 시 시작할 수 있습니다.'),
+          backgroundColor: Colors.orange,
+        ),
+      );
     }
   }
 
-// 실제 도장 처리 로직을 별도 메서드로 분리
-  void _processTaskCompletion(
+  void _showToggleTaskDialog(
       String studentId, String taskName, bool completed, bool isGroupTask) {
-    // TaskProvider 참조
     final taskProvider = Provider.of<TaskProvider>(context, listen: false);
     final isOffline = taskProvider.isOffline;
 
-    // 알림 대화상자 표시
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
@@ -772,80 +604,80 @@ class _ProgressManagementState extends State<ProgressManagement> {
           ),
           TextButton(
             child: Text(completed ? '도장 부여' : '도장 취소'),
-            onPressed: () async {
-              Navigator.of(context).pop();
-
-              // 로딩 표시 - 타임아웃 설정
-              final snackBar = SnackBar(
-                content: Row(
-                  children: [
-                    const SizedBox(
-                      width: 20,
-                      height: 20,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    ),
-                    const SizedBox(width: 16),
-                    Text('${completed ? '도장 부여' : '도장 취소'} 중...'),
-                  ],
-                ),
-                duration: const Duration(seconds: 3), // 최대 3초 표시
-                backgroundColor: Colors.blue.shade700,
-              );
-
-              // 스낵바 표시
-              ScaffoldMessenger.of(context).showSnackBar(snackBar);
-
-              try {
-                // TaskProvider를 통해 상태 업데이트
-                await taskProvider.updateTaskStatus(
-                    studentId, taskName, completed, isGroupTask);
-
-                // 성공 시 기존 스낵바 제거 후 성공 메시지 표시
-                ScaffoldMessenger.of(context).hideCurrentSnackBar();
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text(completed
-                        ? '$taskName 과제에 성공 도장을 부여했습니다.'
-                        : '$taskName 과제의 성공 도장을 취소했습니다.'),
-                    backgroundColor: completed ? Colors.green : Colors.orange,
-                    behavior: SnackBarBehavior.floating,
-                    duration: const Duration(seconds: 2),
-                  ),
-                );
-
-                // 매우 중요: UI 강제 갱신
-                setState(() {});
-              } catch (e) {
-                // 오류 발생 시 기존 스낵바 제거 후 오류 메시지 표시
-                ScaffoldMessenger.of(context).hideCurrentSnackBar();
-
-                // 오프라인 상태면 다른 메시지 표시
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text(isOffline
-                        ? '오프라인 모드: 변경 사항은 로컬에 저장되었으며 네트워크 연결 시 동기화됩니다.'
-                        : '오류 발생: $e'),
-                    backgroundColor: isOffline ? Colors.orange : Colors.red,
-                    behavior: SnackBarBehavior.floating,
-                    action: isOffline
-                        ? SnackBarAction(
-                            label: '동기화 시도',
-                            onPressed: () {
-                              taskProvider.syncData();
-                            },
-                          )
-                        : null,
-                  ),
-                );
-
-                // 오류가 발생해도 UI 갱신 (로컬 상태는 업데이트되었을 수 있음)
-                setState(() {});
-              }
-            },
+            onPressed: () => _processTaskUpdate(
+                studentId, taskName, completed, isGroupTask, context),
           ),
         ],
       ),
     );
+  }
+
+  Future<void> _processTaskUpdate(String studentId, String taskName,
+      bool completed, bool isGroupTask, BuildContext dialogContext) async {
+    Navigator.of(dialogContext).pop();
+    final taskProvider = Provider.of<TaskProvider>(context, listen: false);
+    final isOffline = taskProvider.isOffline;
+
+    // 로딩 표시
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Row(
+          children: [
+            const SizedBox(
+              width: 20,
+              height: 20,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            ),
+            const SizedBox(width: AppSpacing.md),
+            Text('${completed ? '도장 부여' : '도장 취소'} 중...'),
+          ],
+        ),
+        duration: const Duration(seconds: 60), // 긴 시간 설정
+        backgroundColor: AppColors.individualPrimary,
+      ),
+    );
+
+    try {
+      // TaskProvider를 통해 상태 업데이트
+      await taskProvider.updateTaskStatus(
+          studentId, taskName, completed, isGroupTask);
+
+      // 성공 시 기존 스낵바 제거 후 성공 메시지 표시
+      ScaffoldMessenger.of(context).hideCurrentSnackBar();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(completed
+              ? '$taskName 과제에 성공 도장을 부여했습니다.'
+              : '$taskName 과제의 성공 도장을 취소했습니다.'),
+          backgroundColor: completed ? AppColors.success : Colors.orange,
+          behavior: SnackBarBehavior.floating,
+          duration: const Duration(seconds: 2),
+        ),
+      );
+
+      // UI 강제 갱신
+      setState(() {});
+    } catch (e) {
+      // 오류 발생 시 기존 스낵바 제거 후 오류 메시지 표시
+      ScaffoldMessenger.of(context).hideCurrentSnackBar();
+
+      // 오프라인 상태면 다른 메시지 표시
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(isOffline ? AppStrings.offlineMode : '오류 발생: $e'),
+          backgroundColor: isOffline ? Colors.orange : AppColors.error,
+          behavior: SnackBarBehavior.floating,
+          action: isOffline
+              ? SnackBarAction(
+                  label: '동기화 시도',
+                  onPressed: () {
+                    taskProvider.syncData();
+                  },
+                )
+              : null,
+        ),
+      );
+    }
   }
 
   // 모둠별 단체줄넘기 자격 여부 확인
@@ -870,8 +702,27 @@ class _ProgressManagementState extends State<ProgressManagement> {
       needed: neededSuccesses,
     );
   }
+
+  // 날짜 포맷팅 함수
+  String _formatDate(String? dateString) {
+    if (dateString == null) return '';
+
+    try {
+      final dateTime = DateTime.parse(dateString);
+      return DateFormat('yy/MM/dd').format(dateTime);
+    } catch (e) {
+      // 날짜 형식이 아닌 경우 원본 그대로 반환
+      return dateString.substring(0, min(10, dateString.length));
+    }
+  }
+
+  // 날짜 문자열 길이 제한 함수
+  int min(int a, int b) {
+    return a < b ? a : b;
+  }
 }
 
+// 모둠 단체줄넘기 자격 상태를 담는 클래스
 class QualificationStatus {
   final bool qualified;
   final int count;
