@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 
 enum NavigationTab {
-  dashboard,
+  home, // 새로 추가할 홈 탭
+  dashboard, // 이름을 '과제'로 변경할 현재 홈 탭
   progress,
   reflection,
 }
@@ -43,8 +44,14 @@ class BottomNavBar extends StatelessWidget {
             children: [
               _buildNavItem(
                 context: context,
-                icon: Icons.home,
-                label: '홈',
+                icon: Icons.home, // 홈 아이콘 유지
+                label: '홈', // 새 홈 탭
+                tab: NavigationTab.home,
+              ),
+              _buildNavItem(
+                context: context,
+                icon: Icons.assignment, // 과제에 더 적합한 아이콘으로 변경
+                label: '과제', // 기존 홈을 과제로 변경
                 tab: NavigationTab.dashboard,
               ),
               _buildNavItem(

@@ -10,6 +10,7 @@ import './progress_screen.dart'; // 진도 화면
 import './reflection_screen.dart'; // 성찰 화면 (이름 충돌 해결)
 import '../../models/ui_models.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter/cupertino.dart';
 
 // 현재 학생의 진도 정보 찾기 (일관된 방식으로)
 StudentProgress getCurrentStudent(TaskProvider taskProvider, String studentId) {
@@ -46,6 +47,8 @@ class _StudentDashboardState extends State<StudentDashboard>
   void initState() {
     super.initState();
     _tabController = TabController(length: 2, vsync: this);
+    // 기본 탭을 홈으로 설정
+    _currentTab = NavigationTab.home;
     // 화면이 처음 로드될 때 데이터 강제 새로고침
     WidgetsBinding.instance.addPostFrameCallback((_) {
       // 사용자 정보를 이용해 학생 ID 가져오기
@@ -186,6 +189,8 @@ class _StudentDashboardState extends State<StudentDashboard>
 
   Widget _buildBody() {
     switch (_currentTab) {
+      case NavigationTab.home:
+        return _buildHomeContent();
       case NavigationTab.dashboard:
         return _buildDashboardContent();
       case NavigationTab.progress:
@@ -195,8 +200,234 @@ class _StudentDashboardState extends State<StudentDashboard>
         // 성찰 화면
         return const ReflectionScreen();
       default:
-        return _buildDashboardContent();
+        return _buildHomeContent();
     }
+  }
+
+  Widget _buildHomeContent() {
+    return Container(
+      color: Colors.grey.shade50, // iOS 느낌의 밝은 배경색
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.all(16),
+        physics: const BouncingScrollPhysics(), // iOS 스타일 스크롤 효과
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // 앱 소개 헤더
+            Padding(
+              padding: const EdgeInsets.only(left: 8, bottom: 16, top: 8),
+              child: Text(
+                '줄넘기 학습 관리',
+                style: TextStyle(
+                  fontSize: 28,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.blue.shade800,
+                  letterSpacing: -0.5, // iOS 스타일 타이포그래피
+                ),
+              ),
+            ),
+
+            // 앱 사용 방법 카드
+            _buildIosStyleCard(
+              title: '앱 사용 방법',
+              icon: CupertinoIcons.app_badge,
+              color: Colors.blue.shade600,
+              children: [
+                _buildListItem('과제 탭에서 개인 및 단체 줄넘기 과제를 확인하고 도전할 수 있습니다.'),
+                _buildListItem(
+                    '모든 조원은 서로 협력하여 앱에서 제시하는 여러 가지 줄넘기 방법을 단계별로 학습합니다.'),
+                _buildListItem(
+                    '줄넘기 연습 장소는 선생님의 시야를 벗어나지 않는 범위에서 적당한 곳을 선정하여 모둠별로 연습합니다.'),
+                _buildListItem('개인줄넘기 단계는 반드시 이전 단계를 통과해야 다음 단계로 진행할 수 있습니다.'),
+                _buildListItem('과제 수행 후 선생님께 확인 받으면 앱에서 도장이 찍힙니다.'),
+                _buildListItem('성공한 과제는 진도 탭에서 실시간으로 확인할 수 있습니다.'),
+              ],
+            ),
+
+            // 단체 과제 카드
+            _buildIosStyleCard(
+              title: '단체 줄넘기 진행 방법',
+              icon: CupertinoIcons.person_3_fill,
+              color: Colors.green.shade600,
+              children: [
+                _buildListItem(
+                    '2인 이상 하는 줄넘기(짝 줄넘기, 긴 줄넘기)는 모둠 누적 확인 도장이 모둠원×5개 이상 있어야만 도전할 수 있습니다.'),
+                _buildListItem(
+                    '팀원은 서로 과제 도전을 도와주고, 성공 기준을 달성하면 선생님께 확인을 받습니다.'),
+                _buildListItem('자세한 설명에도 이해가 안 되면 친구나 선생님에게 도움을 청할 수 있습니다.'),
+                _buildListItem(
+                    '모둠원들은 모든 모둠원이 가능한 빠른 시간 내에 정해진 진도를 모두 달성할 수 있도록 서로 협력해야 합니다.'),
+              ],
+            ),
+
+            // 평가 방법 카드
+            _buildIosStyleCard(
+              title: '평가 방법',
+              icon: CupertinoIcons.chart_bar_alt_fill,
+              color: Colors.orange.shade600,
+              children: [
+                _buildListItem('매 수업시간마다 앱의 진도 탭에서 확인되는 진도를 기준으로 평가합니다.'),
+                _buildListItem('단체 줄넘기는 모둠 확인도장이 모둠원×5개 이상부터 시도할 수 있습니다.'),
+                _buildListItem('만점 기준:'),
+                Padding(
+                  padding: const EdgeInsets.only(left: 32),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      _buildListItem('개인영역: 개인줄넘기 5단계 이상', bulletSize: 4),
+                      _buildListItem('모둠영역: 모둠 전체 확인도장이 (모둠원 × 11)개 이상',
+                          bulletSize: 4),
+                      _buildListItem('예) 4명 모둠은 4 × 11 = 44개 이상 도장 시 만점',
+                          bulletSize: 4),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+
+            // 주의사항 카드
+            _buildIosStyleCard(
+              title: '주의사항',
+              icon: CupertinoIcons.exclamationmark_triangle_fill,
+              color: Colors.red.shade600,
+              children: [
+                _buildListItem('줄넘기 연습은 수업시간 내내 지속적으로 이루어져야 합니다.'),
+                _buildListItem(
+                    '줄넘기와 무관한 활동을 하는 학생이 있는 모둠은 체력 훈련 대상이 될 수 있습니다.'),
+                _buildListItem('과제 확인은 반드시 선생님께 받아야 합니다.'),
+                _buildListItem(
+                    '수업시간에는 줄넘기만 해야 하며, 화장실이나 물 마시러 가는 것은 선생님의 허락이 필요합니다.'),
+                _buildListItem(
+                    '몸 상태가 좋지 않은, 환자는 선생님께 알리고 보건실 방문 후 모둠 활동을 관람할 수 있습니다.'),
+              ],
+            ),
+
+            // 성공 전략 카드
+            _buildIosStyleCard(
+              title: '좋은 성적을 받으려면...',
+              icon: CupertinoIcons.lightbulb_fill,
+              color: Colors.amber.shade600,
+              children: [
+                _buildListItem(
+                    '나만 잘해서는 팀 점수가 높아질 수 없습니다. 모둠원 모두가 잘해야 좋은 성적을 받을 수 있습니다.'),
+                _buildListItem('줄넘기를 못 하는 친구를 도와 진도를 나갈 수 있게 도와주세요.'),
+                _buildListItem('지금 여러분에게 필요한 것은... 스피드가 아닌 협동입니다.'),
+              ],
+            ),
+
+            // 앱 버전 정보
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 8),
+              child: Text(
+                '줄넘기 학습 관리 앱 v1.0',
+                style: TextStyle(
+                  fontSize: 12,
+                  color: Colors.grey.shade500,
+                  fontWeight: FontWeight.w500,
+                ),
+                textAlign: TextAlign.center,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+// iOS 스타일 카드 위젯
+  Widget _buildIosStyleCard({
+    required String title,
+    required IconData icon,
+    required Color color,
+    required List<Widget> children,
+  }) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 10,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // 카드 헤더
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            decoration: BoxDecoration(
+              color: color.withOpacity(0.1),
+              borderRadius: const BorderRadius.only(
+                topLeft: Radius.circular(16),
+                topRight: Radius.circular(16),
+              ),
+            ),
+            child: Row(
+              children: [
+                Icon(icon, color: color, size: 22),
+                const SizedBox(width: 8),
+                Text(
+                  title,
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w600,
+                    color: color.withOpacity(0.9),
+                    letterSpacing: -0.5,
+                  ),
+                ),
+              ],
+            ),
+          ),
+
+          // 카드 내용
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: children,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+// 목록 항목 위젯
+  Widget _buildListItem(String text, {double bulletSize = 6}) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            margin: EdgeInsets.only(
+                top: 7, right: 8, left: bulletSize == 4 ? 0 : 4),
+            width: bulletSize,
+            height: bulletSize,
+            decoration: BoxDecoration(
+              color: Colors.grey.shade700,
+              shape: BoxShape.circle,
+            ),
+          ),
+          Expanded(
+            child: Text(
+              text,
+              style: TextStyle(
+                fontSize: 15,
+                height: 1.4,
+                color: Colors.grey.shade800,
+                letterSpacing: -0.3, // iOS 스타일 타이포그래피
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   Widget _buildDashboardContent() {
