@@ -24,7 +24,7 @@ void main() async {
           apiKey: "AIzaSyBfHiCftWbN4jTbQ_p_1-sMoH4XGQvaEss",
           authDomain: "jump-rope-app.firebaseapp.com",
           projectId: "jump-rope-app",
-          storageBucket: "jump-rope-app.appspot.com",
+          storageBucket: "jump-rope-app.firebasestorage.app",
           messagingSenderId: "555175745259",
           appId: "1:555175745259:web:2c5cc3166b76efabf990ae"),
     );

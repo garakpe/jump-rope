@@ -5,7 +5,6 @@ import '../../models/reflection_model.dart';
 import '../../models/firebase_models.dart';
 import '../../providers/task_provider.dart';
 import '../../providers/reflection_provider.dart';
-import 'package:url_launcher/url_launcher.dart';
 
 class ReflectionManagement extends StatefulWidget {
   final int selectedClassId;
@@ -21,144 +20,111 @@ class ReflectionManagement extends StatefulWidget {
 
 class _ReflectionManagementState extends State<ReflectionManagement> {
   ReflectionSubmission? _selectedSubmission;
-  String _statusMessage = '';
+  int _selectedWeek = 1;
   bool _isLoading = false;
-  bool _isOffline = false;
-
-  // 제출 현황 캐시
-  final Map<String, Map<int, bool>> _submissionCache = {};
+  String _errorMessage = '';
+  List<FirebaseReflectionModel> _submissions = [];
 
   @override
   void initState() {
     super.initState();
+    _loadReflectionData();
+  }
 
-    // 학급 선택 시 데이터 로드
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (widget.selectedClassId > 0) {
-        final taskProvider = Provider.of<TaskProvider>(context, listen: false);
-        final reflectionProvider =
-            Provider.of<ReflectionProvider>(context, listen: false);
+  @override
+  void didUpdateWidget(ReflectionManagement oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // 학급이 변경되면 데이터 다시 로드
+    if (oldWidget.selectedClassId != widget.selectedClassId) {
+      _loadReflectionData();
+    }
+  }
 
-        taskProvider.selectClass(widget.selectedClassId.toString());
-        reflectionProvider.selectClassAndWeek(
-            widget.selectedClassId.toString(), reflectionProvider.currentWeek);
+  // 성찰 데이터 로드
+  Future<void> _loadReflectionData() async {
+    if (widget.selectedClassId <= 0) return;
 
-        // 네트워크 상태 확인
-        reflectionProvider.checkNetworkStatus().then((_) {
-          setState(() {
-            _isOffline = reflectionProvider.isOffline;
-          });
-        });
-
-        print('ReflectionManagement - 선택된 학급: ${widget.selectedClassId}');
-      }
+    setState(() {
+      _isLoading = true;
+      _errorMessage = '';
     });
+
+    try {
+      final reflectionProvider =
+          Provider.of<ReflectionProvider>(context, listen: false);
+
+      // 주차별 성찰 데이터 로드
+      reflectionProvider.selectClassAndWeek(
+          widget.selectedClassId.toString(), _selectedWeek);
+
+      print('성찰 데이터 로드 요청: ${widget.selectedClassId}반, $_selectedWeek주차');
+    } catch (e) {
+      setState(() {
+        _errorMessage = '성찰 데이터 로드 중 오류가 발생했습니다: $e';
+      });
+      print('성찰 데이터 로드 오류: $e');
+    } finally {
+      setState(() {
+        _isLoading = false;
+      });
+    }
   }
 
   @override
   Widget build(BuildContext context) {
+    // 선택된 제출물이 있으면 상세보기 표시
     if (_selectedSubmission != null) {
       return _buildSubmissionDetail();
     }
 
+    // 성찰 데이터 상태 관리
+    final reflectionProvider = Provider.of<ReflectionProvider>(context);
+    _submissions = reflectionProvider.submissions;
+    final isProviderLoading = reflectionProvider.isLoading;
+    final providerError = reflectionProvider.error;
+
+    // 로딩 상태 동기화
+    if (_isLoading != isProviderLoading) {
+      _isLoading = isProviderLoading;
+    }
+
+    // 오류 메시지 동기화
+    if (providerError.isNotEmpty && _errorMessage.isEmpty) {
+      _errorMessage = providerError;
+    }
+
     // 학생 목록 가져오기
     final taskProvider = Provider.of<TaskProvider>(context);
-    final reflectionProvider = Provider.of<ReflectionProvider>(context);
     final students = taskProvider.students;
-    final currentWeek = reflectionProvider.currentWeek;
-    final isOffline = reflectionProvider.isOffline;
-
-    // 학생이 없는 경우 메시지 표시
-    if (students.isEmpty) {
-      return Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.book_outlined, size: 64, color: Colors.grey.shade300),
-            const SizedBox(height: 16),
-            Text(
-              '학급을 선택하고 학생을 추가해주세요',
-              style: TextStyle(color: Colors.grey.shade600),
-            ),
-          ],
-        ),
-      );
-    }
 
     return Column(
       children: [
         // 헤더 영역
-        _buildHeaderCard(currentWeek),
+        _buildHeaderCard(),
         const SizedBox(height: 16),
 
-        // 오프라인 상태 표시
-        if (isOffline)
+        // 오류 메시지 표시
+        if (_errorMessage.isNotEmpty)
           Container(
             margin: const EdgeInsets.only(bottom: 16),
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
-              color: Colors.orange.shade50,
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: Colors.orange.shade200),
+              color: Colors.red.shade50,
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: Colors.red.shade200),
             ),
             child: Row(
               children: [
-                Icon(Icons.wifi_off, color: Colors.orange.shade700),
+                Icon(Icons.error_outline, color: Colors.red.shade400),
                 const SizedBox(width: 8),
                 Expanded(
-                  child: Text(
-                    '오프라인 모드: 일부 기능이 제한되며 최신 데이터를 볼 수 없습니다.',
-                    style: TextStyle(color: Colors.orange.shade700),
-                  ),
-                ),
-                TextButton(
-                  onPressed: () {
-                    _syncOfflineData();
-                  },
-                  child: Text(
-                    '동기화 시도',
-                    style: TextStyle(color: Colors.orange.shade700),
-                  ),
-                ),
-              ],
-            ),
-          ),
-
-        // 상태 메시지
-        if (_statusMessage.isNotEmpty)
-          Container(
-            margin: const EdgeInsets.only(bottom: 16),
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: _statusMessage.contains('성공')
-                  ? Colors.green.shade50
-                  : Colors.orange.shade50,
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(
-                color: _statusMessage.contains('성공')
-                    ? Colors.green.shade200
-                    : Colors.orange.shade200,
-              ),
-            ),
-            child: Row(
-              children: [
-                Icon(
-                  _statusMessage.contains('성공')
-                      ? Icons.check_circle
-                      : Icons.info_outline,
-                  color: _statusMessage.contains('성공')
-                      ? Colors.green.shade600
-                      : Colors.orange.shade600,
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(_statusMessage),
+                  child: Text(_errorMessage),
                 ),
                 IconButton(
                   icon: const Icon(Icons.close, size: 16),
                   onPressed: () {
                     setState(() {
-                      _statusMessage = '';
+                      _errorMessage = '';
                     });
                   },
                 ),
@@ -166,16 +132,52 @@ class _ReflectionManagementState extends State<ReflectionManagement> {
             ),
           ),
 
-        // 성찰 카드 그리드
-        Expanded(
-          child: _buildReflectionGrid(currentWeek),
-        ),
+        // 본문 내용 - Column의 children 안에서 if-else 문법 수정
+        if (_isLoading)
+          const Expanded(
+            child: Center(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  CircularProgressIndicator(),
+                  SizedBox(height: 16),
+                  Text('성찰 데이터를 불러오는 중...'),
+                ],
+              ),
+            ),
+          )
+        else if (students.isEmpty)
+          Expanded(
+            child: Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.book_outlined,
+                      size: 64, color: Colors.grey.shade300),
+                  const SizedBox(height: 16),
+                  Text(
+                    '학급을 선택하고 학생을 추가해주세요',
+                    style: TextStyle(color: Colors.grey.shade600),
+                  ),
+                  const SizedBox(height: 24),
+                  ElevatedButton.icon(
+                    icon: const Icon(Icons.refresh),
+                    label: const Text('다시 시도'),
+                    onPressed: _loadReflectionData,
+                  ),
+                ],
+              ),
+            ),
+          )
+        else
+          Expanded(
+            child: _buildReflectionGrid(),
+          ),
       ],
     );
   }
 
-  // 헤더 카드
-  Widget _buildHeaderCard(int currentWeek) {
+  Widget _buildHeaderCard() {
     return Card(
       elevation: 2,
       shape: RoundedRectangleBorder(
@@ -191,7 +193,7 @@ class _ReflectionManagementState extends State<ReflectionManagement> {
                 Icon(Icons.book, color: Colors.amber.shade700),
                 const SizedBox(width: 8),
                 Text(
-                  '성찰 관리',
+                  '${widget.selectedClassId}반 성찰 관리',
                   style: TextStyle(
                     fontSize: 18,
                     fontWeight: FontWeight.bold,
@@ -200,67 +202,45 @@ class _ReflectionManagementState extends State<ReflectionManagement> {
                 ),
               ],
             ),
-
-            // 주차 설정 및 엑셀 다운로드 UI
-            Row(
-              children: [
-                Text(
-                  '현재 주차:',
-                  style: TextStyle(
-                    fontWeight: FontWeight.w500,
-                    color: Colors.grey.shade700,
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 4),
-                  decoration: BoxDecoration(
-                    color: Colors.amber.shade50,
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: Colors.amber.shade200),
-                  ),
-                  child: DropdownButtonHideUnderline(
-                    child: DropdownButton<int>(
-                      value: currentWeek,
-                      items: [1, 2, 3].map((week) {
-                        return DropdownMenuItem<int>(
-                          value: week,
-                          child: Padding(
-                            padding:
-                                const EdgeInsets.symmetric(horizontal: 8.0),
-                            child: Text(
-                              '$week주차',
-                              style: TextStyle(
-                                fontWeight: currentWeek == week
-                                    ? FontWeight.bold
-                                    : FontWeight.normal,
-                                color: Colors.amber.shade900,
-                              ),
-                            ),
-                          ),
-                        );
-                      }).toList(),
-                      onChanged: (value) {
-                        if (value != null) {
-                          _updateCurrentWeek(value);
-                        }
-                      },
+            Container(
+              padding: const EdgeInsets.symmetric(
+                horizontal: 12,
+                vertical: 6,
+              ),
+              decoration: BoxDecoration(
+                color: Colors.amber.shade50,
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: DropdownButton<int>(
+                value: _selectedWeek,
+                dropdownColor: Colors.white,
+                underline: Container(),
+                items: [1, 2, 3].map((week) {
+                  return DropdownMenuItem<int>(
+                    value: week,
+                    child: Text(
+                      '$week주차',
+                      style: TextStyle(
+                        color: Colors.amber.shade800,
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
-                  ),
-                ),
-                const SizedBox(width: 16),
-                ElevatedButton.icon(
-                  icon: const Icon(Icons.file_download),
-                  label: const Text('엑셀 다운로드'),
-                  onPressed: _isOffline ? null : _downloadExcel,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.green.shade100,
-                    foregroundColor: Colors.green.shade800,
-                    disabledBackgroundColor: Colors.grey.shade200,
-                    disabledForegroundColor: Colors.grey.shade500,
-                  ),
-                ),
-              ],
+                  );
+                }).toList(),
+                onChanged: (value) {
+                  if (value != null) {
+                    setState(() {
+                      _selectedWeek = value;
+                    });
+
+                    // 주차 변경 시 데이터 새로 로드
+                    final reflectionProvider =
+                        Provider.of<ReflectionProvider>(context, listen: false);
+                    reflectionProvider.selectClassAndWeek(
+                        widget.selectedClassId.toString(), value);
+                  }
+                },
+              ),
             ),
           ],
         ),
@@ -268,108 +248,60 @@ class _ReflectionManagementState extends State<ReflectionManagement> {
     );
   }
 
-  // 현재 주차 업데이트 메서드
-  void _updateCurrentWeek(int newWeek) async {
-    setState(() {
-      _isLoading = true;
-      _statusMessage = '주차 정보 업데이트 중...';
-    });
+  Widget _buildReflectionGrid() {
+    final taskProvider = Provider.of<TaskProvider>(context);
+    final students = taskProvider.students;
 
-    try {
-      final reflectionProvider =
-          Provider.of<ReflectionProvider>(context, listen: false);
-      reflectionProvider.setCurrentWeek(newWeek);
-
-      setState(() {
-        _isLoading = false;
-        _statusMessage =
-            '성공: $newWeek주차로 설정되었습니다. 이제 학생들은 $newWeek주차 성찰까지 작성할 수 있습니다.';
-      });
-    } catch (e) {
-      setState(() {
-        _isLoading = false;
-        _statusMessage = '오류: 주차 정보 업데이트 실패 - $e';
-      });
+    // 성찰 데이터가 없는 경우 메시지 표시
+    if (_submissions.isEmpty) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.description_outlined,
+                size: 64, color: Colors.amber.shade200),
+            const SizedBox(height: 16),
+            Text(
+              '제출된 성찰 보고서가 없습니다',
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+                color: Colors.amber.shade800,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              '학생들이 $_selectedWeek주차 성찰 보고서를 제출하면 여기에 표시됩니다',
+              style: TextStyle(
+                color: Colors.grey.shade600,
+              ),
+              textAlign: TextAlign.center,
+            ),
+          ],
+        ),
+      );
     }
-  }
 
-  // 오프라인 데이터 동기화
-  void _syncOfflineData() async {
-    setState(() {
-      _isLoading = true;
-      _statusMessage = '오프라인 데이터 동기화 중...';
-    });
-
-    try {
-      final reflectionProvider =
-          Provider.of<ReflectionProvider>(context, listen: false);
-      await reflectionProvider.syncOfflineData();
-
-      setState(() {
-        _isLoading = false;
-        _isOffline = reflectionProvider.isOffline;
-        _statusMessage = '동기화 성공: 최신 데이터가 로드되었습니다.';
-      });
-    } catch (e) {
-      setState(() {
-        _isLoading = false;
-        _statusMessage = '동기화 오류: $e';
-      });
+    // 학생 ID를 성찰 데이터와 매핑하기 위한 맵 생성
+    final submissionMap = <String, FirebaseReflectionModel>{};
+    for (var submission in _submissions) {
+      submissionMap[submission.studentId] = submission;
     }
-  }
 
-  // 엑셀 다운로드
-  void _downloadExcel() async {
-    setState(() {
-      _isLoading = true;
-      _statusMessage = '엑셀 파일 생성 중...';
-    });
-
-    try {
-      final reflectionProvider =
-          Provider.of<ReflectionProvider>(context, listen: false);
-      final url = await reflectionProvider.generateExcelDownloadUrl();
-
-      setState(() {
-        _isLoading = false;
-        _statusMessage = '엑셀 파일이 생성되었습니다. 다운로드 링크가 브라우저에서 열립니다.';
-      });
-
-      // URL 열기 (개발 중에는 print만, 실제 앱에서는 URL 론처 사용)
-      print('다운로드 URL: $url');
-
-      // 다음 코드 사용시 url_launcher 패키지 필요
-      /* 
-      if (await canLaunch(url)) {
-        await launch(url);
-      } else {
-        setState(() {
-          _statusMessage = 'URL을 열 수 없습니다: $url';
-        });
-      }
-      */
-    } catch (e) {
-      setState(() {
-        _isLoading = false;
-        _statusMessage = '엑셀 생성 오류: $e';
-      });
-    }
-  }
-
-  // 성찰 그리드
-  Widget _buildReflectionGrid(int currentWeek) {
+    // 학급의 학생별로 성찰 보고서 목록 표시
     return GridView.builder(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(8),
       gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
         crossAxisCount: 3,
-        childAspectRatio: 1.0,
+        childAspectRatio: 1.2,
         crossAxisSpacing: 16,
         mainAxisSpacing: 16,
       ),
-      itemCount: 3, // 3주차 성찰
+      itemCount: students.length,
       itemBuilder: (context, index) {
-        final weekNum = index + 1;
-        final bool isActive = weekNum <= currentWeek;
+        final student = students[index];
+        final studentId = student.id;
+        final hasSubmitted = submissionMap.containsKey(studentId);
 
         return Card(
           elevation: 2,
@@ -377,19 +309,15 @@ class _ReflectionManagementState extends State<ReflectionManagement> {
             borderRadius: BorderRadius.circular(16),
           ),
           child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               // 카드 헤더
               Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(16),
+                padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    colors: isActive
-                        ? [Colors.amber.shade500, Colors.orange.shade400]
-                        : [Colors.grey.shade300, Colors.grey.shade400],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                  ),
+                  color: hasSubmitted
+                      ? Colors.green.shade100
+                      : Colors.grey.shade100,
                   borderRadius: const BorderRadius.only(
                     topLeft: Radius.circular(16),
                     topRight: Radius.circular(16),
@@ -398,31 +326,136 @@ class _ReflectionManagementState extends State<ReflectionManagement> {
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Text(
-                      '$weekNum주차 성찰',
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontWeight: FontWeight.bold,
-                        fontSize: 16,
+                    Expanded(
+                      child: Text(
+                        student.name,
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          color: hasSubmitted
+                              ? Colors.green.shade800
+                              : Colors.grey.shade800,
+                          fontSize: 16,
+                        ),
+                        overflow: TextOverflow.ellipsis,
                       ),
-                      textAlign: TextAlign.center,
                     ),
-
-                    // 활성화 상태 아이콘
-                    Icon(
-                      isActive ? Icons.lock_open : Icons.lock,
-                      size: 16,
-                      color: Colors.white,
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 4,
+                      ),
+                      decoration: BoxDecoration(
+                        color: hasSubmitted
+                            ? Colors.green.shade50
+                            : Colors.red.shade50,
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Text(
+                        hasSubmitted ? '제출완료' : '미제출',
+                        style: TextStyle(
+                          color: hasSubmitted
+                              ? Colors.green.shade700
+                              : Colors.red.shade700,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 12,
+                        ),
+                      ),
                     ),
                   ],
                 ),
               ),
 
-              // 학생 목록
-              Expanded(
-                child: isActive
-                    ? _buildStudentList(weekNum)
-                    : _buildInactiveWeekView(weekNum),
+              // 학생 정보
+              Padding(
+                padding: const EdgeInsets.all(12),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Icon(Icons.person_outline,
+                            size: 16, color: Colors.grey.shade600),
+                        const SizedBox(width: 4),
+                        Text(
+                          '학번: ${student.studentId}',
+                          style: TextStyle(
+                            fontSize: 13,
+                            color: Colors.grey.shade700,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 4),
+                    Row(
+                      children: [
+                        Icon(Icons.groups_outlined,
+                            size: 16, color: Colors.grey.shade600),
+                        const SizedBox(width: 4),
+                        Text(
+                          '${student.group}모둠',
+                          style: TextStyle(
+                            fontSize: 13,
+                            color: Colors.grey.shade700,
+                          ),
+                        ),
+                      ],
+                    ),
+
+                    // 제출 정보
+                    if (hasSubmitted) ...[
+                      const SizedBox(height: 8),
+                      const Divider(),
+                      Row(
+                        children: [
+                          Icon(Icons.calendar_today,
+                              size: 16, color: Colors.green.shade600),
+                          const SizedBox(width: 4),
+                          Text(
+                            '제출일: ${_formatDate(submissionMap[studentId]!.submittedDate)}',
+                            style: TextStyle(
+                              fontSize: 13,
+                              color: Colors.green.shade700,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+
+              const Spacer(),
+
+              // 버튼 영역
+              Padding(
+                padding: const EdgeInsets.all(12),
+                child: ElevatedButton(
+                  onPressed: hasSubmitted
+                      ? () => _showSubmissionDetail(submissionMap[studentId]!)
+                      : null,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: hasSubmitted
+                        ? Colors.amber.shade400
+                        : Colors.grey.shade300,
+                    foregroundColor:
+                        hasSubmitted ? Colors.white : Colors.grey.shade600,
+                    padding: const EdgeInsets.symmetric(vertical: 8),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(
+                        hasSubmitted ? Icons.visibility : Icons.visibility_off,
+                        size: 16,
+                      ),
+                      const SizedBox(width: 8),
+                      const Text('성찰 보기'),
+                    ],
+                  ),
+                ),
               ),
             ],
           ),
@@ -431,151 +464,30 @@ class _ReflectionManagementState extends State<ReflectionManagement> {
     );
   }
 
-  // 비활성화된 주차 표시
-  Widget _buildInactiveWeekView(int weekNum) {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(
-            Icons.lock_outline,
-            size: 32,
-            color: Colors.grey.shade400,
-          ),
-          const SizedBox(height: 8),
-          Text(
-            '비활성화됨',
-            style: TextStyle(
-              color: Colors.grey.shade500,
-              fontWeight: FontWeight.w500,
-            ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            '현재 주차를 변경하여 활성화',
-            style: TextStyle(
-              fontSize: 12,
-              color: Colors.grey.shade500,
-            ),
-            textAlign: TextAlign.center,
-          ),
-        ],
-      ),
+  void _showSubmissionDetail(FirebaseReflectionModel reflection) {
+    // FirebaseReflectionModel을 ReflectionSubmission으로 변환
+    final submission = ReflectionSubmission(
+      studentId: reflection.studentId,
+      reflectionId: reflection.week, // 임시로 week를 ID로 사용
+      week: reflection.week,
+      answers: reflection.answers,
+      submittedDate: reflection.submittedDate,
+      studentName: reflection.studentName,
+      className: reflection.className,
+      group: reflection.group,
     );
-  }
 
-  // 학생 목록 빌드
-  Widget _buildStudentList(int weekNum) {
-    final students = Provider.of<TaskProvider>(context).students;
-    final reflectionProvider = Provider.of<ReflectionProvider>(context);
-    final submissionStatus = reflectionProvider.submissionStatus;
-
-    return ListView.builder(
-      itemCount: students.length,
-      itemBuilder: (context, index) {
-        final student = students[index];
-        final reflectionId =
-            reflectionCards.firstWhere((r) => r.week == weekNum).id;
-
-        // 제출 상태 확인 (로컬 캐시 기반)
-        final hasSubmitted = submissionStatus[student.id] ?? false;
-
-        return ListTile(
-          onTap: () {
-            if (hasSubmitted) {
-              _loadStudentSubmission(student.id, reflectionId, weekNum);
-            } else if (!_isOffline) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('제출된 성찰이 없습니다.')),
-              );
-            }
-          },
-          leading: Container(
-            padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(
-              color: Colors.amber.shade100,
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: Text(
-              '${student.group}모둠',
-              style: TextStyle(
-                fontWeight: FontWeight.bold,
-                color: Colors.amber.shade800,
-                fontSize: 12,
-              ),
-            ),
-          ),
-          title: Text(
-            '${student.number}번 ${student.name}',
-            style: const TextStyle(
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-          trailing: Container(
-            padding: const EdgeInsets.symmetric(
-              horizontal: 8,
-              vertical: 4,
-            ),
-            decoration: BoxDecoration(
-              color: hasSubmitted ? Colors.green.shade100 : Colors.red.shade100,
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Text(
-              hasSubmitted ? '제출완료' : '미제출',
-              style: TextStyle(
-                color:
-                    hasSubmitted ? Colors.green.shade800 : Colors.red.shade800,
-                fontWeight: FontWeight.bold,
-                fontSize: 12,
-              ),
-            ),
-          ),
-        );
-      },
-    );
-  }
-
-  // 학생 제출물 로드
-  void _loadStudentSubmission(
-      String studentId, int reflectionId, int week) async {
     setState(() {
-      _isLoading = true;
-      _statusMessage = '성찰 데이터 로드 중...';
+      _selectedSubmission = submission;
     });
-
-    try {
-      final reflectionProvider =
-          Provider.of<ReflectionProvider>(context, listen: false);
-      final submission =
-          await reflectionProvider.getSubmission(studentId, reflectionId);
-
-      if (submission != null) {
-        setState(() {
-          _selectedSubmission = submission;
-          _isLoading = false;
-          _statusMessage = '';
-        });
-      } else {
-        setState(() {
-          _isLoading = false;
-          _statusMessage = '성찰 데이터를 찾을 수 없습니다.';
-        });
-      }
-    } catch (e) {
-      setState(() {
-        _isLoading = false;
-        _statusMessage = '데이터 로드 오류: $e';
-      });
-    }
   }
 
-  // 제출된 성찰 상세 보기
   Widget _buildSubmissionDetail() {
     if (_selectedSubmission == null) return const SizedBox.shrink();
 
     final reflectionId = _selectedSubmission!.reflectionId;
     final reflection = reflectionCards.firstWhere(
-      (r) => r.id == reflectionId,
+      (r) => r.id == reflectionId || r.week == _selectedSubmission!.week,
       orElse: () => reflectionCards.first,
     );
 
@@ -625,14 +537,85 @@ class _ReflectionManagementState extends State<ReflectionManagement> {
         ),
         const SizedBox(height: 16),
 
+        // 학생 정보 카드
+        Card(
+          elevation: 1,
+          margin: const EdgeInsets.only(bottom: 16),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.all(16.0),
+            child: Row(
+              children: [
+                Container(
+                  width: 48,
+                  height: 48,
+                  decoration: BoxDecoration(
+                    color: Colors.amber.shade100,
+                    shape: BoxShape.circle,
+                  ),
+                  child: Center(
+                    child: Icon(
+                      Icons.person,
+                      color: Colors.amber.shade700,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        _selectedSubmission!.studentName,
+                        style: const TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 16,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        '${_selectedSubmission!.className}학년 ${widget.selectedClassId}반 ${_selectedSubmission!.group}모둠',
+                        style: TextStyle(
+                          color: Colors.grey.shade700,
+                          fontSize: 14,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    Text(
+                      '제출일',
+                      style: TextStyle(
+                        color: Colors.grey.shade600,
+                        fontSize: 12,
+                      ),
+                    ),
+                    Text(
+                      _formatDate(_selectedSubmission!.submittedDate),
+                      style: const TextStyle(
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ),
+
         // 질문 및 답변 목록
         Expanded(
           child: ListView.builder(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
             itemCount: reflection.questions.length,
             itemBuilder: (context, index) {
               final question = reflection.questions[index];
-              final answer = _selectedSubmission!.answers[question] ?? '';
+              final answer =
+                  _selectedSubmission!.answers[question] ?? '(답변 없음)';
 
               return Card(
                 elevation: 1,
@@ -654,38 +637,54 @@ class _ReflectionManagementState extends State<ReflectionManagement> {
                           topRight: Radius.circular(16),
                         ),
                       ),
-                      child: Text(
-                        '${index + 1}. $question',
-                        style: TextStyle(
-                          fontWeight: FontWeight.bold,
-                          color: Colors.amber.shade800,
-                        ),
+                      child: Row(
+                        children: [
+                          Container(
+                            width: 24,
+                            height: 24,
+                            decoration: BoxDecoration(
+                              color: Colors.amber.shade100,
+                              shape: BoxShape.circle,
+                            ),
+                            child: Center(
+                              child: Text(
+                                '${index + 1}',
+                                style: TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.amber.shade800,
+                                ),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              question,
+                              style: TextStyle(
+                                fontWeight: FontWeight.bold,
+                                color: Colors.amber.shade800,
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
                     ),
 
                     // 답변 영역
                     Padding(
                       padding: const EdgeInsets.all(16.0),
-                      child: TextField(
-                        controller: TextEditingController(text: answer),
-                        maxLines: 4,
-                        readOnly: true, // 읽기 전용
-                        decoration: InputDecoration(
-                          hintText: '학생 답변...',
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
-                            borderSide:
-                                BorderSide(color: Colors.amber.shade200),
-                          ),
-                          enabledBorder: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
-                            borderSide:
-                                BorderSide(color: Colors.amber.shade200),
-                          ),
-                          focusedBorder: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
-                            borderSide:
-                                BorderSide(color: Colors.amber.shade400),
+                      child: Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          color: Colors.grey.shade50,
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: Colors.grey.shade200),
+                        ),
+                        child: Text(
+                          answer,
+                          style: const TextStyle(
+                            height: 1.5,
                           ),
                         ),
                       ),
@@ -698,5 +697,10 @@ class _ReflectionManagementState extends State<ReflectionManagement> {
         ),
       ],
     );
+  }
+
+  // 날짜 포맷팅 함수
+  String _formatDate(DateTime date) {
+    return '${date.year}.${date.month.toString().padLeft(2, '0')}.${date.day.toString().padLeft(2, '0')}';
   }
 }
