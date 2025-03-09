@@ -4,6 +4,8 @@ import 'package:provider/provider.dart';
 import '../../models/reflection_model.dart';
 import '../../models/firebase_models.dart';
 import '../../providers/task_provider.dart';
+import '../../providers/reflection_provider.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 class ReflectionManagement extends StatefulWidget {
   final int selectedClassId;
@@ -19,8 +21,39 @@ class ReflectionManagement extends StatefulWidget {
 
 class _ReflectionManagementState extends State<ReflectionManagement> {
   ReflectionSubmission? _selectedSubmission;
-  String _statusMessage = ''; // 변수 선언 추가
-  bool _isLoading = false; // 변수 선언 추가
+  String _statusMessage = '';
+  bool _isLoading = false;
+  bool _isOffline = false;
+
+  // 제출 현황 캐시
+  final Map<String, Map<int, bool>> _submissionCache = {};
+
+  @override
+  void initState() {
+    super.initState();
+
+    // 학급 선택 시 데이터 로드
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (widget.selectedClassId > 0) {
+        final taskProvider = Provider.of<TaskProvider>(context, listen: false);
+        final reflectionProvider =
+            Provider.of<ReflectionProvider>(context, listen: false);
+
+        taskProvider.selectClass(widget.selectedClassId.toString());
+        reflectionProvider.selectClassAndWeek(
+            widget.selectedClassId.toString(), reflectionProvider.currentWeek);
+
+        // 네트워크 상태 확인
+        reflectionProvider.checkNetworkStatus().then((_) {
+          setState(() {
+            _isOffline = reflectionProvider.isOffline;
+          });
+        });
+
+        print('ReflectionManagement - 선택된 학급: ${widget.selectedClassId}');
+      }
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -30,8 +63,10 @@ class _ReflectionManagementState extends State<ReflectionManagement> {
 
     // 학생 목록 가져오기
     final taskProvider = Provider.of<TaskProvider>(context);
+    final reflectionProvider = Provider.of<ReflectionProvider>(context);
     final students = taskProvider.students;
-    final currentWeek = taskProvider.currentWeek;
+    final currentWeek = reflectionProvider.currentWeek;
+    final isOffline = reflectionProvider.isOffline;
 
     // 학생이 없는 경우 메시지 표시
     if (students.isEmpty) {
@@ -53,8 +88,41 @@ class _ReflectionManagementState extends State<ReflectionManagement> {
     return Column(
       children: [
         // 헤더 영역
-        _buildHeaderCard(currentWeek), // 매개변수 추가
+        _buildHeaderCard(currentWeek),
         const SizedBox(height: 16),
+
+        // 오프라인 상태 표시
+        if (isOffline)
+          Container(
+            margin: const EdgeInsets.only(bottom: 16),
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: Colors.orange.shade50,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: Colors.orange.shade200),
+            ),
+            child: Row(
+              children: [
+                Icon(Icons.wifi_off, color: Colors.orange.shade700),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    '오프라인 모드: 일부 기능이 제한되며 최신 데이터를 볼 수 없습니다.',
+                    style: TextStyle(color: Colors.orange.shade700),
+                  ),
+                ),
+                TextButton(
+                  onPressed: () {
+                    _syncOfflineData();
+                  },
+                  child: Text(
+                    '동기화 시도',
+                    style: TextStyle(color: Colors.orange.shade700),
+                  ),
+                ),
+              ],
+            ),
+          ),
 
         // 상태 메시지
         if (_statusMessage.isNotEmpty)
@@ -100,16 +168,14 @@ class _ReflectionManagementState extends State<ReflectionManagement> {
 
         // 성찰 카드 그리드
         Expanded(
-          child: _buildReflectionGrid(currentWeek), // 매개변수 추가
+          child: _buildReflectionGrid(currentWeek),
         ),
       ],
     );
   }
 
-  // 헤더 카드 (중복 메서드 제거 및 통합)
+  // 헤더 카드
   Widget _buildHeaderCard(int currentWeek) {
-    final taskProvider = Provider.of<TaskProvider>(context, listen: false);
-
     return Card(
       elevation: 2,
       shape: RoundedRectangleBorder(
@@ -135,7 +201,7 @@ class _ReflectionManagementState extends State<ReflectionManagement> {
               ],
             ),
 
-            // 주차 설정 UI
+            // 주차 설정 및 엑셀 다운로드 UI
             Row(
               children: [
                 Text(
@@ -182,6 +248,18 @@ class _ReflectionManagementState extends State<ReflectionManagement> {
                     ),
                   ),
                 ),
+                const SizedBox(width: 16),
+                ElevatedButton.icon(
+                  icon: const Icon(Icons.file_download),
+                  label: const Text('엑셀 다운로드'),
+                  onPressed: _isOffline ? null : _downloadExcel,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.green.shade100,
+                    foregroundColor: Colors.green.shade800,
+                    disabledBackgroundColor: Colors.grey.shade200,
+                    disabledForegroundColor: Colors.grey.shade500,
+                  ),
+                ),
               ],
             ),
           ],
@@ -198,8 +276,9 @@ class _ReflectionManagementState extends State<ReflectionManagement> {
     });
 
     try {
-      final taskProvider = Provider.of<TaskProvider>(context, listen: false);
-      taskProvider.setCurrentWeek(newWeek);
+      final reflectionProvider =
+          Provider.of<ReflectionProvider>(context, listen: false);
+      reflectionProvider.setCurrentWeek(newWeek);
 
       setState(() {
         _isLoading = false;
@@ -214,9 +293,73 @@ class _ReflectionManagementState extends State<ReflectionManagement> {
     }
   }
 
-  // 성찰 그리드 (중복 메서드 제거 및 통합)
+  // 오프라인 데이터 동기화
+  void _syncOfflineData() async {
+    setState(() {
+      _isLoading = true;
+      _statusMessage = '오프라인 데이터 동기화 중...';
+    });
+
+    try {
+      final reflectionProvider =
+          Provider.of<ReflectionProvider>(context, listen: false);
+      await reflectionProvider.syncOfflineData();
+
+      setState(() {
+        _isLoading = false;
+        _isOffline = reflectionProvider.isOffline;
+        _statusMessage = '동기화 성공: 최신 데이터가 로드되었습니다.';
+      });
+    } catch (e) {
+      setState(() {
+        _isLoading = false;
+        _statusMessage = '동기화 오류: $e';
+      });
+    }
+  }
+
+  // 엑셀 다운로드
+  void _downloadExcel() async {
+    setState(() {
+      _isLoading = true;
+      _statusMessage = '엑셀 파일 생성 중...';
+    });
+
+    try {
+      final reflectionProvider =
+          Provider.of<ReflectionProvider>(context, listen: false);
+      final url = await reflectionProvider.generateExcelDownloadUrl();
+
+      setState(() {
+        _isLoading = false;
+        _statusMessage = '엑셀 파일이 생성되었습니다. 다운로드 링크가 브라우저에서 열립니다.';
+      });
+
+      // URL 열기 (개발 중에는 print만, 실제 앱에서는 URL 론처 사용)
+      print('다운로드 URL: $url');
+
+      // 다음 코드 사용시 url_launcher 패키지 필요
+      /* 
+      if (await canLaunch(url)) {
+        await launch(url);
+      } else {
+        setState(() {
+          _statusMessage = 'URL을 열 수 없습니다: $url';
+        });
+      }
+      */
+    } catch (e) {
+      setState(() {
+        _isLoading = false;
+        _statusMessage = '엑셀 생성 오류: $e';
+      });
+    }
+  }
+
+  // 성찰 그리드
   Widget _buildReflectionGrid(int currentWeek) {
     return GridView.builder(
+      padding: const EdgeInsets.all(16),
       gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
         crossAxisCount: 3,
         childAspectRatio: 1.0,
@@ -321,8 +464,11 @@ class _ReflectionManagementState extends State<ReflectionManagement> {
     );
   }
 
+  // 학생 목록 빌드
   Widget _buildStudentList(int weekNum) {
     final students = Provider.of<TaskProvider>(context).students;
+    final reflectionProvider = Provider.of<ReflectionProvider>(context);
+    final submissionStatus = reflectionProvider.submissionStatus;
 
     return ListView.builder(
       itemCount: students.length,
@@ -331,33 +477,18 @@ class _ReflectionManagementState extends State<ReflectionManagement> {
         final reflectionId =
             reflectionCards.firstWhere((r) => r.week == weekNum).id;
 
-        // 임시로 랜덤 제출 여부 표시 (실제로는 Provider에서 확인)
-        final hasSubmitted = index % 3 == 0; // 예시로 첫번째, 네번째 등의 학생만 제출한 것으로 가정
+        // 제출 상태 확인 (로컬 캐시 기반)
+        final hasSubmitted = submissionStatus[student.id] ?? false;
 
         return ListTile(
           onTap: () {
-            // 제출 내용 보기 (실제로는 Provider에서 데이터 가져오기)
-            final dummySubmission = ReflectionSubmission(
-              studentId: student.id,
-              reflectionId: reflectionId,
-              week: weekNum,
-              answers: {
-                '이번 체육 수업에서 나의 학습 목표는 무엇인가요?':
-                    '줄넘기 기술을 향상시키고 모둠 활동에 적극적으로 참여하는 것입니다.',
-                '줄넘기를 잘하기 위해서 어떤 노력이 필요할까요?': '꾸준한 연습과 올바른 자세 연습이 필요합니다.',
-                '나의 현재 줄넘기 실력은 어느 정도라고 생각하나요?':
-                    '기본 동작은 가능하지만 어려운 기술은 더 연습이 필요합니다.',
-                '모둠 활동에서 나의 역할은 무엇인가요?': '모둠원들을 격려하고 시범을 보여주는 역할입니다.',
-              },
-              submittedDate: DateTime.now(),
-              studentName: student.name,
-              className: '1',
-              group: student.group,
-            );
-
-            setState(() {
-              _selectedSubmission = dummySubmission;
-            });
+            if (hasSubmitted) {
+              _loadStudentSubmission(student.id, reflectionId, weekNum);
+            } else if (!_isOffline) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('제출된 성찰이 없습니다.')),
+              );
+            }
           },
           leading: Container(
             padding: const EdgeInsets.all(8),
@@ -404,6 +535,41 @@ class _ReflectionManagementState extends State<ReflectionManagement> {
     );
   }
 
+  // 학생 제출물 로드
+  void _loadStudentSubmission(
+      String studentId, int reflectionId, int week) async {
+    setState(() {
+      _isLoading = true;
+      _statusMessage = '성찰 데이터 로드 중...';
+    });
+
+    try {
+      final reflectionProvider =
+          Provider.of<ReflectionProvider>(context, listen: false);
+      final submission =
+          await reflectionProvider.getSubmission(studentId, reflectionId);
+
+      if (submission != null) {
+        setState(() {
+          _selectedSubmission = submission;
+          _isLoading = false;
+          _statusMessage = '';
+        });
+      } else {
+        setState(() {
+          _isLoading = false;
+          _statusMessage = '성찰 데이터를 찾을 수 없습니다.';
+        });
+      }
+    } catch (e) {
+      setState(() {
+        _isLoading = false;
+        _statusMessage = '데이터 로드 오류: $e';
+      });
+    }
+  }
+
+  // 제출된 성찰 상세 보기
   Widget _buildSubmissionDetail() {
     if (_selectedSubmission == null) return const SizedBox.shrink();
 
@@ -462,6 +628,7 @@ class _ReflectionManagementState extends State<ReflectionManagement> {
         // 질문 및 답변 목록
         Expanded(
           child: ListView.builder(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
             itemCount: reflection.questions.length,
             itemBuilder: (context, index) {
               final question = reflection.questions[index];
@@ -502,7 +669,7 @@ class _ReflectionManagementState extends State<ReflectionManagement> {
                       child: TextField(
                         controller: TextEditingController(text: answer),
                         maxLines: 4,
-                        readOnly: true, // 현재는 읽기 전용
+                        readOnly: true, // 읽기 전용
                         decoration: InputDecoration(
                           hintText: '학생 답변...',
                           border: OutlineInputBorder(

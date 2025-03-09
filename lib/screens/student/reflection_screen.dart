@@ -19,6 +19,7 @@ class _ReflectionScreenState extends State<ReflectionScreen> {
   int _selectedWeek = 1;
   bool _isSubmitting = false;
   bool _hasSubmitted = false;
+  bool _isOffline = false;
   String _statusMessage = '';
   final Map<String, TextEditingController> _controllers = {};
 
@@ -32,6 +33,18 @@ class _ReflectionScreenState extends State<ReflectionScreen> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _loadCurrentWeek();
       _initReflection();
+      _checkNetworkStatus();
+    });
+  }
+
+  // 네트워크 상태 확인
+  void _checkNetworkStatus() async {
+    final reflectionProvider =
+        Provider.of<ReflectionProvider>(context, listen: false);
+    await reflectionProvider.checkNetworkStatus();
+
+    setState(() {
+      _isOffline = reflectionProvider.isOffline;
     });
   }
 
@@ -142,6 +155,31 @@ class _ReflectionScreenState extends State<ReflectionScreen> {
     }
   }
 
+  // 오프라인 데이터 동기화
+  void _syncOfflineData() async {
+    setState(() {
+      _statusMessage = '데이터 동기화 중...';
+    });
+
+    try {
+      final reflectionProvider =
+          Provider.of<ReflectionProvider>(context, listen: false);
+      await reflectionProvider.syncOfflineData();
+
+      setState(() {
+        _isOffline = reflectionProvider.isOffline;
+        _statusMessage = '데이터 동기화 완료!';
+      });
+
+      // 현재 데이터 다시 로드
+      _initReflection();
+    } catch (e) {
+      setState(() {
+        _statusMessage = '동기화 오류: $e';
+      });
+    }
+  }
+
   Future<void> _submitReflection() async {
     final authProvider = Provider.of<AuthProvider>(context, listen: false);
     final reflectionProvider =
@@ -199,7 +237,9 @@ class _ReflectionScreenState extends State<ReflectionScreen> {
       setState(() {
         _hasSubmitted = true;
         _isSubmitting = false;
-        _statusMessage = '성찰 보고서가 성공적으로 제출되었습니다!';
+        _statusMessage = reflectionProvider.isOffline
+            ? '성찰 보고서가 로컬에 저장되었습니다. 네트워크 연결 시 자동으로 동기화됩니다.'
+            : '성찰 보고서가 성공적으로 제출되었습니다!';
       });
     } catch (e) {
       setState(() {
@@ -220,6 +260,10 @@ class _ReflectionScreenState extends State<ReflectionScreen> {
     // 제출 버튼 활성화 여부
     final bool canSubmit = _weekEnabled[_selectedWeek - 1] && !_isSubmitting;
 
+    // 오프라인 상태 확인
+    final reflectionProvider = Provider.of<ReflectionProvider>(context);
+    final isOffline = reflectionProvider.isOffline;
+
     return Container(
       color: CupertinoColors.systemGroupedBackground, // iOS 스타일 배경색
       child: SafeArea(
@@ -238,6 +282,47 @@ class _ReflectionScreenState extends State<ReflectionScreen> {
                 ),
               ),
             ),
+
+            // 오프라인 모드 표시
+            if (isOffline)
+              Container(
+                margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: CupertinoColors.systemOrange.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(
+                      CupertinoIcons.wifi_slash,
+                      color: CupertinoColors.systemOrange,
+                      size: 18,
+                    ),
+                    const SizedBox(width: 8),
+                    const Expanded(
+                      child: Text(
+                        '오프라인 모드: 작성한 내용은 로컬에 저장되며 네트워크 연결 시 동기화됩니다.',
+                        style: TextStyle(
+                          fontSize: 13,
+                          color: CupertinoColors.systemOrange,
+                        ),
+                      ),
+                    ),
+                    CupertinoButton(
+                      padding: EdgeInsets.zero,
+                      minSize: 0,
+                      child: const Text(
+                        '동기화',
+                        style: TextStyle(fontSize: 13),
+                      ),
+                      onPressed: () {
+                        _syncOfflineData();
+                      },
+                    )
+                  ],
+                ),
+              ),
 
             // iOS 스타일 세그먼트 컨트롤
             Padding(
@@ -307,7 +392,8 @@ class _ReflectionScreenState extends State<ReflectionScreen> {
                 padding:
                     const EdgeInsets.symmetric(horizontal: 12.0, vertical: 8.0),
                 decoration: BoxDecoration(
-                  color: _statusMessage.contains('성공')
+                  color: _statusMessage.contains('성공') ||
+                          _statusMessage.contains('완료')
                       ? CupertinoColors.systemGreen.withOpacity(0.1)
                       : CupertinoColors.systemRed.withOpacity(0.1),
                   borderRadius: BorderRadius.circular(8),
@@ -315,10 +401,12 @@ class _ReflectionScreenState extends State<ReflectionScreen> {
                 child: Row(
                   children: [
                     Icon(
-                      _statusMessage.contains('성공')
+                      _statusMessage.contains('성공') ||
+                              _statusMessage.contains('완료')
                           ? CupertinoIcons.check_mark_circled
                           : CupertinoIcons.exclamationmark_circle,
-                      color: _statusMessage.contains('성공')
+                      color: _statusMessage.contains('성공') ||
+                              _statusMessage.contains('완료')
                           ? CupertinoColors.systemGreen
                           : CupertinoColors.systemRed,
                       size: 16,
@@ -329,7 +417,8 @@ class _ReflectionScreenState extends State<ReflectionScreen> {
                         _statusMessage,
                         style: TextStyle(
                           fontSize: 13,
-                          color: _statusMessage.contains('성공')
+                          color: _statusMessage.contains('성공') ||
+                                  _statusMessage.contains('완료')
                               ? CupertinoColors.systemGreen.darkColor
                               : CupertinoColors.systemRed.darkColor,
                         ),
