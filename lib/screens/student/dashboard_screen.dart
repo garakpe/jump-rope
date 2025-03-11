@@ -6,10 +6,9 @@ import '../../providers/auth_provider.dart';
 import '../../providers/task_provider.dart';
 import '../../widgets/bottom_nav_bar.dart';
 import '../../widgets/task_card.dart';
-import './progress_screen.dart'; // 진도 화면
-import './reflection_screen.dart'; // 성찰 화면 (이름 충돌 해결)
+import './progress_screen.dart';
+import './reflection_screen.dart';
 import '../../models/ui_models.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/cupertino.dart';
 
 // 현재 학생의 진도 정보 찾기 (일관된 방식으로)
@@ -467,8 +466,8 @@ class _StudentDashboardState extends State<StudentDashboard>
           child: TabBarView(
             controller: _tabController,
             children: [
-              _buildTaskGrid(individualTasks, true), // 개인줄넘기
-              _buildTaskGrid(groupTasks, false), // 단체줄넘기
+              _buildTaskGrid(TaskModel.getIndividualTasks(), true), // 개인줄넘기
+              _buildTaskGrid(TaskModel.getGroupTasks(), false), // 단체줄넘기
             ],
           ),
         ),
@@ -589,7 +588,7 @@ class _StudentDashboardState extends State<StudentDashboard>
             final completedTasks = currentStudent.individualProgress.entries
                 .where((entry) => entry.value.isCompleted)
                 .map((entry) {
-              final taskModel = individualTasks.firstWhere(
+              final taskModel = TaskModel.getIndividualTasks().firstWhere(
                 (t) => t.name == entry.key,
                 orElse: () =>
                     TaskModel(id: 0, name: entry.key, count: '', level: 99),

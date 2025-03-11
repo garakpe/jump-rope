@@ -316,7 +316,7 @@ class _ProgressScreenState extends State<ProgressScreen> {
             style: TextStyle(fontWeight: FontWeight.bold),
           ),
         ),
-        ...individualTasks.map((task) => DataColumn(
+        ...TaskModel.getIndividualTasks().map((task) => DataColumn(
               label: Expanded(
                 child: Text(
                   '${task.name}\n${task.count}',
@@ -327,7 +327,7 @@ class _ProgressScreenState extends State<ProgressScreen> {
                 ),
               ),
             )),
-        ...groupTasks.map((task) => DataColumn(
+        ...TaskModel.getGroupTasks().map((task) => DataColumn(
               label: Expanded(
                 child: Text(
                   '${task.name}\n${task.count}',
@@ -358,7 +358,7 @@ class _ProgressScreenState extends State<ProgressScreen> {
                 ),
               ),
             ),
-            ...individualTasks.map((task) {
+            ...TaskModel.getIndividualTasks().map((task) {
               final progress = student.individualProgress[task.name];
               final isCompleted = progress?.isCompleted ?? false;
               final completionDate = progress?.completedDate;
@@ -384,7 +384,7 @@ class _ProgressScreenState extends State<ProgressScreen> {
                 ),
               );
             }),
-            ...groupTasks.map((task) {
+            ...TaskModel.getGroupTasks().map((task) {
               final progress = student.groupProgress[task.name];
               final isCompleted = progress?.isCompleted ?? false;
               final completionDate = progress?.completedDate;

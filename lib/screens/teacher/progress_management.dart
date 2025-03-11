@@ -1,4 +1,4 @@
-// lib/screens/teacher/progress_management.dart 파일 전체 코드
+// lib/screens/teacher/progress_management.dart 수정된 코드
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -240,7 +240,10 @@ class _ProgressManagementState extends State<ProgressManagement> {
   }
 
   Widget _buildProgressTable(List<StudentProgress> students) {
-    final tasks = _viewMode == 'individual' ? individualTasks : groupTasks;
+    // 수정: TaskModel의 정적 메서드 사용
+    final tasks = _viewMode == 'individual'
+        ? TaskModel.getIndividualTasks()
+        : TaskModel.getGroupTasks();
 
     // 모둠별로 학생 그룹화
     final Map<int, List<StudentProgress>> groupedStudents = {};
@@ -415,10 +418,6 @@ class _ProgressManagementState extends State<ProgressManagement> {
                                         color: Colors.red.shade400),
                               ),
                             ),
-// lib/screens/teacher/progress_management.dart의 _buildProgressTable 내부에서 DataCell 부분 수정
-
-// progress_management.dart 파일의 _buildProgressTable 메서드 내부 DataCell 부분 수정
-
                             ...tasks.map((task) {
                               final isIndividual = _viewMode == 'individual';
                               final progress = isIndividual
@@ -605,7 +604,7 @@ class _ProgressManagementState extends State<ProgressManagement> {
     );
   }
 
-// 날짜 포맷팅 함수 개선
+  // 날짜 포맷팅 함수 개선
   String _formatDate(String? dateString) {
     if (dateString == null) return '';
 
@@ -629,8 +628,6 @@ class _ProgressManagementState extends State<ProgressManagement> {
     return a < b ? a : b;
   }
 
-// lib/screens/teacher/progress_management.dart의 _toggleTaskCompletion 메서드
-
   void _toggleTaskCompletion(
       String studentId, String taskName, bool completed, bool isGroupTask) {
     // TaskProvider 참조
@@ -641,10 +638,10 @@ class _ProgressManagementState extends State<ProgressManagement> {
 
     // 개인줄넘기 과제의 경우, 순차적 진행 여부 확인
     if (!isGroupTask && completed) {
-      // 현재 과제의 레벨 찾기
-      final currentTask = individualTasks.firstWhere(
+      // 수정: TaskModel의 정적 메서드 사용
+      final currentTask = TaskModel.getIndividualTasks().firstWhere(
         (task) => task.name == taskName,
-        orElse: () => TaskModel(id: 0, name: "", count: "", level: 0),
+        orElse: () => const TaskModel(id: 0, name: "", count: "", level: 0),
       );
 
       // 해당 학생 찾기
@@ -668,7 +665,8 @@ class _ProgressManagementState extends State<ProgressManagement> {
       bool hasSkippedTasks = false;
       List<String> skippedTaskNames = [];
 
-      for (var task in individualTasks) {
+      // 수정: TaskModel의 정적 메서드 사용
+      for (var task in TaskModel.getIndividualTasks()) {
         // 현재 과제보다 낮은 레벨의 과제만 확인
         if (task.level < currentTask.level) {
           // 이전 단계 과제가 완료되지 않았는지 확인
@@ -750,7 +748,7 @@ class _ProgressManagementState extends State<ProgressManagement> {
     }
   }
 
-// 실제 도장 처리 로직을 별도 메서드로 분리
+  // 실제 도장 처리 로직을 별도 메서드로 분리
   void _processTaskCompletion(
       String studentId, String taskName, bool completed, bool isGroupTask) {
     // TaskProvider 참조
