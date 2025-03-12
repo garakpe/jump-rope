@@ -11,7 +11,7 @@ import './reflection_screen.dart';
 import '../../models/ui_models.dart';
 import 'package:flutter/cupertino.dart';
 
-// 현재 학생의 진도 정보 찾기 (일관된 방식으로)
+// 현재 학생의 진도 정보 찾기 (간결화된 버전)
 StudentProgress getCurrentStudent(TaskProvider taskProvider, String studentId) {
   // 캐시에서 먼저 확인
   final cachedStudent = taskProvider.getStudentFromCache(studentId);
@@ -22,12 +22,7 @@ StudentProgress getCurrentStudent(TaskProvider taskProvider, String studentId) {
   return taskProvider.students.firstWhere(
       (s) => s.id == studentId || s.id == studentId,
       orElse: () => StudentProgress(
-          id: studentId,
-          name: '',
-          number: 0,
-          group: 0,
-          studentId: studentId // 추가: 학번을 ID와 동일하게 설정
-          ));
+          id: studentId, name: '', number: 0, group: 0, studentId: studentId));
 }
 
 class StudentDashboard extends StatefulWidget {
@@ -50,15 +45,19 @@ class _StudentDashboardState extends State<StudentDashboard>
     _currentTab = NavigationTab.home;
     // 화면이 처음 로드될 때 데이터 강제 새로고침
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      // 사용자 정보를 이용해 학생 ID 가져오기
-      final authProvider = Provider.of<AuthProvider>(context, listen: false);
-      final user = authProvider.userInfo;
-      final studentId = user?.studentId ?? '';
-      if (studentId.isNotEmpty) {
-        // 강제로 서버에서 직접 데이터를 가져오는 함수 호출
-        _loadStudentDataFromServer(studentId);
-      }
+      _loadInitialData();
     });
+  }
+
+  // 초기 데이터 로드 메서드 - 간결화
+  void _loadInitialData() {
+    final authProvider = Provider.of<AuthProvider>(context, listen: false);
+    final user = authProvider.userInfo;
+    final studentId = user?.studentId ?? '';
+
+    if (studentId.isNotEmpty) {
+      _loadStudentDataFromServer(studentId);
+    }
   }
 
   @override
@@ -107,40 +106,11 @@ class _StudentDashboardState extends State<StudentDashboard>
           ],
         ),
         actions: [
-          // 새로고침 버튼 추가
+          // 새로고침 버튼
           IconButton(
             icon: const Icon(Icons.refresh),
             tooltip: '새로고침',
-            onPressed: () {
-              // 로딩 표시
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('데이터를 새로고침 중입니다...')),
-              );
-
-              // 사용자 정보를 이용해 학생 ID 가져오기
-              final studentId = user?.studentId ?? '';
-
-              if (studentId.isNotEmpty) {
-                // 데이터 새로고침 요청
-                taskProvider.refreshStudentData(studentId).then((_) {
-                  // 성공 메시지
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text('데이터가 업데이트되었습니다'),
-                      backgroundColor: Colors.green,
-                    ),
-                  );
-                }).catchError((e) {
-                  // 오류 메시지
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text('새로고침 오류: $e'),
-                      backgroundColor: Colors.red,
-                    ),
-                  );
-                });
-              }
-            },
+            onPressed: () => _refreshData(user?.studentId ?? ''),
           ),
 
           if (isOffline)
@@ -186,6 +156,37 @@ class _StudentDashboardState extends State<StudentDashboard>
     );
   }
 
+  // 데이터 새로고침 메서드 - 간결화
+  void _refreshData(String studentId) {
+    if (studentId.isEmpty) return;
+
+    // 로딩 표시
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('데이터를 새로고침 중입니다...')),
+    );
+
+    // 데이터 새로고침 요청
+    Provider.of<TaskProvider>(context, listen: false)
+        .refreshStudentData(studentId)
+        .then((_) {
+      // 성공 메시지
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('데이터가 업데이트되었습니다'),
+          backgroundColor: Colors.green,
+        ),
+      );
+    }).catchError((e) {
+      // 오류 메시지
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('새로고침 오류: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    });
+  }
+
   Widget _buildBody() {
     switch (_currentTab) {
       case NavigationTab.home:
@@ -193,10 +194,8 @@ class _StudentDashboardState extends State<StudentDashboard>
       case NavigationTab.dashboard:
         return _buildDashboardContent();
       case NavigationTab.progress:
-        // 진도 화면
         return const ProgressScreen();
       case NavigationTab.reflection:
-        // 성찰 화면
         return const ReflectionScreen();
       default:
         return _buildHomeContent();
@@ -205,10 +204,10 @@ class _StudentDashboardState extends State<StudentDashboard>
 
   Widget _buildHomeContent() {
     return Container(
-      color: Colors.grey.shade50, // iOS 느낌의 밝은 배경색
+      color: Colors.grey.shade50,
       child: SingleChildScrollView(
         padding: const EdgeInsets.all(16),
-        physics: const BouncingScrollPhysics(), // iOS 스타일 스크롤 효과
+        physics: const BouncingScrollPhysics(),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -221,7 +220,7 @@ class _StudentDashboardState extends State<StudentDashboard>
                   fontSize: 28,
                   fontWeight: FontWeight.bold,
                   color: Colors.blue.shade800,
-                  letterSpacing: -0.5, // iOS 스타일 타이포그래피
+                  letterSpacing: -0.5,
                 ),
               ),
             ),
@@ -333,7 +332,7 @@ class _StudentDashboardState extends State<StudentDashboard>
     );
   }
 
-// iOS 스타일 카드 위젯
+  // iOS 스타일 카드 위젯
   Widget _buildIosStyleCard({
     required String title,
     required IconData icon,
@@ -396,7 +395,7 @@ class _StudentDashboardState extends State<StudentDashboard>
     );
   }
 
-// 목록 항목 위젯
+  // 목록 항목 위젯
   Widget _buildListItem(String text, {double bulletSize = 6}) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 10),
@@ -420,7 +419,7 @@ class _StudentDashboardState extends State<StudentDashboard>
                 fontSize: 15,
                 height: 1.4,
                 color: Colors.grey.shade800,
-                letterSpacing: -0.3, // iOS 스타일 타이포그래피
+                letterSpacing: -0.3,
               ),
             ),
           ),
@@ -481,55 +480,14 @@ class _StudentDashboardState extends State<StudentDashboard>
     final user = authProvider.userInfo;
     final studentId = user?.studentId ?? '';
 
-    // 현재 학생의 진도 정보 찾기 (캐시 우선 사용)
-    StudentProgress currentStudent;
+    // 현재 학생의 진도 정보 찾기 - 간결화
+    final currentStudent = getCurrentStudent(taskProvider, studentId);
 
-    // 캐시된 데이터 확인
-    final cachedStudent = taskProvider.getStudentFromCache(studentId);
-    if (cachedStudent != null) {
-      currentStudent = cachedStudent;
-      print('캐시에서 학생 데이터 사용: $studentId, 이름: ${cachedStudent.name}');
-    } else {
-      print('캐시에 학생 데이터 없음, 목록에서 검색: $studentId');
-      // 캐시에 없으면 목록에서 검색
-      try {
-        currentStudent = taskProvider.students.firstWhere(
-            (s) => s.id == studentId || s.id == user?.name, orElse: () {
-          print('학생 목록에서도 찾지 못함, 기본 데이터 생성: $studentId');
-          return StudentProgress(
-              id: studentId,
-              name: user?.name ?? '',
-              number: 0,
-              group: int.tryParse(user?.group ?? '1') ?? 1,
-              studentId: '');
-        });
-      } catch (e) {
-        print('학생 데이터 검색 오류: $e');
-        currentStudent = StudentProgress(
-            id: studentId,
-            name: user?.name ?? '',
-            number: 0,
-            group: int.tryParse(user?.group ?? '1') ?? 1,
-            studentId: '');
-      }
-    }
-
-    // 학생의 그룹 찾기
+    // 그룹 정보 가져오기
     final group = int.tryParse(user?.group ?? '1') ?? 1;
 
-    // 학생 진행 상태 확인
-    print('학생 ${user?.name} (ID: $studentId) 진행 상태:');
-    currentStudent.individualProgress.forEach((key, progress) {
-      print('- 과제: $key, 완료: ${progress.isCompleted}');
-    });
-
     // 단체줄넘기 허용 여부 확인
-    bool canDoGroupTasks = false;
-    try {
-      canDoGroupTasks = taskProvider.canStartGroupActivities(group);
-    } catch (e) {
-      print('단체줄넘기 허용 여부 확인 오류: $e');
-    }
+    final canDoGroupTasks = taskProvider.canStartGroupActivities(group);
 
     // 로딩 상태 표시
     if (taskProvider.isLoading) {
@@ -567,24 +525,15 @@ class _StudentDashboardState extends State<StudentDashboard>
           isCompleted = progress?.isCompleted ?? false;
         }
 
-        // 디버깅
-        print('과제 상태: ${task.name}, 완료=$isCompleted');
-
-        // 과제 활성화 로직 개선
+        // 과제 활성화 결정
         bool isActive;
 
         if (isIndividual) {
-          // 완료된 과제는 항상 활성화
-          if (isCompleted) {
+          // 개인 과제 활성화 로직
+          if (isCompleted || task.level == 1) {
             isActive = true;
-          }
-          // 레벨 1 과제는 항상 활성화
-          else if (task.level == 1) {
-            isActive = true;
-          }
-          // 이미 완료된 과제 수에 기반하여 활성화
-          else {
-            // 완료된 과제 리스트를 레벨 순으로 정렬
+          } else {
+            // 완료된 과제 리스트를 레벨 순으로 추출
             final completedTasks = currentStudent.individualProgress.entries
                 .where((entry) => entry.value.isCompleted)
                 .map((entry) {
@@ -596,29 +545,21 @@ class _StudentDashboardState extends State<StudentDashboard>
               return taskModel;
             }).toList();
 
-            // 완료된 최고 레벨
+            // 완료된 최고 레벨 계산
             int maxCompletedLevel = 0;
             if (completedTasks.isNotEmpty) {
-              // 레벨을 기준으로 내림차순 정렬 (높은 레벨이 먼저)
               completedTasks.sort((a, b) => b.level - a.level);
               maxCompletedLevel = completedTasks.first.level;
             }
 
-            // 완료된 최고 레벨 + 1까지 활성화 (최소 레벨 1은 항상 활성화)
+            // 활성화 레벨 결정
             int activationLevel = maxCompletedLevel + 1;
-
-            print(
-                '완료된 과제 수: ${completedTasks.length}, 최고 레벨: $maxCompletedLevel, 활성화 레벨: $activationLevel, 현재 과제 레벨: ${task.level}');
             isActive = task.level <= activationLevel;
           }
         } else {
           // 단체 과제는 조건 충족 시 활성화
           isActive = canDoGroupTasks || isCompleted;
         }
-
-        // 디버깅 정보 출력
-        print(
-            '과제: ${task.name}, 레벨: ${task.level}, 완료: $isCompleted, 활성화: $isActive');
 
         return TaskCard(
           task: task,
@@ -633,30 +574,18 @@ class _StudentDashboardState extends State<StudentDashboard>
     );
   }
 
-// 수정할 코드
+  // 서버에서 학생 데이터 로드 - 간결화
   Future<void> _loadStudentDataFromServer(String studentId) async {
     if (studentId.isEmpty) return;
 
     try {
-      // TaskProvider의 통합 메서드 사용
       final taskProvider = Provider.of<TaskProvider>(context, listen: false);
-      final studentProgress =
-          await taskProvider.syncStudentDataFromServer(studentId);
-
-      if (studentProgress != null) {
-        print('학생 데이터 로드 성공: ${studentProgress.name}, ${studentProgress.id}');
-        print(
-            '과제 완료 현황: 개인-${studentProgress.individualProgress.values.where((p) => p.isCompleted).length}개, '
-            '단체-${studentProgress.groupProgress.values.where((p) => p.isCompleted).length}개');
-      } else {
-        print('학생 데이터를 찾을 수 없음: $studentId');
-      }
+      await taskProvider.syncStudentDataFromServer(studentId);
 
       // 화면 갱신
       setState(() {});
     } catch (e) {
       print('학생 데이터 로드 오류: $e');
-      // 에러가 발생해도 UI 갱신
       setState(() {});
     }
   }

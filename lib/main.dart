@@ -10,14 +10,35 @@ import 'providers/reflection_provider.dart';
 import 'providers/student_provider.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
-// 전역 네비게이터 키 추가
+// 전역 네비게이터 키
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
 void main() async {
+  // Flutter 바인딩 초기화
   WidgetsFlutterBinding.ensureInitialized();
-  setUrlStrategy(PathUrlStrategy()); // 웹 URL에서 해시 제거
 
-  // Firebase 초기화 (웹에서 문제 해결을 위한 방법)
+  // 웹 URL 해시 제거
+  setUrlStrategy(PathUrlStrategy());
+
+  // Firebase 초기화
+  await _initializeFirebase();
+
+  // 앱 실행
+  runApp(
+    MultiProvider(
+      providers: [
+        ChangeNotifierProvider(create: (_) => AuthProvider()),
+        ChangeNotifierProvider(create: (_) => TaskProvider()),
+        ChangeNotifierProvider(create: (_) => ReflectionProvider()),
+        ChangeNotifierProvider(create: (_) => StudentProvider()),
+      ],
+      child: const JumpRopeApp(),
+    ),
+  );
+}
+
+// Firebase 초기화 함수
+Future<void> _initializeFirebase() async {
   try {
     await Firebase.initializeApp(
       options: const FirebaseOptions(
@@ -39,17 +60,4 @@ void main() async {
   } catch (e) {
     print("Firebase 초기화 실패: $e");
   }
-
-  // 앱 실행
-  runApp(
-    MultiProvider(
-      providers: [
-        ChangeNotifierProvider(create: (_) => AuthProvider()),
-        ChangeNotifierProvider(create: (_) => TaskProvider()),
-        ChangeNotifierProvider(create: (_) => ReflectionProvider()),
-        ChangeNotifierProvider(create: (_) => StudentProvider()),
-      ],
-      child: const JumpRopeApp(),
-    ),
-  );
 }

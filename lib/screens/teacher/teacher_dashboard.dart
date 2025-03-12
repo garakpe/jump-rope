@@ -8,7 +8,6 @@ import 'reflection_management.dart';
 import 'student_upload_screen.dart';
 import '../../providers/task_provider.dart';
 import '../../providers/student_provider.dart';
-import '../../providers/reflection_provider.dart';
 
 class TeacherDashboard extends StatefulWidget {
   const TeacherDashboard({Key? key}) : super(key: key);
@@ -54,63 +53,12 @@ class _TeacherDashboardState extends State<TeacherDashboard>
         title: Row(
           children: [
             const Text('줄넘기 학습 관리 (교사용)'),
-            if (isOffline)
-              Container(
-                margin: const EdgeInsets.only(left: 8),
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                decoration: BoxDecoration(
-                  color: Colors.orange.shade100,
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(Icons.cloud_off,
-                        size: 14, color: Colors.orange.shade800),
-                    const SizedBox(width: 4),
-                    Text(
-                      '오프라인',
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: Colors.orange.shade800,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
+            if (isOffline) _buildOfflineIndicator(),
           ],
         ),
         actions: [
-          if (isOffline)
-            IconButton(
-              icon: const Icon(Icons.sync),
-              tooltip: '데이터 동기화',
-              onPressed: () {
-                taskProvider.syncData();
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('데이터 동기화 중...')),
-                );
-              },
-            ),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            child: Row(
-              children: [
-                Text(
-                  '${authProvider.userInfo?.name} 선생님',
-                  style: const TextStyle(
-                    fontSize: 14,
-                    color: Colors.black54,
-                  ),
-                ),
-                IconButton(
-                  icon: const Icon(Icons.logout),
-                  onPressed: () => authProvider.logout(),
-                ),
-              ],
-            ),
-          ),
+          if (isOffline) _buildSyncButton(taskProvider),
+          _buildUserInfo(authProvider),
         ],
       ),
       body: Padding(
@@ -118,46 +66,11 @@ class _TeacherDashboardState extends State<TeacherDashboard>
         child: Column(
           children: [
             // 상단 헤더 영역
-            _buildHeaderCard(),
+            _buildHeaderCard(isOffline),
             const SizedBox(height: 16),
 
             // 탭바
-            Container(
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(16),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withOpacity(0.05),
-                    blurRadius: 4,
-                    offset: const Offset(0, 2),
-                  ),
-                ],
-              ),
-              child: TabBar(
-                controller: _tabController,
-                indicator: BoxDecoration(
-                  color: Colors.blue.shade50,
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                labelColor: Colors.blue.shade700,
-                unselectedLabelColor: Colors.grey.shade700,
-                tabs: const [
-                  Tab(
-                    icon: Icon(Icons.group),
-                    text: '모둠 관리',
-                  ),
-                  Tab(
-                    icon: Icon(Icons.school),
-                    text: '학습 현황',
-                  ),
-                  Tab(
-                    icon: Icon(Icons.book),
-                    text: '성찰 관리',
-                  ),
-                ],
-              ),
-            ),
+            _buildTabBar(),
             const SizedBox(height: 16),
 
             // 탭 내용
@@ -179,10 +92,111 @@ class _TeacherDashboardState extends State<TeacherDashboard>
     );
   }
 
-  Widget _buildHeaderCard() {
-    final taskProvider = Provider.of<TaskProvider>(context);
-    final isOffline = taskProvider.isOffline;
+  // 오프라인 상태 표시 위젯
+  Widget _buildOfflineIndicator() {
+    return Container(
+      margin: const EdgeInsets.only(left: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: Colors.orange.shade100,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(Icons.cloud_off, size: 14, color: Colors.orange.shade800),
+          const SizedBox(width: 4),
+          Text(
+            '오프라인',
+            style: TextStyle(
+              fontSize: 12,
+              color: Colors.orange.shade800,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 
+  // 동기화 버튼
+  Widget _buildSyncButton(TaskProvider taskProvider) {
+    return IconButton(
+      icon: const Icon(Icons.sync),
+      tooltip: '데이터 동기화',
+      onPressed: () {
+        taskProvider.syncData();
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('데이터 동기화 중...')),
+        );
+      },
+    );
+  }
+
+  // 사용자 정보 및 로그아웃 버튼
+  Widget _buildUserInfo(AuthProvider authProvider) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      child: Row(
+        children: [
+          Text(
+            '${authProvider.userInfo?.name} 선생님',
+            style: const TextStyle(
+              fontSize: 14,
+              color: Colors.black54,
+            ),
+          ),
+          IconButton(
+            icon: const Icon(Icons.logout),
+            onPressed: () => authProvider.logout(),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // 탭바 위젯
+  Widget _buildTabBar() {
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 4,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: TabBar(
+        controller: _tabController,
+        indicator: BoxDecoration(
+          color: Colors.blue.shade50,
+          borderRadius: BorderRadius.circular(12),
+        ),
+        labelColor: Colors.blue.shade700,
+        unselectedLabelColor: Colors.grey.shade700,
+        tabs: const [
+          Tab(
+            icon: Icon(Icons.group),
+            text: '모둠 관리',
+          ),
+          Tab(
+            icon: Icon(Icons.school),
+            text: '학습 현황',
+          ),
+          Tab(
+            icon: Icon(Icons.book),
+            text: '성찰 관리',
+          ),
+        ],
+      ),
+    );
+  }
+
+  // 헤더 카드 위젯
+  Widget _buildHeaderCard(bool isOffline) {
     return Card(
       elevation: 2,
       shape: RoundedRectangleBorder(
@@ -217,101 +231,13 @@ class _TeacherDashboardState extends State<TeacherDashboard>
                 ),
 
                 // 오프라인 상태 표시
-                if (isOffline)
-                  Container(
-                    margin: const EdgeInsets.only(left: 12),
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                    decoration: BoxDecoration(
-                      color: Colors.orange.shade50,
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: Colors.orange.shade300),
-                    ),
-                    child: Row(
-                      children: [
-                        Icon(Icons.cloud_off,
-                            size: 16, color: Colors.orange.shade700),
-                        const SizedBox(width: 8),
-                        Text(
-                          '오프라인 모드',
-                          style: TextStyle(
-                            color: Colors.orange.shade700,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        ElevatedButton(
-                          onPressed: () => _showSyncDialog(),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.orange.shade700,
-                            foregroundColor: Colors.white,
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 12, vertical: 4),
-                            minimumSize: const Size(0, 32),
-                          ),
-                          child: const Text('동기화 관리'),
-                        ),
-                      ],
-                    ),
-                  ),
+                if (isOffline) _buildOfflineWarning(),
               ],
             ),
             Row(
               children: [
-                // 학생 일괄 등록 버튼 (이 버튼만 남김)
-                ElevatedButton.icon(
-                  icon: const Icon(Icons.upload_file),
-                  label: const Text('학생 일괄 등록'),
-                  onPressed: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) => const StudentUploadScreen(),
-                      ),
-                    ).then((result) {
-                      // 학생 업로드 화면에서 반환된 데이터가 있으면 처리
-                      if (result != null &&
-                          result is Map &&
-                          result.containsKey('refreshClass')) {
-                        final classNumString =
-                            result['refreshClass'].toString();
-                        if (classNumString.isNotEmpty) {
-                          // 숫자로 변환 가능한지 확인
-                          final classNumInt = int.tryParse(classNumString);
-                          if (classNumInt != null) {
-                            // 해당 학급 번호 선택
-                            setState(() {
-                              _selectedClassId = classNumInt;
-                            });
-
-                            // 데이터 로드
-                            Provider.of<StudentProvider>(context, listen: false)
-                                .setSelectedClass(classNumString);
-                            Provider.of<TaskProvider>(context, listen: false)
-                                .selectClass(classNumString);
-
-                            // 첫 번째 탭(모둠관리)으로 이동
-                            _tabController.animateTo(0);
-
-                            // 디버깅용 로그
-                            print('학급 데이터 리프레시: $classNumString반');
-                          }
-                        }
-                      }
-                    });
-                  },
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.green.shade500,
-                    foregroundColor: Colors.white,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 16,
-                      vertical: 10,
-                    ),
-                  ),
-                ),
+                // 학생 일괄 등록 버튼
+                _buildStudentUploadButton(),
                 const SizedBox(width: 16),
                 // 학급 선택 드롭다운
                 _buildClassSelector(),
@@ -323,6 +249,105 @@ class _TeacherDashboardState extends State<TeacherDashboard>
     );
   }
 
+  // 오프라인 경고 위젯
+  Widget _buildOfflineWarning() {
+    return Container(
+      margin: const EdgeInsets.only(left: 12),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      decoration: BoxDecoration(
+        color: Colors.orange.shade50,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: Colors.orange.shade300),
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.cloud_off, size: 16, color: Colors.orange.shade700),
+          const SizedBox(width: 8),
+          Text(
+            '오프라인 모드',
+            style: TextStyle(
+              color: Colors.orange.shade700,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          const SizedBox(width: 8),
+          ElevatedButton(
+            onPressed: () => _showSyncDialog(),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.orange.shade700,
+              foregroundColor: Colors.white,
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+              minimumSize: const Size(0, 32),
+            ),
+            child: const Text('동기화 관리'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // 학생 일괄 등록 버튼
+  Widget _buildStudentUploadButton() {
+    return ElevatedButton.icon(
+      icon: const Icon(Icons.upload_file),
+      label: const Text('학생 일괄 등록'),
+      onPressed: () => _navigateToStudentUpload(),
+      style: ElevatedButton.styleFrom(
+        backgroundColor: Colors.green.shade500,
+        foregroundColor: Colors.white,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12),
+        ),
+        padding: const EdgeInsets.symmetric(
+          horizontal: 16,
+          vertical: 10,
+        ),
+      ),
+    );
+  }
+
+  // 학생 일괄 등록 화면으로 이동
+  void _navigateToStudentUpload() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => const StudentUploadScreen(),
+      ),
+    ).then((result) {
+      if (result != null &&
+          result is Map &&
+          result.containsKey('refreshClass')) {
+        final classNumString = result['refreshClass'].toString();
+        if (classNumString.isNotEmpty) {
+          final classNumInt = int.tryParse(classNumString);
+          if (classNumInt != null) {
+            _updateSelectedClass(classNumInt, classNumString);
+          }
+        }
+      }
+    });
+  }
+
+  // 선택된 학급 업데이트
+  void _updateSelectedClass(int classId, String classNumString) {
+    setState(() {
+      _selectedClassId = classId;
+    });
+
+    // 데이터 로드
+    Provider.of<StudentProvider>(context, listen: false)
+        .setSelectedClass(classNumString);
+    Provider.of<TaskProvider>(context, listen: false)
+        .selectClass(classNumString);
+
+    // 첫 번째 탭(모둠관리)으로 이동
+    _tabController.animateTo(0);
+
+    // 디버깅용 로그
+    print('학급 데이터 리프레시: $classNumString반');
+  }
+
+  // 학급 선택 드롭다운
   Widget _buildClassSelector() {
     return Container(
       decoration: BoxDecoration(
@@ -342,36 +367,34 @@ class _TeacherDashboardState extends State<TeacherDashboard>
               child: Text(cls['name']),
             );
           }).toList(),
-// _buildClassSelector 메서드의 onChanged 부분을 수정
-          onChanged: (value) {
-            if (value != null) {
-              setState(() {
-                _selectedClassId = value;
-              });
-
-              // 디버깅 정보 출력
-              print('교사 대시보드 - 학급 선택: $_selectedClassId');
-
-              // 중요: 여기서 StudentProvider에 classNum을 전달해야 합니다
-              final classNumString = value.toString();
-
-              // StudentProvider에 반 정보 전달
-              Provider.of<StudentProvider>(context, listen: false)
-                  .setSelectedClass(classNumString);
-
-              // TaskProvider에도 반 정보 전달
-              Provider.of<TaskProvider>(context, listen: false)
-                  .selectClass(classNumString);
-
-              // TabController를 첫 번째 탭으로 리셋
-              _tabController.animateTo(0);
-
-              print('학급 선택됨: $classNumString (교사 대시보드)'); // 디버깅용 로그
-            }
-          },
+          onChanged: _onClassSelected,
         ),
       ),
     );
+  }
+
+  // 학급 선택 처리
+  void _onClassSelected(int? value) {
+    if (value != null) {
+      setState(() {
+        _selectedClassId = value;
+      });
+
+      // 디버깅 정보 출력
+      print('교사 대시보드 - 학급 선택: $_selectedClassId');
+
+      // 학급 정보 업데이트
+      final classNumString = value.toString();
+      Provider.of<StudentProvider>(context, listen: false)
+          .setSelectedClass(classNumString);
+      Provider.of<TaskProvider>(context, listen: false)
+          .selectClass(classNumString);
+
+      // 첫 번째 탭으로 리셋
+      _tabController.animateTo(0);
+
+      print('학급 선택됨: $classNumString (교사 대시보드)');
+    }
   }
 
   // 동기화 관리 대화상자
@@ -419,32 +442,36 @@ class _TeacherDashboardState extends State<TeacherDashboard>
           ElevatedButton.icon(
             icon: const Icon(Icons.sync),
             label: const Text('지금 동기화'),
-            onPressed: () {
-              Navigator.pop(context);
-
-              // 동기화 시도 및 결과 알림
-              taskProvider.syncData().then((_) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('데이터 동기화가 완료되었습니다.'),
-                    backgroundColor: Colors.green,
-                  ),
-                );
-              }).catchError((error) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text('동기화 오류: $error'),
-                    backgroundColor: Colors.red,
-                  ),
-                );
-              });
-            },
+            onPressed: () => _syncData(taskProvider),
           ),
         ],
       ),
     );
   }
 
+  // 데이터 동기화 함수
+  void _syncData(TaskProvider taskProvider) {
+    Navigator.pop(context);
+
+    // 동기화 시도 및 결과 알림
+    taskProvider.syncData().then((_) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('데이터 동기화가 완료되었습니다.'),
+          backgroundColor: Colors.green,
+        ),
+      );
+    }).catchError((error) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('동기화 오류: $error'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    });
+  }
+
+  // 학급 미선택 상태 화면
   Widget _buildNoClassSelectedView() {
     return Center(
       child: Column(

@@ -18,116 +18,123 @@ class StudentProvider extends ChangeNotifier {
 
   // 현재 선택된 학급 설정
   void setSelectedClass(String className) {
-    // 중요: 학급 변경 전에 기존 구독을 취소해야 함
     _selectedClass = className;
     _isLoading = true;
     _error = '';
+    _students = [];
     notifyListeners();
 
-    // 학급이 선택되면 해당 학급의 학생 목록 구독
     if (className.isNotEmpty) {
-      print('학급 선택됨: $className - 학생 목록 구독 시작'); // 디버깅용 로그
-
-      // 현재 학생 목록을 비웁니다
-      _students = [];
-      notifyListeners();
-
-      // 새로운 학급의 학생 목록을 구독합니다
       subscribeToClass(className);
     }
   }
 
   // 학급별 학생 목록 구독
   void subscribeToClass(String className) {
-    _selectedClass = className;
     _isLoading = true;
     notifyListeners();
 
     try {
-      print('Firestore 쿼리 시작: 학급=$className'); // 디버깅용 로그
-
-      // 여러 필드로 검색 시도 (classNum과 className 모두 확인)
+      // 'classNum' 필드로 학생 구독
       _firestore
           .collection('students')
           .where('classNum', isEqualTo: className)
           .orderBy('studentId')
           .snapshots()
-          .listen((snapshot) {
-        _students = snapshot.docs
-            .map((doc) => FirebaseStudentModel.fromFirestore(doc))
-            .toList();
+          .listen(
+        (snapshot) {
+          _students = snapshot.docs
+              .map((doc) => FirebaseStudentModel.fromFirestore(doc))
+              .toList();
 
-        print('학생 목록 로드됨: ${_students.length}명'); // 디버깅용 로그
-
-        // 만약 학생이 없으면 className으로도 시도해봄
-        if (_students.isEmpty) {
-          print('classNum으로 학생을 찾지 못함. className으로 시도');
-          _firestore
-              .collection('students')
-              .where('className', isEqualTo: className)
-              .orderBy('studentId')
-              .get()
-              .then((classNameSnapshot) {
-            if (classNameSnapshot.docs.isNotEmpty) {
-              _students = classNameSnapshot.docs
-                  .map((doc) => FirebaseStudentModel.fromFirestore(doc))
-                  .toList();
-              print('className으로 학생 목록 로드됨: ${_students.length}명');
-              _isLoading = false;
-              notifyListeners();
-            }
-          });
-        }
-
-        _isLoading = false;
-        notifyListeners();
-      }, onError: (e) {
-        print('Firestore 쿼리 오류: $e'); // 디버깅용 로그
-        _isLoading = false;
-        _error = e.toString();
-        notifyListeners();
-      });
+          // classNum으로 학생을 찾지 못하면 className으로 시도
+          if (_students.isEmpty) {
+            _tryClassNameQuery(className);
+          } else {
+            _isLoading = false;
+            notifyListeners();
+          }
+        },
+        onError: _handleError,
+      );
     } catch (e) {
-      print('subscribeToClass 예외: $e'); // 디버깅용 로그
-      _isLoading = false;
-      _error = e.toString();
-      notifyListeners();
+      _handleError(e);
     }
   }
 
-  // 학생 모둠 업데이트
-  Future<void> updateStudentGroup(String studentId, int newGroup) async {
+  // 'className' 필드로 학생 조회 시도
+  void _tryClassNameQuery(String className) {
+    _firestore
+        .collection('students')
+        .where('className', isEqualTo: className)
+        .orderBy('studentId')
+        .get()
+        .then(
+      (snapshot) {
+        _students = snapshot.docs
+            .map((doc) => FirebaseStudentModel.fromFirestore(doc))
+            .toList();
+        _isLoading = false;
+        notifyListeners();
+      },
+      onError: _handleError,
+    );
+  }
+
+  // 에러 처리 공통 함수
+  void _handleError(dynamic e) {
+    _isLoading = false;
+    _error = e.toString();
+    notifyListeners();
+  }
+
+  // 학생 문서 ID 조회 헬퍼 함수
+  Future<String?> _getStudentDocId(String studentId) async {
     try {
-      // 학생 문서 ID 찾기
       QuerySnapshot querySnapshot = await _firestore
           .collection('students')
           .where('studentId', isEqualTo: studentId)
           .limit(1)
           .get();
 
-      if (querySnapshot.docs.isEmpty) {
-        throw Exception("학생을 찾을 수 없습니다");
-      }
+      return querySnapshot.docs.isEmpty ? null : querySnapshot.docs.first.id;
+    } catch (e) {
+      _error = e.toString();
+      notifyListeners();
+      return null;
+    }
+  }
 
-      // 학생 문서 업데이트
+  // 학생 모둠 업데이트
+  Future<void> updateStudentGroup(String studentId, int newGroup) async {
+    try {
+      String? docId = await _getStudentDocId(studentId);
+      if (docId == null) throw Exception("학생을 찾을 수 없습니다");
+
       await _firestore
           .collection('students')
-          .doc(querySnapshot.docs.first.id)
+          .doc(docId)
           .update({'group': newGroup});
 
       // 로컬 목록 업데이트
-      final index = _students.indexWhere((s) => s.studentId == studentId);
-      if (index >= 0) {
-        final updatedStudent = _students[index].copyWith(group: newGroup);
-        final newList = List<FirebaseStudentModel>.from(_students);
-        newList[index] = updatedStudent;
-        _students = newList;
-        notifyListeners();
-      }
+      _updateLocalStudent(
+          studentId, (student) => student.copyWith(group: newGroup));
     } catch (e) {
       _error = e.toString();
       notifyListeners();
       rethrow;
+    }
+  }
+
+  // 로컬 학생 데이터 업데이트 헬퍼 함수
+  void _updateLocalStudent(String studentId,
+      FirebaseStudentModel Function(FirebaseStudentModel) update) {
+    final index = _students.indexWhere((s) => s.studentId == studentId);
+    if (index >= 0) {
+      final newList = List<FirebaseStudentModel>.from(_students);
+      newList[index] = update(_students[index]);
+      _students = newList;
+      notifyListeners();
     }
   }
 
@@ -140,20 +147,17 @@ class StudentProvider extends ChangeNotifier {
       _isLoading = true;
       notifyListeners();
 
-      // Firestore 일괄 처리를 위한 배치 생성
+      // Firestore 일괄 처리
       final batch = _firestore.batch();
       final updatedStudents = <FirebaseStudentModel>[];
 
-      // 변경 사항 처리
       for (var entry in studentGroupMap.entries) {
         final studentId = entry.key; // 문서 ID
         final newGroup = entry.value;
 
-        // 문서 참조 가져오기
+        // 배치에 업데이트 추가
         DocumentReference docRef =
             _firestore.collection('students').doc(studentId);
-
-        // 배치에 업데이트 추가
         batch.update(docRef, {'group': newGroup});
 
         // 로컬 업데이트를 위해 수정된 학생 정보 찾기
@@ -163,33 +167,38 @@ class StudentProvider extends ChangeNotifier {
         }
       }
 
-      // 배치 커밋 (모든 변경 사항을 한 번에 적용)
+      // 배치 커밋
       await batch.commit();
 
       // 로컬 학생 목록 업데이트
-      final newList = List<FirebaseStudentModel>.from(_students);
-      for (var updatedStudent in updatedStudents) {
-        final index = newList.indexWhere((s) => s.id == updatedStudent.id);
-        if (index >= 0) {
-          newList[index] = updatedStudent;
-        }
-      }
-
-      _students = newList;
-      _isLoading = false;
-      notifyListeners();
+      _updateMultipleStudents(updatedStudents);
     } catch (e) {
-      _isLoading = false;
       _error = "모둠 업데이트 실패: $e";
-      print("모둠 업데이트 오류: $e");
       notifyListeners();
       rethrow;
+    } finally {
+      _isLoading = false;
+      notifyListeners();
     }
+  }
+
+  // 여러 학생 업데이트 헬퍼 함수
+  void _updateMultipleStudents(List<FirebaseStudentModel> updatedStudents) {
+    final newList = List<FirebaseStudentModel>.from(_students);
+    for (var updatedStudent in updatedStudents) {
+      final index = newList.indexWhere((s) => s.id == updatedStudent.id);
+      if (index >= 0) {
+        newList[index] = updatedStudent;
+      }
+    }
+    _students = newList;
   }
 
   // 모둠 일괄 변경 (여러 학생의 모둠을 한번에 변경)
   Future<void> updateGroupForStudents(
       List<String> studentIds, int newGroup) async {
+    if (studentIds.isEmpty) return;
+
     try {
       _isLoading = true;
       notifyListeners();
@@ -200,15 +209,10 @@ class StudentProvider extends ChangeNotifier {
 
       for (final studentId in studentIds) {
         // 학생 문서 ID 찾기
-        final QuerySnapshot querySnapshot = await _firestore
-            .collection('students')
-            .where('studentId', isEqualTo: studentId)
-            .limit(1)
-            .get();
-
-        if (querySnapshot.docs.isNotEmpty) {
-          final doc = querySnapshot.docs.first;
-          batch.update(doc.reference, {'group': newGroup});
+        final docId = await _getStudentDocId(studentId);
+        if (docId != null) {
+          batch.update(_firestore.collection('students').doc(docId),
+              {'group': newGroup});
 
           // 로컬 목록 업데이트 준비
           final index = _students.indexWhere((s) => s.studentId == studentId);
@@ -222,23 +226,14 @@ class StudentProvider extends ChangeNotifier {
       await batch.commit();
 
       // 로컬 목록 업데이트
-      final newList = List<FirebaseStudentModel>.from(_students);
-      for (final updatedStudent in updatedStudents) {
-        final index =
-            newList.indexWhere((s) => s.studentId == updatedStudent.studentId);
-        if (index >= 0) {
-          newList[index] = updatedStudent;
-        }
-      }
-
-      _students = newList;
-      _isLoading = false;
-      notifyListeners();
+      _updateMultipleStudents(updatedStudents);
     } catch (e) {
-      _isLoading = false;
       _error = e.toString();
       notifyListeners();
       rethrow;
+    } finally {
+      _isLoading = false;
+      notifyListeners();
     }
   }
 
@@ -246,35 +241,45 @@ class StudentProvider extends ChangeNotifier {
   Future<void> updateAttendance(String studentId, bool isPresent) async {
     try {
       // 학생 문서 ID 찾기
-      QuerySnapshot querySnapshot = await _firestore
-          .collection('students')
-          .where('studentId', isEqualTo: studentId)
-          .limit(1)
-          .get();
+      final docId = await _getStudentDocId(studentId);
+      if (docId == null) throw Exception("학생을 찾을 수 없습니다");
 
-      if (querySnapshot.docs.isEmpty) {
-        throw Exception("학생을 찾을 수 없습니다");
-      }
-
-      // 학생 문서 업데이트
       await _firestore
           .collection('students')
-          .doc(querySnapshot.docs.first.id)
+          .doc(docId)
           .update({'attendance': isPresent});
 
       // 로컬 목록 업데이트
-      final index = _students.indexWhere((s) => s.studentId == studentId);
-      if (index >= 0) {
-        final updatedStudent = _students[index].copyWith(attendance: isPresent);
-        final newList = List<FirebaseStudentModel>.from(_students);
-        newList[index] = updatedStudent;
-        _students = newList;
-        notifyListeners();
-      }
+      _updateLocalStudent(
+          studentId, (student) => student.copyWith(attendance: isPresent));
     } catch (e) {
       _error = e.toString();
       notifyListeners();
       rethrow;
+    }
+  }
+
+  // 학생 삭제
+  Future<void> deleteStudent(String studentId) async {
+    try {
+      _isLoading = true;
+      notifyListeners();
+
+      // 학생 문서 ID 찾기
+      final docId = await _getStudentDocId(studentId);
+      if (docId == null) throw Exception("학생을 찾을 수 없습니다");
+
+      await _firestore.collection('students').doc(docId).delete();
+
+      // 로컬 목록 업데이트
+      _students = _students.where((s) => s.studentId != studentId).toList();
+    } catch (e) {
+      _error = e.toString();
+      notifyListeners();
+      rethrow;
+    } finally {
+      _isLoading = false;
+      notifyListeners();
     }
   }
 
@@ -286,78 +291,31 @@ class StudentProvider extends ChangeNotifier {
   // 총 모둠 수 계산
   int getTotalGroups() {
     if (_students.isEmpty) return 0;
-
-    final groups = <int>{};
-    for (var student in _students) {
-      groups.add(student.group);
-    }
-
-    return groups.length;
+    return getGroupList().length;
   }
 
   // 모둠별 학생 수 계산
   Map<int, int> getGroupCounts() {
     final counts = <int, int>{};
-
     for (var student in _students) {
       counts[student.group] = (counts[student.group] ?? 0) + 1;
     }
-
     return counts;
   }
 
   // 현재 모둠 목록 가져오기
   List<int> getGroupList() {
     final groups = <int>{};
-
     for (var student in _students) {
       groups.add(student.group);
     }
-
     return groups.toList()..sort();
-  }
-
-  // 학생 삭제
-  Future<void> deleteStudent(String studentId) async {
-    try {
-      _isLoading = true;
-      notifyListeners();
-
-      // 학생 문서 ID 찾기
-      QuerySnapshot querySnapshot = await _firestore
-          .collection('students')
-          .where('studentId', isEqualTo: studentId)
-          .limit(1)
-          .get();
-
-      if (querySnapshot.docs.isEmpty) {
-        throw Exception("학생을 찾을 수 없습니다");
-      }
-
-      // 학생 문서 삭제
-      await _firestore
-          .collection('students')
-          .doc(querySnapshot.docs.first.id)
-          .delete();
-
-      // 로컬 목록 업데이트
-      _students = _students.where((s) => s.studentId != studentId).toList();
-      _isLoading = false;
-      notifyListeners();
-    } catch (e) {
-      _isLoading = false;
-      _error = e.toString();
-      notifyListeners();
-      rethrow;
-    }
   }
 
   // 학생 검색
   List<FirebaseStudentModel> searchStudents(String query) {
     if (query.isEmpty) return _students;
-
     final lowercaseQuery = query.toLowerCase();
-
     return _students.where((student) {
       return student.name.toLowerCase().contains(lowercaseQuery) ||
           student.studentId.toLowerCase().contains(lowercaseQuery);

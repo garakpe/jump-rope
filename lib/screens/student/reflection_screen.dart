@@ -35,26 +35,21 @@ class _ReflectionScreenState extends State<ReflectionScreen> {
     });
   }
 
-  // 현재 주차 로드
+  // 현재 주차 로드 - 간결화
   void _loadCurrentWeek() {
     final taskProvider = Provider.of<TaskProvider>(context, listen: false);
     final currentWeek = taskProvider.currentWeek;
 
     setState(() {
       _currentWeek = currentWeek;
-      _selectedWeek = currentWeek > _selectedWeek
-          ? _selectedWeek
-          : currentWeek; // 선택이 현재 주차보다 크면 현재 주차로 설정
+      _selectedWeek = currentWeek > _selectedWeek ? _selectedWeek : currentWeek;
 
       // 주차 활성화 상태 업데이트 (현재 주차까지만 활성화)
-      _weekEnabled = [
-        currentWeek >= 1, // 1주차
-        currentWeek >= 2, // 2주차
-        currentWeek >= 3, // 3주차
-      ];
+      _weekEnabled = List.generate(3, (index) => currentWeek >= index + 1);
     });
   }
 
+  // 성찰 초기화 메서드 - 간결화
   Future<void> _initReflection() async {
     final authProvider = Provider.of<AuthProvider>(context, listen: false);
     final reflectionProvider =
@@ -68,44 +63,22 @@ class _ReflectionScreenState extends State<ReflectionScreen> {
     });
 
     try {
-      // 현재 주차에 해당하는 reflection ID 찾기
+      // 제출 여부 확인 및 답변 가져오기
+      final studentId = user.studentId ?? '';
       final reflectionId = _selectedWeek;
+      final hasSubmitted =
+          await reflectionProvider.hasSubmitted(studentId, reflectionId);
 
-      // 제출 여부 확인
-      final hasSubmitted = await reflectionProvider.hasSubmitted(
-          user.studentId ?? '', reflectionId);
-
-      // 이미 제출했으면 제출한 답변 가져오기
       if (hasSubmitted) {
-        final submission = await reflectionProvider.getSubmission(
-            user.studentId ?? '', reflectionId);
-
+        // 제출한 답변 가져오기
+        final submission =
+            await reflectionProvider.getSubmission(studentId, reflectionId);
         if (submission != null) {
-          // 기존 답변으로 컨트롤러 초기화
-          final reflection =
-              reflectionCards.firstWhere((r) => r.id == reflectionId);
-
-          for (var question in reflection.questions) {
-            final answer = submission.answers[question] ?? '';
-            if (!_controllers.containsKey(question)) {
-              _controllers[question] = TextEditingController(text: answer);
-            } else {
-              _controllers[question]!.text = answer;
-            }
-          }
+          _initControllers(submission.answers);
         }
       } else {
-        // 미제출 상태면 빈 컨트롤러 초기화
-        final reflection =
-            reflectionCards.firstWhere((r) => r.id == reflectionId);
-
-        for (var question in reflection.questions) {
-          if (!_controllers.containsKey(question)) {
-            _controllers[question] = TextEditingController();
-          } else {
-            _controllers[question]!.text = '';
-          }
-        }
+        // 새 컨트롤러 초기화
+        _initEmptyControllers();
       }
 
       setState(() {
@@ -120,6 +93,33 @@ class _ReflectionScreenState extends State<ReflectionScreen> {
     }
   }
 
+  // 컨트롤러 초기화 함수
+  void _initControllers(Map<String, String> answers) {
+    final reflection = reflectionCards.firstWhere((r) => r.id == _selectedWeek);
+
+    for (var question in reflection.questions) {
+      final answer = answers[question] ?? '';
+      if (!_controllers.containsKey(question)) {
+        _controllers[question] = TextEditingController(text: answer);
+      } else {
+        _controllers[question]!.text = answer;
+      }
+    }
+  }
+
+  // 빈 컨트롤러 초기화
+  void _initEmptyControllers() {
+    final reflection = reflectionCards.firstWhere((r) => r.id == _selectedWeek);
+
+    for (var question in reflection.questions) {
+      if (!_controllers.containsKey(question)) {
+        _controllers[question] = TextEditingController();
+      } else {
+        _controllers[question]!.text = '';
+      }
+    }
+  }
+
   @override
   void dispose() {
     // 컨트롤러 해제
@@ -129,6 +129,7 @@ class _ReflectionScreenState extends State<ReflectionScreen> {
     super.dispose();
   }
 
+  // 주차 선택 함수
   void _selectWeek(int week) {
     if (_selectedWeek != week && _weekEnabled[week - 1]) {
       setState(() {
@@ -142,6 +143,7 @@ class _ReflectionScreenState extends State<ReflectionScreen> {
     }
   }
 
+  // 성찰 보고서 제출 함수
   Future<void> _submitReflection() async {
     final authProvider = Provider.of<AuthProvider>(context, listen: false);
     final reflectionProvider =
@@ -155,24 +157,10 @@ class _ReflectionScreenState extends State<ReflectionScreen> {
       return;
     }
 
-    // 모든 질문에 답변했는지 확인
+    // 답변 유효성 검사
     final reflection = reflectionCards.firstWhere((r) => r.id == _selectedWeek);
     final answers = <String, String>{};
-    bool allAnswered = true;
-
-    for (var question in reflection.questions) {
-      final answer = _controllers[question]?.text.trim() ?? '';
-      if (answer.isEmpty) {
-        allAnswered = false;
-        break;
-      }
-      answers[question] = answer;
-    }
-
-    if (!allAnswered) {
-      setState(() {
-        _statusMessage = '모든 질문에 답변해 주세요.';
-      });
+    if (!_validateAnswers(reflection.questions, answers)) {
       return;
     }
 
@@ -207,6 +195,29 @@ class _ReflectionScreenState extends State<ReflectionScreen> {
         _statusMessage = '제출 중 오류 발생: $e';
       });
     }
+  }
+
+  // 답변 유효성 검사
+  bool _validateAnswers(List<String> questions, Map<String, String> answers) {
+    bool allAnswered = true;
+
+    for (var question in questions) {
+      final answer = _controllers[question]?.text.trim() ?? '';
+      if (answer.isEmpty) {
+        allAnswered = false;
+        break;
+      }
+      answers[question] = answer;
+    }
+
+    if (!allAnswered) {
+      setState(() {
+        _statusMessage = '모든 질문에 답변해 주세요.';
+      });
+      return false;
+    }
+
+    return true;
   }
 
   @override
@@ -300,56 +311,7 @@ class _ReflectionScreenState extends State<ReflectionScreen> {
             ),
 
             // 상태 메시지
-            if (_statusMessage.isNotEmpty)
-              Container(
-                margin:
-                    const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 12.0, vertical: 8.0),
-                decoration: BoxDecoration(
-                  color: _statusMessage.contains('성공')
-                      ? CupertinoColors.systemGreen.withOpacity(0.1)
-                      : CupertinoColors.systemRed.withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Row(
-                  children: [
-                    Icon(
-                      _statusMessage.contains('성공')
-                          ? CupertinoIcons.check_mark_circled
-                          : CupertinoIcons.exclamationmark_circle,
-                      color: _statusMessage.contains('성공')
-                          ? CupertinoColors.systemGreen
-                          : CupertinoColors.systemRed,
-                      size: 16,
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        _statusMessage,
-                        style: TextStyle(
-                          fontSize: 13,
-                          color: _statusMessage.contains('성공')
-                              ? CupertinoColors.systemGreen.darkColor
-                              : CupertinoColors.systemRed.darkColor,
-                        ),
-                      ),
-                    ),
-                    GestureDetector(
-                      onTap: () {
-                        setState(() {
-                          _statusMessage = '';
-                        });
-                      },
-                      child: const Icon(
-                        CupertinoIcons.clear_circled,
-                        color: CupertinoColors.systemGrey,
-                        size: 16,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
+            if (_statusMessage.isNotEmpty) _buildStatusMessage(),
 
             // 질문 목록 및 답변 입력 필드
             Expanded(
@@ -378,6 +340,57 @@ class _ReflectionScreenState extends State<ReflectionScreen> {
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  // 상태 메시지 위젯
+  Widget _buildStatusMessage() {
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+      padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 8.0),
+      decoration: BoxDecoration(
+        color: _statusMessage.contains('성공')
+            ? CupertinoColors.systemGreen.withOpacity(0.1)
+            : CupertinoColors.systemRed.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Row(
+        children: [
+          Icon(
+            _statusMessage.contains('성공')
+                ? CupertinoIcons.check_mark_circled
+                : CupertinoIcons.exclamationmark_circle,
+            color: _statusMessage.contains('성공')
+                ? CupertinoColors.systemGreen
+                : CupertinoColors.systemRed,
+            size: 16,
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              _statusMessage,
+              style: TextStyle(
+                fontSize: 13,
+                color: _statusMessage.contains('성공')
+                    ? CupertinoColors.systemGreen.darkColor
+                    : CupertinoColors.systemRed.darkColor,
+              ),
+            ),
+          ),
+          GestureDetector(
+            onTap: () {
+              setState(() {
+                _statusMessage = '';
+              });
+            },
+            child: const Icon(
+              CupertinoIcons.clear_circled,
+              color: CupertinoColors.systemGrey,
+              size: 16,
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -437,35 +450,9 @@ class _ReflectionScreenState extends State<ReflectionScreen> {
   }
 
   Widget _buildQuestionList(ReflectionModel reflection) {
+    // 비활성화된 주차인 경우
     if (!_weekEnabled[_selectedWeek - 1]) {
-      return Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            const Icon(
-              CupertinoIcons.lock_circle,
-              size: 64,
-              color: CupertinoColors.systemGrey3,
-            ),
-            const SizedBox(height: 16),
-            Text(
-              '아직 $_selectedWeek주차 성찰이 활성화되지 않았습니다.',
-              style: const TextStyle(
-                fontSize: 16,
-                color: CupertinoColors.systemGrey,
-              ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              '현재 활성화된 주차: $_currentWeek주차',
-              style: const TextStyle(
-                fontSize: 14,
-                color: CupertinoColors.systemGrey2,
-              ),
-            ),
-          ],
-        ),
-      );
+      return _buildDisabledWeekMessage();
     }
 
     return ListView.builder(
@@ -482,6 +469,38 @@ class _ReflectionScreenState extends State<ReflectionScreen> {
 
         return _buildQuestionCard(index + 1, question, _controllers[question]!);
       },
+    );
+  }
+
+  // 비활성화된 주차 메시지
+  Widget _buildDisabledWeekMessage() {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          const Icon(
+            CupertinoIcons.lock_circle,
+            size: 64,
+            color: CupertinoColors.systemGrey3,
+          ),
+          const SizedBox(height: 16),
+          Text(
+            '아직 $_selectedWeek주차 성찰이 활성화되지 않았습니다.',
+            style: const TextStyle(
+              fontSize: 16,
+              color: CupertinoColors.systemGrey,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            '현재 활성화된 주차: $_currentWeek주차',
+            style: const TextStyle(
+              fontSize: 14,
+              color: CupertinoColors.systemGrey2,
+            ),
+          ),
+        ],
+      ),
     );
   }
 

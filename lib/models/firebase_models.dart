@@ -27,7 +27,6 @@ class FirebaseUserModel {
     );
   }
 
-  // 로컬 구현
   factory FirebaseUserModel.fromMap(Map<String, dynamic> data, String id) {
     return FirebaseUserModel(
       uid: id,
@@ -38,24 +37,20 @@ class FirebaseUserModel {
     );
   }
 
-  Map<String, dynamic> toMap() {
-    return {
-      'name': name,
-      'email': email,
-      'isTeacher': isTeacher,
-      'teacherCode': teacherCode,
-    };
-  }
+  Map<String, dynamic> toMap() => {
+        'name': name,
+        'email': email,
+        'isTeacher': isTeacher,
+        'teacherCode': teacherCode,
+      };
 }
-
-// lib/models/firebase_models.dart에서 FirebaseStudentModel 클래스 개선
 
 class FirebaseStudentModel {
   final String id;
   final String name;
   final String studentId;
   final String className;
-  final String classNum; // 추가: 반 정보
+  final String classNum;
   final int group;
   final Map<String, dynamic> individualTasks;
   final Map<String, dynamic> groupTasks;
@@ -66,26 +61,21 @@ class FirebaseStudentModel {
     required this.name,
     required this.studentId,
     required this.className,
-    this.classNum = '', // 기본값 추가
+    this.classNum = '',
     required this.group,
     this.individualTasks = const {},
     this.groupTasks = const {},
     this.attendance = true,
   });
 
-  // 타임스탬프 처리 개선
   factory FirebaseStudentModel.fromFirestore(DocumentSnapshot doc) {
     Map<String, dynamic> data = doc.data() as Map<String, dynamic>;
 
-    // individualTasks와 groupTasks 처리 개선
+    // Process individual tasks
     Map<String, dynamic> processedIndividualTasks = {};
-    Map<String, dynamic> processedGroupTasks = {};
-
-    // individualTasks 처리
     Map<String, dynamic> rawIndividualTasks = data['individualTasks'] ?? {};
     rawIndividualTasks.forEach((key, value) {
       if (value is Map<String, dynamic>) {
-        // Timestamp 처리
         var completedDate = value['completedDate'];
         if (completedDate is Timestamp) {
           completedDate = completedDate.toDate().toIso8601String();
@@ -103,11 +93,11 @@ class FirebaseStudentModel {
       }
     });
 
-    // groupTasks 처리 (동일한 방식)
+    // Process group tasks
+    Map<String, dynamic> processedGroupTasks = {};
     Map<String, dynamic> rawGroupTasks = data['groupTasks'] ?? {};
     rawGroupTasks.forEach((key, value) {
       if (value is Map<String, dynamic>) {
-        // Timestamp 처리
         var completedDate = value['completedDate'];
         if (completedDate is Timestamp) {
           completedDate = completedDate.toDate().toIso8601String();
@@ -124,12 +114,27 @@ class FirebaseStudentModel {
         };
       }
     });
+
     return FirebaseStudentModel(
       id: doc.id,
       name: data['name'] ?? '',
       studentId: data['studentId'] ?? '',
       className: data['className'] ?? '',
-      classNum: data['classNum'] ?? '', // 파싱 추가
+      classNum: data['classNum'] ?? '',
+      group: data['group'] ?? 1,
+      individualTasks: processedIndividualTasks,
+      groupTasks: processedGroupTasks,
+      attendance: data['attendance'] ?? true,
+    );
+  }
+
+  factory FirebaseStudentModel.fromMap(Map<String, dynamic> data, String id) {
+    return FirebaseStudentModel(
+      id: id,
+      name: data['name'] ?? '',
+      studentId: data['studentId'] ?? '',
+      className: data['className'] ?? '',
+      classNum: data['classNum'] ?? '',
       group: data['group'] ?? 1,
       individualTasks: data['individualTasks'] ?? {},
       groupTasks: data['groupTasks'] ?? {},
@@ -152,6 +157,7 @@ class FirebaseStudentModel {
       name: name ?? this.name,
       studentId: studentId ?? this.studentId,
       className: className ?? this.className,
+      classNum: classNum,
       group: group ?? this.group,
       individualTasks: individualTasks ?? this.individualTasks,
       groupTasks: groupTasks ?? this.groupTasks,
@@ -159,31 +165,16 @@ class FirebaseStudentModel {
     );
   }
 
-  // 로컬 구현
-  factory FirebaseStudentModel.fromMap(Map<String, dynamic> data, String id) {
-    return FirebaseStudentModel(
-      id: id,
-      name: data['name'] ?? '',
-      studentId: data['studentId'] ?? '',
-      className: data['className'] ?? '',
-      group: data['group'] ?? 1,
-      individualTasks: data['individualTasks'] ?? {},
-      groupTasks: data['groupTasks'] ?? {},
-      attendance: data['attendance'] ?? true,
-    );
-  }
-
-  Map<String, dynamic> toMap() {
-    return {
-      'name': name,
-      'studentId': studentId,
-      'className': className,
-      'group': group,
-      'individualTasks': individualTasks,
-      'groupTasks': groupTasks,
-      'attendance': attendance,
-    };
-  }
+  Map<String, dynamic> toMap() => {
+        'name': name,
+        'studentId': studentId,
+        'className': className,
+        'classNum': classNum,
+        'group': group,
+        'individualTasks': individualTasks,
+        'groupTasks': groupTasks,
+        'attendance': attendance,
+      };
 }
 
 class FirebaseReflectionModel {
@@ -212,12 +203,9 @@ class FirebaseReflectionModel {
   factory FirebaseReflectionModel.fromFirestore(DocumentSnapshot doc) {
     Map<String, dynamic> data = doc.data() as Map<String, dynamic>;
 
-    // submittedDate가 null이거나 타입이 맞지 않는 경우 기본값 제공
     DateTime date = DateTime.now();
-    if (data['submittedDate'] != null) {
-      if (data['submittedDate'] is Timestamp) {
-        date = (data['submittedDate'] as Timestamp).toDate();
-      }
+    if (data['submittedDate'] != null && data['submittedDate'] is Timestamp) {
+      date = (data['submittedDate'] as Timestamp).toDate();
     }
 
     return FirebaseReflectionModel(
@@ -233,7 +221,6 @@ class FirebaseReflectionModel {
     );
   }
 
-  // 로컬 구현
   factory FirebaseReflectionModel.fromMap(
       Map<String, dynamic> data, String id) {
     return FirebaseReflectionModel(
@@ -251,21 +238,18 @@ class FirebaseReflectionModel {
     );
   }
 
-  Map<String, dynamic> toMap() {
-    return {
-      'studentId': studentId,
-      'studentName': studentName,
-      'className': className,
-      'group': group,
-      'week': week,
-      'questions': questions,
-      'answers': answers,
-      'submittedDate': Timestamp.fromDate(submittedDate),
-    };
-  }
+  Map<String, dynamic> toMap() => {
+        'studentId': studentId,
+        'studentName': studentName,
+        'className': className,
+        'group': group,
+        'week': week,
+        'questions': questions,
+        'answers': answers,
+        'submittedDate': Timestamp.fromDate(submittedDate),
+      };
 }
 
-// 기존 ReflectionSubmission 클래스와 호환되는 형태로 추가
 class ReflectionSubmission {
   final String studentId;
   final int reflectionId;
