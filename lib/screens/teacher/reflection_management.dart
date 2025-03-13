@@ -1,5 +1,6 @@
 // lib/screens/teacher/reflection_management.dart
 import 'package:flutter/material.dart';
+import 'package:flutter/cupertino.dart';
 import 'package:provider/provider.dart';
 import '../../models/reflection_model.dart';
 import '../../models/firebase_models.dart';
@@ -7,6 +8,7 @@ import '../../providers/task_provider.dart';
 import '../../providers/student_provider.dart';
 import '../../providers/reflection_provider.dart';
 import '../student/reflection_detail_screen.dart';
+import 'package:intl/intl.dart';
 
 class ReflectionManagement extends StatefulWidget {
   final int selectedClassId;
@@ -25,6 +27,7 @@ class _ReflectionManagementState extends State<ReflectionManagement> {
   String _statusMessage = '';
   bool _isLoading = false;
   int _selectedWeek = 1; // 현재 선택된 주차 추가
+  Map<int, DateTime?> _deadlines = {}; // 주차별 마감일
 
   @override
   void initState() {
@@ -39,9 +42,37 @@ class _ReflectionManagementState extends State<ReflectionManagement> {
         reflectionProvider.selectClassAndWeek(
             widget.selectedClassId.toString(), 1); // 1주차부터 시작
 
+        // 마감일 정보 로드
+        _loadDeadlines();
+
         print('성찰 관리 - 선택된 학급: ${widget.selectedClassId}');
       }
     });
+  }
+
+  // 마감일 정보 로드
+  Future<void> _loadDeadlines() async {
+    setState(() {
+      _isLoading = true;
+    });
+
+    try {
+      final reflectionProvider =
+          Provider.of<ReflectionProvider>(context, listen: false);
+
+      // deadlines getter 사용
+      final deadlines = reflectionProvider.deadlines;
+
+      setState(() {
+        _deadlines = deadlines;
+        _isLoading = false;
+      });
+    } catch (e) {
+      setState(() {
+        _isLoading = false;
+        _statusMessage = '마감일 정보를 불러오는 중 오류가 발생했습니다: $e';
+      });
+    }
   }
 
   @override
@@ -286,7 +317,7 @@ class _ReflectionManagementState extends State<ReflectionManagement> {
       padding: const EdgeInsets.all(12),
       gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
         crossAxisCount: 3,
-        childAspectRatio: 1.0,
+        childAspectRatio: 0.8, // 카드 비율 조정 - 더 세로로 길게
         crossAxisSpacing: 16,
         mainAxisSpacing: 16,
       ),
@@ -294,6 +325,9 @@ class _ReflectionManagementState extends State<ReflectionManagement> {
       itemBuilder: (context, index) {
         final weekNum = index + 1;
         final bool isActive = weekNum <= currentWeek;
+        final DateTime? deadline = _deadlines[weekNum];
+        final bool isDeadlinePassed =
+            deadline != null && deadline.isBefore(DateTime.now());
 
         return Card(
           elevation: 2,
@@ -319,30 +353,89 @@ class _ReflectionManagementState extends State<ReflectionManagement> {
                     topRight: Radius.circular(16),
                   ),
                 ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                child: Column(
                   children: [
-                    Text(
-                      '$weekNum주차 성찰',
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontWeight: FontWeight.bold,
-                        fontSize: 16,
-                      ),
-                      textAlign: TextAlign.center,
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          '$weekNum주차 성찰',
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 16,
+                          ),
+                          textAlign: TextAlign.center,
+                        ),
+
+                        // 활성화 상태 아이콘
+                        Icon(
+                          isActive ? Icons.lock_open : Icons.lock,
+                          size: 16,
+                          color: Colors.white,
+                        ),
+                      ],
                     ),
 
-                    // 활성화 상태 아이콘
-                    Icon(
-                      isActive ? Icons.lock_open : Icons.lock,
-                      size: 16,
-                      color: Colors.white,
-                    ),
+                    // 마감일 표시
+                    if (deadline != null)
+                      Container(
+                        margin: const EdgeInsets.only(top: 8),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 8, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: isDeadlinePassed
+                              ? Colors.red.shade100
+                              : Colors.blue.shade100,
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Text(
+                          isDeadlinePassed
+                              ? '마감됨: ${DateFormat('MM/dd HH:mm').format(deadline)}'
+                              : '마감일: ${DateFormat('MM/dd HH:mm').format(deadline)}',
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold,
+                            color: isDeadlinePassed
+                                ? Colors.red.shade900
+                                : Colors.blue.shade900,
+                          ),
+                        ),
+                      ),
                   ],
                 ),
               ),
 
-              // 학생 목록
+              // 마감 버튼을 여기에 명확하게 배치
+              if (isActive)
+                Container(
+                  width: double.infinity,
+                  margin: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+                  child: ElevatedButton.icon(
+                    icon: Icon(
+                      isDeadlinePassed ? Icons.lock : Icons.timer_off,
+                      size: 16,
+                    ),
+                    label: Text(
+                      isDeadlinePassed ? '마감됨' : '접수마감',
+                      style: const TextStyle(fontSize: 14),
+                    ),
+                    onPressed: isDeadlinePassed
+                        ? () => _reopenDeadline(weekNum)
+                        : () => _setDeadline(weekNum),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: isDeadlinePassed
+                          ? Colors.grey.shade400
+                          : Colors.red.shade400,
+                      padding: const EdgeInsets.symmetric(vertical: 10),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                    ),
+                  ),
+                ),
+
+              // 학생 목록 (남은 공간 모두 차지)
               Expanded(
                 child: isActive
                     ? _buildStudentList(weekNum)
@@ -353,6 +446,178 @@ class _ReflectionManagementState extends State<ReflectionManagement> {
         );
       },
     );
+  }
+
+  // 접수마감 설정 함수
+  void _setDeadline(int weekNum) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Row(
+          children: [
+            Icon(Icons.timer_off, color: Colors.red.shade700),
+            const SizedBox(width: 8),
+            const Text('성찰 보고서 접수마감'),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              '$weekNum주차 성찰 보고서 접수를 마감하시겠습니까?',
+              style: const TextStyle(fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 12),
+            Text(
+              '마감 시 학생들은 더 이상 $weekNum주차 성찰 보고서를 제출할 수 없습니다.',
+              style: TextStyle(color: Colors.grey.shade700),
+            ),
+            const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.amber.shade50,
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: Colors.amber.shade200),
+              ),
+              child: const Text(
+                '참고: 마감 처리된 성찰은 관리자가 다시 열 수 있습니다.',
+                style: TextStyle(fontSize: 12),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('취소'),
+          ),
+          ElevatedButton.icon(
+            icon: const Icon(Icons.timer_off, size: 16),
+            label: const Text('마감하기'),
+            onPressed: () {
+              Navigator.pop(context);
+              _processDeadline(weekNum);
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // 마감 처리 함수
+  Future<void> _processDeadline(int weekNum) async {
+    setState(() {
+      _isLoading = true;
+      _statusMessage = '$weekNum주차 성찰 보고서 마감 처리 중...';
+    });
+
+    try {
+      final reflectionProvider =
+          Provider.of<ReflectionProvider>(context, listen: false);
+
+      // 현재 시간으로 마감일 설정
+      await reflectionProvider.setWeekDeadline(weekNum, DateTime.now());
+
+      // 마감일 정보 다시 로드
+      await _loadDeadlines();
+
+      setState(() {
+        _statusMessage = '$weekNum주차 성찰 보고서가 마감되었습니다.';
+      });
+    } catch (e) {
+      setState(() {
+        _statusMessage = '마감 처리 중 오류가 발생했습니다: $e';
+      });
+    } finally {
+      setState(() {
+        _isLoading = false;
+      });
+    }
+  }
+
+  // 마감 재오픈 함수
+  void _reopenDeadline(int weekNum) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Row(
+          children: [
+            Icon(Icons.lock_open, color: Colors.blue.shade700),
+            const SizedBox(width: 8),
+            const Text('성찰 보고서 마감 해제'),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              '$weekNum주차 성찰 보고서 마감을 해제하시겠습니까?',
+              style: const TextStyle(fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 12),
+            Text(
+              '마감 해제 시 학생들은 다시 $weekNum주차 성찰 보고서를 제출할 수 있습니다.',
+              style: TextStyle(color: Colors.grey.shade700),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('취소'),
+          ),
+          ElevatedButton.icon(
+            icon: const Icon(Icons.lock_open, size: 16),
+            label: const Text('마감 해제'),
+            onPressed: () {
+              Navigator.pop(context);
+              _processReopenDeadline(weekNum);
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.blue,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // 마감 해제 처리 함수
+  Future<void> _processReopenDeadline(int weekNum) async {
+    setState(() {
+      _isLoading = true;
+      _statusMessage = '$weekNum주차 성찰 보고서 마감 해제 중...';
+    });
+
+    try {
+      final reflectionProvider =
+          Provider.of<ReflectionProvider>(context, listen: false);
+
+      // 마감일을 한 달 후로 설정 (사실상 마감 해제)
+      await reflectionProvider.setWeekDeadline(
+          weekNum, DateTime.now().add(const Duration(days: 30)));
+
+      // 마감일 정보 다시 로드
+      await _loadDeadlines();
+
+      setState(() {
+        _statusMessage = '$weekNum주차 성찰 보고서 마감이 해제되었습니다.';
+      });
+    } catch (e) {
+      setState(() {
+        _statusMessage = '마감 해제 중 오류가 발생했습니다: $e';
+      });
+    } finally {
+      setState(() {
+        _isLoading = false;
+      });
+    }
   }
 
   // 비활성화된 주차 표시
@@ -411,16 +676,12 @@ class _ReflectionManagementState extends State<ReflectionManagement> {
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Icon(Icons.people_alt_outlined,
-                size: 64, color: Colors.grey.shade300),
-            const SizedBox(height: 16),
+                size: 40, color: Colors.grey.shade300),
+            const SizedBox(height: 12),
             Text(
               '이 학급에 학생이 없습니다',
-              style: TextStyle(color: Colors.grey.shade600),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              '상단의 "학생 일괄 등록" 버튼을 클릭하여 학생을 추가하세요',
-              style: TextStyle(color: Colors.grey.shade500, fontSize: 12),
+              style: TextStyle(color: Colors.grey.shade600, fontSize: 13),
+              textAlign: TextAlign.center,
             ),
           ],
         ),
@@ -467,6 +728,8 @@ class _ReflectionManagementState extends State<ReflectionManagement> {
             }
 
             return ListTile(
+              dense: true, // 좀 더 조밀하게 표시
+              visualDensity: VisualDensity.compact,
               onTap: () async {
                 // 학생 성찰 보고서 상세 보기 구현 - 제출된 경우에만 상세 보기 가능
                 if (hasSubmitted) {
@@ -482,35 +745,26 @@ class _ReflectionManagementState extends State<ReflectionManagement> {
                   );
                 }
               },
-              leading: Container(
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: Colors.amber.shade100,
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Text(
-                  '${student.group}모둠',
-                  style: TextStyle(
-                    fontWeight: FontWeight.bold,
-                    color: Colors.amber.shade800,
-                    fontSize: 12,
-                  ),
+              leading: Text(
+                '${student.group}',
+                style: TextStyle(
+                  fontWeight: FontWeight.bold,
+                  color: Colors.amber.shade800,
+                  fontSize: 12,
                 ),
               ),
               title: Text(
                 student.name,
                 style: const TextStyle(
                   fontWeight: FontWeight.bold,
+                  fontSize: 13,
                 ),
-              ),
-              subtitle: Text(
-                '학번: ${student.studentId}',
-                style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+                overflow: TextOverflow.ellipsis,
               ),
               trailing: Container(
                 padding: const EdgeInsets.symmetric(
-                  horizontal: 8,
-                  vertical: 4,
+                  horizontal: 6,
+                  vertical: 2,
                 ),
                 decoration: BoxDecoration(
                   color: statusColor,
@@ -527,7 +781,7 @@ class _ReflectionManagementState extends State<ReflectionManagement> {
                                 ? Colors.orange.shade800
                                 : Colors.red.shade800,
                     fontWeight: FontWeight.bold,
-                    fontSize: 12,
+                    fontSize: 11,
                   ),
                 ),
               ),
