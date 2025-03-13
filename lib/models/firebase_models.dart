@@ -1,6 +1,14 @@
 // lib/models/firebase_models.dart
 import 'package:cloud_firestore/cloud_firestore.dart';
 
+// 성찰 보고서 상태 열거형 추가
+enum ReflectionStatus {
+  notSubmitted, // 미제출
+  submitted, // 제출됨
+  rejected, // 반려됨
+  accepted // 승인됨
+}
+
 class FirebaseUserModel {
   final String uid;
   final String name;
@@ -147,6 +155,7 @@ class FirebaseStudentModel {
     String? name,
     String? studentId,
     String? className,
+    String? classNum,
     int? group,
     Map<String, dynamic>? individualTasks,
     Map<String, dynamic>? groupTasks,
@@ -157,7 +166,7 @@ class FirebaseStudentModel {
       name: name ?? this.name,
       studentId: studentId ?? this.studentId,
       className: className ?? this.className,
-      classNum: classNum,
+      classNum: classNum ?? this.classNum,
       group: group ?? this.group,
       individualTasks: individualTasks ?? this.individualTasks,
       groupTasks: groupTasks ?? this.groupTasks,
@@ -187,6 +196,12 @@ class FirebaseReflectionModel {
   final List<String> questions;
   final Map<String, String> answers;
   final DateTime submittedDate;
+  // 새 필드 추가
+  final ReflectionStatus status;
+  final String? rejectionReason;
+  final DateTime? reviewedDate;
+  final String? teacherNote;
+  final Map<String, double>? questionRatings; // 각 질문별 평가 점수
 
   FirebaseReflectionModel({
     required this.id,
@@ -198,14 +213,56 @@ class FirebaseReflectionModel {
     required this.questions,
     required this.answers,
     required this.submittedDate,
+    this.status = ReflectionStatus.submitted,
+    this.rejectionReason,
+    this.reviewedDate,
+    this.teacherNote,
+    this.questionRatings,
   });
 
   factory FirebaseReflectionModel.fromFirestore(DocumentSnapshot doc) {
     Map<String, dynamic> data = doc.data() as Map<String, dynamic>;
 
-    DateTime date = DateTime.now();
+    // 날짜 처리
+    DateTime submittedDate = DateTime.now();
     if (data['submittedDate'] != null && data['submittedDate'] is Timestamp) {
-      date = (data['submittedDate'] as Timestamp).toDate();
+      submittedDate = (data['submittedDate'] as Timestamp).toDate();
+    }
+
+    DateTime? reviewedDate;
+    if (data['reviewedDate'] != null && data['reviewedDate'] is Timestamp) {
+      reviewedDate = (data['reviewedDate'] as Timestamp).toDate();
+    }
+
+    // 상태 문자열을 열거형으로 변환
+    ReflectionStatus status = ReflectionStatus.submitted;
+    if (data['status'] != null) {
+      String statusStr = data['status'] as String;
+      switch (statusStr) {
+        case 'notSubmitted':
+          status = ReflectionStatus.notSubmitted;
+          break;
+        case 'submitted':
+          status = ReflectionStatus.submitted;
+          break;
+        case 'rejected':
+          status = ReflectionStatus.rejected;
+          break;
+        case 'accepted':
+          status = ReflectionStatus.accepted;
+          break;
+      }
+    }
+
+    // 질문별 평가 점수 처리
+    Map<String, double>? questionRatings;
+    if (data['questionRatings'] != null && data['questionRatings'] is Map) {
+      questionRatings = {};
+      (data['questionRatings'] as Map).forEach((key, value) {
+        if (value is num) {
+          questionRatings![key.toString()] = value.toDouble();
+        }
+      });
     }
 
     return FirebaseReflectionModel(
@@ -217,12 +274,48 @@ class FirebaseReflectionModel {
       week: data['week'] ?? 0,
       questions: List<String>.from(data['questions'] ?? []),
       answers: Map<String, String>.from(data['answers'] ?? {}),
-      submittedDate: date,
+      submittedDate: submittedDate,
+      status: status,
+      rejectionReason: data['rejectionReason'],
+      reviewedDate: reviewedDate,
+      teacherNote: data['teacherNote'],
+      questionRatings: questionRatings,
     );
   }
 
   factory FirebaseReflectionModel.fromMap(
       Map<String, dynamic> data, String id) {
+    // 상태 문자열을 열거형으로 변환
+    ReflectionStatus status = ReflectionStatus.submitted;
+    if (data['status'] != null) {
+      String statusStr = data['status'] as String;
+      switch (statusStr) {
+        case 'notSubmitted':
+          status = ReflectionStatus.notSubmitted;
+          break;
+        case 'submitted':
+          status = ReflectionStatus.submitted;
+          break;
+        case 'rejected':
+          status = ReflectionStatus.rejected;
+          break;
+        case 'accepted':
+          status = ReflectionStatus.accepted;
+          break;
+      }
+    }
+
+    // 질문별 평가 점수 처리
+    Map<String, double>? questionRatings;
+    if (data['questionRatings'] != null && data['questionRatings'] is Map) {
+      questionRatings = {};
+      (data['questionRatings'] as Map).forEach((key, value) {
+        if (value is num) {
+          questionRatings![key.toString()] = value.toDouble();
+        }
+      });
+    }
+
     return FirebaseReflectionModel(
       id: id,
       studentId: data['studentId'] ?? '',
@@ -235,22 +328,90 @@ class FirebaseReflectionModel {
       submittedDate: data['submittedDate'] is DateTime
           ? data['submittedDate']
           : DateTime.now(),
+      status: status,
+      rejectionReason: data['rejectionReason'],
+      reviewedDate: data['reviewedDate'],
+      teacherNote: data['teacherNote'],
+      questionRatings: questionRatings,
     );
   }
 
-  Map<String, dynamic> toMap() => {
-        'studentId': studentId,
-        'studentName': studentName,
-        'className': className,
-        'group': group,
-        'week': week,
-        'questions': questions,
-        'answers': answers,
-        'submittedDate': Timestamp.fromDate(submittedDate),
-      };
+  Map<String, dynamic> toMap() {
+    // 상태 열거형을 문자열로 변환
+    String statusStr;
+    switch (status) {
+      case ReflectionStatus.notSubmitted:
+        statusStr = 'notSubmitted';
+        break;
+      case ReflectionStatus.submitted:
+        statusStr = 'submitted';
+        break;
+      case ReflectionStatus.rejected:
+        statusStr = 'rejected';
+        break;
+      case ReflectionStatus.accepted:
+        statusStr = 'accepted';
+        break;
+    }
+
+    return {
+      'studentId': studentId,
+      'studentName': studentName,
+      'className': className,
+      'group': group,
+      'week': week,
+      'questions': questions,
+      'answers': answers,
+      'submittedDate': Timestamp.fromDate(submittedDate),
+      'status': statusStr,
+      'rejectionReason': rejectionReason,
+      'reviewedDate':
+          reviewedDate != null ? Timestamp.fromDate(reviewedDate!) : null,
+      'teacherNote': teacherNote,
+      'questionRatings': questionRatings,
+    };
+  }
+
+  // 새로운 상태로 복사본 생성
+  FirebaseReflectionModel copyWith({
+    String? id,
+    String? studentId,
+    String? studentName,
+    String? className,
+    int? group,
+    int? week,
+    List<String>? questions,
+    Map<String, String>? answers,
+    DateTime? submittedDate,
+    ReflectionStatus? status,
+    String? rejectionReason,
+    DateTime? reviewedDate,
+    String? teacherNote,
+    Map<String, double>? questionRatings,
+  }) {
+    return FirebaseReflectionModel(
+      id: id ?? this.id,
+      studentId: studentId ?? this.studentId,
+      studentName: studentName ?? this.studentName,
+      className: className ?? this.className,
+      group: group ?? this.group,
+      week: week ?? this.week,
+      questions: questions ?? this.questions,
+      answers: answers ?? this.answers,
+      submittedDate: submittedDate ?? this.submittedDate,
+      status: status ?? this.status,
+      rejectionReason: rejectionReason ?? this.rejectionReason,
+      reviewedDate: reviewedDate ?? this.reviewedDate,
+      teacherNote: teacherNote ?? this.teacherNote,
+      questionRatings: questionRatings ?? this.questionRatings,
+    );
+  }
 }
 
+// lib/models/firebase_models.dart에서 ReflectionSubmission 클래스 업데이트
+
 class ReflectionSubmission {
+  final String id; // ID 필드 추가
   final String studentId;
   final int reflectionId;
   final int week;
@@ -259,8 +420,11 @@ class ReflectionSubmission {
   final String studentName;
   final String className;
   final int group;
+  final ReflectionStatus status;
+  final String? rejectionReason;
 
   ReflectionSubmission({
+    this.id = '', // ID 기본값 추가
     required this.studentId,
     required this.reflectionId,
     required this.week,
@@ -269,5 +433,36 @@ class ReflectionSubmission {
     this.studentName = '',
     this.className = '',
     this.group = 0,
+    this.status = ReflectionStatus.submitted,
+    this.rejectionReason,
   });
+
+  // 새로운 상태로 복사본 생성
+  ReflectionSubmission copyWith({
+    String? id,
+    String? studentId,
+    int? reflectionId,
+    int? week,
+    Map<String, String>? answers,
+    DateTime? submittedDate,
+    String? studentName,
+    String? className,
+    int? group,
+    ReflectionStatus? status,
+    String? rejectionReason,
+  }) {
+    return ReflectionSubmission(
+      id: id ?? this.id,
+      studentId: studentId ?? this.studentId,
+      reflectionId: reflectionId ?? this.reflectionId,
+      week: week ?? this.week,
+      answers: answers ?? this.answers,
+      submittedDate: submittedDate ?? this.submittedDate,
+      studentName: studentName ?? this.studentName,
+      className: className ?? this.className,
+      group: group ?? this.group,
+      status: status ?? this.status,
+      rejectionReason: rejectionReason ?? this.rejectionReason,
+    );
+  }
 }

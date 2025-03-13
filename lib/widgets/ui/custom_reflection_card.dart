@@ -1,6 +1,7 @@
-// lib/widgets/custom_reflection_card.dart
+// lib/widgets/ui/custom_reflection_card.dart
 import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
+import '../../models/firebase_models.dart'; // ReflectionStatus 가져오기
 
 class ReflectionEditableAnswerCard extends StatelessWidget {
   final int index;
