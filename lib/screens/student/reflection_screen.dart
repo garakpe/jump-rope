@@ -55,7 +55,7 @@ class _ReflectionScreenState extends State<ReflectionScreen> {
     });
   }
 
-  // 성찰 초기화 메서드 - 간결화
+// 학생 화면의 initReflection 메서드 수정 (반려 상태 처리 추가)
   Future<void> _initReflection() async {
     final authProvider = Provider.of<AuthProvider>(context, listen: false);
     final reflectionProvider =
@@ -81,6 +81,13 @@ class _ReflectionScreenState extends State<ReflectionScreen> {
 
       final hasSubmitted = _submissionStatus != ReflectionStatus.notSubmitted;
 
+      // 상태가 반려됨으로 변경된 경우 팝업 메시지 표시
+      if (_submissionStatus == ReflectionStatus.rejected) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          _showRejectionNotification();
+        });
+      }
+
       if (hasSubmitted) {
         // 제출한 답변 가져오기
         final submission =
@@ -90,7 +97,6 @@ class _ReflectionScreenState extends State<ReflectionScreen> {
 
           // 반려된 경우 사유 표시
           if (_submissionStatus == ReflectionStatus.rejected) {
-            // 실제로는 Firebase에서 반려 사유를 가져와야 함
             _rejectionReason =
                 submission.rejectionReason ?? "내용이 부실합니다. 더 구체적으로 작성해주세요.";
           }
@@ -110,6 +116,53 @@ class _ReflectionScreenState extends State<ReflectionScreen> {
         _isSubmitting = false;
       });
     }
+  }
+
+  // 반려 알림 팝업 표시 메서드 추가
+  void _showRejectionNotification() {
+    showCupertinoDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return CupertinoAlertDialog(
+          title: const Row(
+            children: [
+              Icon(CupertinoIcons.exclamationmark_triangle,
+                  color: Colors.orange, size: 20),
+              SizedBox(width: 8),
+              Text('성찰 보고서 반려됨'),
+            ],
+          ),
+          content: Column(
+            children: [
+              const SizedBox(height: 12),
+              const Text('교사가 성찰 보고서를 반려했습니다.\n반려 사유를 확인하고 수정 후 다시 제출해주세요.'),
+              const SizedBox(height: 8),
+              if (_rejectionReason.isNotEmpty)
+                Container(
+                  margin: const EdgeInsets.only(top: 8),
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: Colors.orange.shade50,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Text(
+                    '반려 사유: $_rejectionReason',
+                    style: const TextStyle(fontStyle: FontStyle.italic),
+                  ),
+                ),
+            ],
+          ),
+          actions: [
+            CupertinoDialogAction(
+              child: const Text('확인'),
+              onPressed: () {
+                Navigator.of(context).pop();
+              },
+            ),
+          ],
+        );
+      },
+    );
   }
 
   // 컨트롤러 초기화 함수

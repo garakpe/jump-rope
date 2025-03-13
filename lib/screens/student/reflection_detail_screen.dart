@@ -1,28 +1,28 @@
-// lib/screens/student/reflection_detail_screen.dart
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
-import '../../models/firebase_models.dart'; // ReflectionStatus와 ReflectionSubmission 임포트
+import '../../models/firebase_models.dart';
 import '../../models/reflection_model.dart';
 import '../../providers/reflection_provider.dart';
 import '../../providers/auth_provider.dart';
-import '../../widgets/ui/custom_reflection_card.dart'; // ReflectionEditableAnswerCard 위젯 임포트
+import '../../widgets/ui/custom_reflection_card.dart'; // Import the custom card widget
 
 class ReflectionDetailScreen extends StatefulWidget {
   final int reflectionId;
   final ReflectionSubmission? submission;
-  final bool isTeacher; // 교사 모드 플래그 추가
+  final bool isTeacher;
 
   const ReflectionDetailScreen({
     Key? key,
     required this.reflectionId,
     this.submission,
-    this.isTeacher = false, // 기본값은 false (학생 모드)
+    this.isTeacher = false,
   }) : super(key: key);
 
   @override
-  _ReflectionDetailScreenState createState() => _ReflectionDetailScreenState();
+  State<ReflectionDetailScreen> createState() => _ReflectionDetailScreenState();
 }
 
 class _ReflectionDetailScreenState extends State<ReflectionDetailScreen> {
@@ -172,6 +172,7 @@ class _ReflectionDetailScreenState extends State<ReflectionDetailScreen> {
       // 성찰 보고서 제출
       await reflectionProvider.submitReflection(
         ReflectionSubmission(
+          id: _submission?.id ?? '', // Include the existing ID if available
           studentId: user.studentId ?? '',
           reflectionId: widget.reflectionId,
           week: reflection.week,
@@ -192,7 +193,9 @@ class _ReflectionDetailScreenState extends State<ReflectionDetailScreen> {
 
       // 잠시 후 이전 화면으로 이동
       Future.delayed(const Duration(seconds: 2), () {
-        Navigator.of(context).pop(true); // 업데이트 성공 표시
+        if (mounted) {
+          Navigator.of(context).pop(true); // 업데이트 성공 표시
+        }
       });
     } catch (e) {
       setState(() {
@@ -323,6 +326,48 @@ class _ReflectionDetailScreenState extends State<ReflectionDetailScreen> {
       );
     }
 
+    // 승인 상태 표시
+    Widget approvedWidget = const SizedBox.shrink();
+    if (_submissionStatus == ReflectionStatus.accepted) {
+      approvedWidget = Container(
+        margin: const EdgeInsets.only(bottom: 16),
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: Colors.green.shade50,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: Colors.green.shade200),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(CupertinoIcons.checkmark_circle,
+                    size: 18, color: Colors.green.shade600),
+                const SizedBox(width: 8),
+                Text(
+                  '교사 승인됨',
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.green.shade700,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            Text(
+              '이 성찰 보고서는 교사의 승인을 받았습니다. 더 이상 수정할 수 없습니다.',
+              style: TextStyle(
+                fontSize: 15,
+                color: Colors.green.shade800,
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
     return SingleChildScrollView(
       padding: const EdgeInsets.all(16),
       child: Column(
@@ -384,6 +429,19 @@ class _ReflectionDetailScreenState extends State<ReflectionDetailScreen> {
                         ),
                     ],
                   ),
+
+                  // Document ID for debugging (can be removed in production)
+                  if (_submission!.id.isNotEmpty)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 8.0),
+                      child: Text(
+                        'ID: ${_submission!.id}',
+                        style: TextStyle(
+                          fontSize: 10,
+                          color: Colors.grey.shade400,
+                        ),
+                      ),
+                    ),
                 ],
               ),
             ),
@@ -432,6 +490,9 @@ class _ReflectionDetailScreenState extends State<ReflectionDetailScreen> {
               ),
             ),
 
+          // 승인됨 표시 (있는 경우)
+          approvedWidget,
+
           // 반려 사유 (있는 경우)
           rejectionWidget,
 
@@ -447,7 +508,7 @@ class _ReflectionDetailScreenState extends State<ReflectionDetailScreen> {
             // 읽기 전용 여부 결정
             bool readOnly = _isReadOnly();
 
-            return ReflectionEditableAnswerCard(
+            return CustomReflectionCard(
               index: index,
               question: question,
               controller: _controllers[question]!,
@@ -466,7 +527,7 @@ class _ReflectionDetailScreenState extends State<ReflectionDetailScreen> {
         child: Container(
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
-            color: Colors.white,
+            color: CupertinoColors.systemBackground,
             boxShadow: [
               BoxShadow(
                 color: Colors.black.withOpacity(0.05),
@@ -479,27 +540,59 @@ class _ReflectionDetailScreenState extends State<ReflectionDetailScreen> {
             children: [
               Expanded(
                 child: CupertinoButton(
-                  color: Colors.blue,
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  color: CupertinoColors.systemBlue,
+                  borderRadius: BorderRadius.circular(10),
                   onPressed: () => Navigator.of(context).pop(true),
-                  child: const Text('학생 성찰 확인 완료'),
-                ),
-              ),
-              if (_submissionStatus == ReflectionStatus.submitted)
-                Padding(
-                  padding: const EdgeInsets.only(left: 8.0),
-                  child: CupertinoButton(
-                    color: Colors.green,
-                    onPressed: _approveReflection,
-                    child: const Text('승인'),
+                  child: const Text(
+                    '학생 성찰 확인 완료',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
                 ),
-              if (_submissionStatus == ReflectionStatus.submitted)
+              ),
+              if (_submissionStatus == ReflectionStatus.submitted &&
+                  _submission != null &&
+                  _submission!.id.isNotEmpty)
                 Padding(
                   padding: const EdgeInsets.only(left: 8.0),
                   child: CupertinoButton(
-                    color: Colors.orange,
+                    padding: const EdgeInsets.symmetric(
+                        vertical: 12, horizontal: 16),
+                    color: CupertinoColors.systemGreen,
+                    borderRadius: BorderRadius.circular(10),
+                    onPressed: _approveReflection,
+                    child: const Text(
+                      '승인',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                        color: CupertinoColors.white,
+                      ),
+                    ),
+                  ),
+                ),
+              if (_submissionStatus == ReflectionStatus.submitted &&
+                  _submission != null &&
+                  _submission!.id.isNotEmpty)
+                Padding(
+                  padding: const EdgeInsets.only(left: 8.0),
+                  child: CupertinoButton(
+                    padding: const EdgeInsets.symmetric(
+                        vertical: 12, horizontal: 16),
+                    color: CupertinoColors.systemOrange,
+                    borderRadius: BorderRadius.circular(10),
                     onPressed: _showRejectDialog,
-                    child: const Text('반려'),
+                    child: const Text(
+                      '반려',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                        color: CupertinoColors.white,
+                      ),
+                    ),
                   ),
                 ),
             ],
@@ -514,7 +607,7 @@ class _ReflectionDetailScreenState extends State<ReflectionDetailScreen> {
         child: Container(
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
-            color: Colors.white,
+            color: CupertinoColors.systemBackground,
             boxShadow: [
               BoxShadow(
                 color: Colors.black.withOpacity(0.05),
@@ -527,14 +620,14 @@ class _ReflectionDetailScreenState extends State<ReflectionDetailScreen> {
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               Icon(
-                Icons.check_circle,
-                color: Colors.green,
+                CupertinoIcons.checkmark_circle,
+                color: CupertinoColors.systemGreen,
               ),
               SizedBox(width: 8),
               Text(
                 '승인된 성찰 보고서는 수정할 수 없습니다.',
                 style: TextStyle(
-                  color: Colors.green,
+                  color: CupertinoColors.systemGreen,
                   fontWeight: FontWeight.w500,
                 ),
               ),
@@ -548,7 +641,7 @@ class _ReflectionDetailScreenState extends State<ReflectionDetailScreen> {
       child: Container(
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: CupertinoColors.systemBackground,
           boxShadow: [
             BoxShadow(
               color: Colors.black.withOpacity(0.05),
@@ -561,126 +654,24 @@ class _ReflectionDetailScreenState extends State<ReflectionDetailScreen> {
           children: [
             Expanded(
               child: CupertinoButton(
+                padding: const EdgeInsets.symmetric(vertical: 12),
                 color: _getSubmitButtonColor(),
+                borderRadius: BorderRadius.circular(10),
                 onPressed: _isLoading ? null : _submitReflection,
-                child: Text(_getSubmitButtonLabel()),
+                child: Text(
+                  _getSubmitButtonLabel(),
+                  style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                    color: CupertinoColors.white,
+                  ),
+                ),
               ),
             ),
           ],
         ),
       ),
     );
-  }
-
-  // 성찰 승인 메서드
-  Future<void> _approveReflection() async {
-    if (_submission == null) return;
-
-    setState(() {
-      _isLoading = true;
-      _statusMessage = '성찰 보고서 승인 중...';
-    });
-
-    try {
-      final reflectionProvider =
-          Provider.of<ReflectionProvider>(context, listen: false);
-
-      // 승인 처리
-      await reflectionProvider.approveReflection(_submission!.id);
-
-      setState(() {
-        _isLoading = false;
-        _submissionStatus = ReflectionStatus.accepted;
-        _statusMessage = '성찰 보고서가 승인되었습니다.';
-      });
-
-      // 잠시 후 이전 화면으로 이동
-      Future.delayed(const Duration(seconds: 1), () {
-        Navigator.of(context).pop(true);
-      });
-    } catch (e) {
-      setState(() {
-        _isLoading = false;
-        _statusMessage = '승인 중 오류 발생: $e';
-      });
-    }
-  }
-
-  // 반려 다이얼로그 표시 메서드
-  void _showRejectDialog() {
-    final TextEditingController reasonController = TextEditingController();
-
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('성찰 보고서 반려'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Text('반려 사유를 입력해주세요:'),
-            const SizedBox(height: 8),
-            TextField(
-              controller: reasonController,
-              maxLines: 3,
-              decoration: const InputDecoration(
-                hintText: '반려 사유를 입력하세요...',
-                border: OutlineInputBorder(),
-              ),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('취소'),
-          ),
-          ElevatedButton(
-            onPressed: () {
-              Navigator.pop(context);
-              _rejectReflection(reasonController.text);
-            },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.orange,
-            ),
-            child: const Text('반려하기'),
-          ),
-        ],
-      ),
-    );
-  }
-
-  // 반려 처리 메서드
-  Future<void> _rejectReflection(String reason) async {
-    if (_submission == null || reason.trim().isEmpty) return;
-
-    setState(() {
-      _isLoading = true;
-      _statusMessage = '성찰 보고서 반려 중...';
-    });
-
-    try {
-      final reflectionProvider =
-          Provider.of<ReflectionProvider>(context, listen: false);
-
-      // 반려 처리
-      await reflectionProvider.rejectReflection(_submission!.id, reason);
-
-      setState(() {
-        _isLoading = false;
-        _submissionStatus = ReflectionStatus.rejected;
-        _statusMessage = '성찰 보고서가 반려되었습니다.';
-      });
-
-      // 잠시 후 이전 화면으로 이동
-      Future.delayed(const Duration(seconds: 1), () {
-        Navigator.of(context).pop(true);
-      });
-    } catch (e) {
-      setState(() {
-        _isLoading = false;
-        _statusMessage = '반려 중 오류 발생: $e';
-      });
-    }
   }
 
   // 상태 뱃지 위젯
@@ -768,6 +759,149 @@ class _ReflectionDetailScreenState extends State<ReflectionDetailScreen> {
       case ReflectionStatus.notSubmitted:
       default:
         return '성찰 보고서 제출하기';
+    }
+  }
+
+  // 성찰 승인 메서드
+  Future<void> _approveReflection() async {
+    if (_submission == null) return;
+
+    // Check if ID is empty
+    if (_submission!.id.isEmpty) {
+      setState(() {
+        _statusMessage = '성찰 보고서 ID가 없어 승인할 수 없습니다.';
+      });
+      return;
+    }
+
+    setState(() {
+      _isLoading = true;
+      _statusMessage = '성찰 보고서 승인 중...';
+    });
+
+    try {
+      final reflectionProvider =
+          Provider.of<ReflectionProvider>(context, listen: false);
+
+      // 디버깅용 로그 추가
+      print('승인 시도 - 문서 ID: ${_submission!.id}');
+
+      // 승인 처리
+      await reflectionProvider.approveReflection(_submission!.id);
+
+      setState(() {
+        _isLoading = false;
+        _submissionStatus = ReflectionStatus.accepted;
+        _statusMessage = '성찰 보고서가 승인되었습니다.';
+      });
+
+      // 잠시 후 이전 화면으로 이동
+      if (mounted) {
+        Future.delayed(const Duration(seconds: 1), () {
+          if (mounted) {
+            Navigator.of(context).pop(true);
+          }
+        });
+      }
+    } catch (e) {
+      setState(() {
+        _isLoading = false;
+        _statusMessage = '승인 중 오류 발생: $e';
+      });
+    }
+  }
+
+  // 반려 다이얼로그 표시 메서드
+  void _showRejectDialog() {
+    final TextEditingController reasonController = TextEditingController();
+
+    showCupertinoDialog(
+      context: context,
+      builder: (context) => CupertinoAlertDialog(
+        title: const Text('성찰 보고서 반려'),
+        content: Column(
+          children: [
+            const SizedBox(height: 16),
+            const Text('반려 사유를 입력해주세요:'),
+            const SizedBox(height: 12),
+            CupertinoTextField(
+              controller: reasonController,
+              placeholder: '반려 사유를 입력하세요...',
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: CupertinoColors.systemGrey6,
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: CupertinoColors.systemGrey4),
+              ),
+              maxLines: 3,
+              style: const TextStyle(fontSize: 14),
+            ),
+          ],
+        ),
+        actions: [
+          CupertinoDialogAction(
+            onPressed: () => Navigator.pop(context),
+            isDefaultAction: true,
+            child: const Text('취소'),
+          ),
+          CupertinoDialogAction(
+            onPressed: () {
+              Navigator.pop(context);
+              _rejectReflection(reasonController.text);
+            },
+            isDestructiveAction: true,
+            child: const Text('반려하기'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _rejectReflection(String reason) async {
+    if (_submission == null || reason.trim().isEmpty) return;
+
+    // Check if ID is empty
+    if (_submission!.id.isEmpty) {
+      setState(() {
+        _statusMessage = '성찰 보고서 ID가 없어 반려할 수 없습니다.';
+      });
+      return;
+    }
+
+    setState(() {
+      _isLoading = true;
+      _statusMessage = '성찰 보고서 반려 중...';
+    });
+
+    try {
+      final reflectionProvider =
+          Provider.of<ReflectionProvider>(context, listen: false);
+
+      // 디버깅용 로그 추가
+      print('반려 시도 - 문서 ID: ${_submission!.id}, 사유: $reason');
+
+      // 반려 처리
+      await reflectionProvider.rejectReflection(_submission!.id, reason);
+
+      setState(() {
+        _isLoading = false;
+        _submissionStatus = ReflectionStatus.rejected;
+        _statusMessage = '성찰 보고서가 반려되었습니다.';
+      });
+
+      // 잠시 후 이전 화면으로 이동
+      if (mounted) {
+        Future.delayed(const Duration(seconds: 1), () {
+          if (mounted) {
+            Navigator.of(context).pop(true);
+          }
+        });
+      }
+    } catch (e) {
+      setState(() {
+        _isLoading = false;
+        _statusMessage = '반려 중 오류 발생: $e';
+      });
     }
   }
 

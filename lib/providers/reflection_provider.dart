@@ -44,9 +44,15 @@ class ReflectionProvider extends ChangeNotifier {
 
   // 초기 데이터 로드
   Future<void> _initializeData() async {
-    await _loadReflectionQuestions();
-    await _loadActiveWeeks();
-    await _loadDeadlines();
+    try {
+      await Future.wait([
+        _loadReflectionQuestions(),
+        _loadActiveWeeks(),
+        _loadDeadlines(),
+      ]);
+    } catch (e) {
+      _handleError('초기 데이터 로드 실패', e);
+    }
   }
 
   // 성찰 질문 목록 로드
@@ -56,10 +62,6 @@ class ReflectionProvider extends ChangeNotifier {
     try {
       // 기본적으로 하드코딩된 reflectionCards 사용
       _reflectionCards = reflectionCards;
-
-      // 실제 환경에서는 서비스를 통해 Firebase에서 로드
-      // _reflectionCards = await _reflectionService.getReflectionQuestions();
-
       _setLoading(false);
     } catch (e) {
       _handleError('성찰 질문 로드 실패', e);
@@ -132,7 +134,7 @@ class ReflectionProvider extends ChangeNotifier {
     _selectedClass = className;
     _selectedWeek = week;
     _setLoading(true, notify: true);
-    _clearError(); // private 메서드 호출
+    _clearError();
 
     _reflectionService.getClassReflections(className, week).listen(
         (submissionsList) {
@@ -141,47 +143,6 @@ class ReflectionProvider extends ChangeNotifier {
     }, onError: (e) {
       _handleError('성찰 데이터 로드 실패', e);
     });
-  }
-
-  // 성찰 제출
-  Future<void> submitReflection(ReflectionSubmission submission) async {
-    _setLoading(true);
-    _clearError();
-
-    try {
-      print(
-          "Provider - 성찰 제출 시작: ${submission.studentId}, 주차: ${submission.week}");
-
-      // 성찰 카드 찾기
-      final reflectionCard = _findReflectionCard(submission);
-
-      // 로컬 캐시에 저장
-      _cacheSubmission(submission, reflectionCard);
-
-      // 서버에 저장
-      await _reflectionService.submitReflection(
-        studentId: submission.studentId,
-        studentName: submission.studentName,
-        className: submission.className,
-        group: submission.group,
-        reflectionId: submission.reflectionId,
-        week: submission.week,
-        questions: reflectionCard.questions,
-        answers: submission.answers,
-      );
-
-      print("Provider - 성찰 제출 성공");
-
-      // 상태 업데이트
-      _updateSubmissionStatus(submission.studentId, submission.reflectionId,
-          ReflectionStatus.submitted);
-
-      _setLoading(false);
-    } catch (e) {
-      print("Provider - 성찰 제출 실패: $e");
-      _error = '서버 저장 실패: $e - 로컬에 임시 저장됨';
-      _setLoading(false);
-    }
   }
 
   // 성찰 카드 찾기 도우미 메서드
@@ -207,6 +168,50 @@ class ReflectionProvider extends ChangeNotifier {
     }
   }
 
+  // 성찰 제출
+  Future<void> submitReflection(ReflectionSubmission submission) async {
+    _setLoading(true);
+    _clearError();
+
+    try {
+      print(
+          "Provider - 성찰 제출 시작: ${submission.studentId}, 주차: ${submission.week}");
+
+      // 성찰 카드 찾기
+      final reflectionCard = _findReflectionCard(submission);
+
+      // 서버에 저장하고 문서 ID 받기
+      String docId = await _reflectionService.submitReflection(
+        studentId: submission.studentId,
+        studentName: submission.studentName,
+        className: submission.className,
+        group: submission.group,
+        reflectionId: submission.reflectionId,
+        week: submission.week,
+        questions: reflectionCard.questions,
+        answers: submission.answers,
+      );
+
+      // ID를 포함한 submission 생성
+      final updatedSubmission = submission.copyWith(id: docId);
+
+      // 로컬 캐시에 저장
+      _cacheSubmission(updatedSubmission, reflectionCard);
+
+      print("Provider - 성찰 제출 성공");
+
+      // 상태 업데이트
+      _updateSubmissionStatus(updatedSubmission.studentId,
+          updatedSubmission.reflectionId, ReflectionStatus.submitted);
+
+      _setLoading(false);
+    } catch (e) {
+      print("Provider - 성찰 제출 실패: $e");
+      _error = '서버 저장 실패: $e - 로컬에 임시 저장됨';
+      _setLoading(false);
+    }
+  }
+
   // 제출 상태 업데이트 메서드
   void _updateSubmissionStatus(
       String studentId, int reflectionId, ReflectionStatus status) {
@@ -219,7 +224,8 @@ class ReflectionProvider extends ChangeNotifier {
   void _cacheSubmission(
       ReflectionSubmission submission, ReflectionModel reflectionCard) {
     try {
-      print("로컬에 임시 저장: ${submission.studentId}, 주차: ${submission.week}");
+      print(
+          "로컬에 임시 저장: ${submission.studentId}, 주차: ${submission.week}, ID: ${submission.id}");
 
       // 상태 업데이트
       _updateSubmissionStatus(submission.studentId, submission.reflectionId,
@@ -230,9 +236,14 @@ class ReflectionProvider extends ChangeNotifier {
         _studentReflections[submission.studentId] = {};
       }
 
+      // 문서 ID 처리
+      final documentId = submission.id.isNotEmpty
+          ? submission.id
+          : 'local_${DateTime.now().millisecondsSinceEpoch}';
+
       // 리플렉션 모델 생성
       final reflection = FirebaseReflectionModel(
-        id: 'local_${DateTime.now().millisecondsSinceEpoch}',
+        id: documentId,
         studentId: submission.studentId,
         studentName: submission.studentName,
         className: submission.className,
@@ -248,28 +259,32 @@ class ReflectionProvider extends ChangeNotifier {
       _studentReflections[submission.studentId]![submission.reflectionId] =
           reflection;
 
-      print("로컬 저장 성공");
+      print("로컬 저장 성공 (ID: $documentId)");
     } catch (e) {
       print("로컬 저장 실패: $e");
       rethrow;
     }
   }
 
-  // 성찰 보고서 반려
+  // 성찰 보고서 반려 메서드
   Future<void> rejectReflection(String reflectionId, String reason) async {
+    if (reflectionId.isEmpty) {
+      _setError('반려 실패: 성찰 보고서 ID가 없습니다');
+      return;
+    }
+
     _setLoading(true);
 
     try {
+      print("Provider - 성찰 반려 시작. ID: $reflectionId, 사유: $reason");
+
       // 서버 반려 처리
-      try {
-        await _reflectionService.rejectReflection(reflectionId, reason);
-      } catch (e) {
-        print('서버 반려 처리 실패: $e - 로컬에만 반영됨');
-      }
+      await _reflectionService.rejectReflection(reflectionId, reason);
 
       // 로컬 데이터 업데이트
       _updateLocalRejection(reflectionId, reason);
 
+      print("Provider - 성찰 반려 성공");
       _setLoading(false);
     } catch (e) {
       _handleError('성찰 반려 처리 실패', e);
@@ -277,7 +292,7 @@ class ReflectionProvider extends ChangeNotifier {
     }
   }
 
-  // 로컬 데이터에서 반려 처리
+  // 로컬 데이터에서 반려 처리 업데이트
   void _updateLocalRejection(String reflectionId, String reason) {
     // 제출 목록에서 찾기
     for (var i = 0; i < _submissions.length; i++) {
@@ -295,13 +310,15 @@ class ReflectionProvider extends ChangeNotifier {
         // 학생별 캐시 업데이트
         _updateStudentCache(submission, updatedSubmission);
 
-        // 상태 업데이트
+        // 상태 업데이트 (학생용 화면에 반영되도록)
         _reflectionStatuses['${submission.studentId}_${submission.week}'] =
             ReflectionStatus.rejected;
 
         break;
       }
     }
+
+    notifyListeners(); // UI 갱신을 위해 추가
   }
 
   // 학생 캐시 업데이트
@@ -390,6 +407,7 @@ class ReflectionProvider extends ChangeNotifier {
     final reflection = _studentReflections[studentId]![reflectionId]!;
 
     return ReflectionSubmission(
+      id: reflection.id,
       studentId: reflection.studentId,
       reflectionId: reflectionId,
       week: reflection.week,
@@ -407,6 +425,7 @@ class ReflectionProvider extends ChangeNotifier {
   ReflectionSubmission _createEmptySubmission(
       String studentId, int reflectionId) {
     return ReflectionSubmission(
+      id: 'empty_${DateTime.now().millisecondsSinceEpoch}',
       studentId: studentId,
       reflectionId: reflectionId,
       week: reflectionCards.firstWhere((r) => r.id == reflectionId).week,
@@ -419,6 +438,7 @@ class ReflectionProvider extends ChangeNotifier {
   ReflectionSubmission _createSubmissionFromFirebase(
       FirebaseReflectionModel reflection, int reflectionId) {
     return ReflectionSubmission(
+      id: reflection.id,
       studentId: reflection.studentId,
       reflectionId: reflectionId,
       week: reflection.week,
@@ -466,17 +486,25 @@ class ReflectionProvider extends ChangeNotifier {
     }
   }
 
-  // 성찰 보고서 승인
+  // 성찰 보고서 승인 메서드
   Future<void> approveReflection(String reflectionId) async {
+    if (reflectionId.isEmpty) {
+      _setError('승인 실패: 성찰 보고서 ID가 없습니다');
+      return;
+    }
+
     _setLoading(true);
 
     try {
-      // 승인 처리 API 호출 (실제 서비스에 구현 필요)
-      // await _reflectionService.approveReflection(reflectionId);
+      print("Provider - 성찰 승인 시작. ID: $reflectionId");
+
+      // 승인 처리 API 호출
+      await _reflectionService.approveReflection(reflectionId);
 
       // 로컬 상태 업데이트
       _updateLocalApproval(reflectionId);
 
+      print("Provider - 성찰 승인 성공");
       _setLoading(false);
     } catch (e) {
       _handleError('성찰 승인 처리 실패', e);
@@ -507,6 +535,8 @@ class ReflectionProvider extends ChangeNotifier {
         break;
       }
     }
+
+    notifyListeners();
   }
 
   // 로딩 상태 설정

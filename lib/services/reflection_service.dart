@@ -19,6 +19,13 @@ class ReflectionService {
     createSampleReflections();
   }
 
+  // ID 유효성 검사 도우미 메서드
+  void _validateId(String id, String operation) {
+    if (id.isEmpty) {
+      throw Exception('$operation 실패: 성찰 보고서 ID가 비어있습니다.');
+    }
+  }
+
   // 활성화된 주차 가져오기
   Future<int> getActiveWeeks() async {
     try {
@@ -43,7 +50,9 @@ class ReflectionService {
 
   // 활성화된 주차 설정 (교사 전용)
   Future<void> setActiveWeeks(int weeks) async {
-    if (weeks < 1 || weeks > 3) return;
+    if (weeks < 1 || weeks > 3) {
+      throw Exception('주차는 1~3 사이여야 합니다');
+    }
 
     try {
       // 파이어베이스 연동 코드
@@ -58,7 +67,6 @@ class ReflectionService {
       _activeWeeks = weeks;
     } catch (e) {
       print('활성화된 주차 설정 오류: $e');
-
       // 로컬 구현
       _activeWeeks = weeks;
       throw Exception('설정 저장 중 오류가 발생했습니다: $e');
@@ -107,7 +115,9 @@ class ReflectionService {
 
   // 마감일 설정 (교사 전용)
   Future<void> setDeadline(int week, DateTime? deadline) async {
-    if (week < 1 || week > 3) return;
+    if (week < 1 || week > 3) {
+      throw Exception('주차는 1~3 사이여야 합니다');
+    }
 
     try {
       // 파이어베이스 연동 코드
@@ -125,13 +135,13 @@ class ReflectionService {
       _deadlines[week] = deadline;
     } catch (e) {
       print('마감일 설정 오류: $e');
-
       // 로컬 구현
       _deadlines[week] = deadline;
       throw Exception('마감일 설정 중 오류가 발생했습니다: $e');
     }
   }
 
+  // 성찰 보고서 제출
   Future<String> submitReflection({
     required String studentId,
     required String studentName,
@@ -164,13 +174,44 @@ class ReflectionService {
 
       print("Firestore에 reflections 저장 시도");
 
-      // 기존 코드는 놔두고, 명시적으로 새 문서 생성 시도
-      DocumentReference docRef =
-          await _firestore.collection('reflections').add(reflectionData);
-      docId = docRef.id;
-      print("Firestore에 새 문서 생성 성공: $docId");
+      // 기존 문서 찾기 시도
+      QuerySnapshot existingDocs = await _firestore
+          .collection('reflections')
+          .where('studentId', isEqualTo: studentId)
+          .where('reflectionId', isEqualTo: reflectionId)
+          .limit(1)
+          .get();
 
-      // 로컬 캐시 업데이트 코드는 그대로 유지
+      if (existingDocs.docs.isNotEmpty) {
+        // 기존 문서 업데이트
+        docId = existingDocs.docs.first.id;
+        await _firestore
+            .collection('reflections')
+            .doc(docId)
+            .update(reflectionData);
+        print("Firestore의 기존 문서 업데이트 성공: $docId");
+      } else {
+        // 새 문서 생성
+        DocumentReference docRef =
+            await _firestore.collection('reflections').add(reflectionData);
+        docId = docRef.id;
+        print("Firestore에 새 문서 생성 성공: $docId");
+      }
+
+      // 로컬 캐시 업데이트
+      _updateLocalReflection(
+        docId,
+        studentId,
+        studentName,
+        className,
+        group,
+        reflectionId,
+        week,
+        questions,
+        answers,
+        DateTime.now(), // 서버 타임스탬프를 사용할 수 없으므로 현재 시간 사용
+        ReflectionStatus.submitted,
+      );
 
       return docId;
     } catch (e) {
@@ -180,19 +221,41 @@ class ReflectionService {
       // 오류가 발생해도 사용자에게 피드백 제공을 위해 로컬 ID 반환
       String localId = 'local_${DateTime.now().millisecondsSinceEpoch}';
       print("로컬 ID 생성: $localId");
+
+      // 로컬 캐시 업데이트
+      _updateLocalReflection(
+        localId,
+        studentId,
+        studentName,
+        className,
+        group,
+        reflectionId,
+        week,
+        questions,
+        answers,
+        DateTime.now(),
+        ReflectionStatus.submitted,
+      );
+
       return localId;
     }
   }
 
   // 성찰 보고서 반려 (교사 전용)
   Future<void> rejectReflection(String reflectionId, String reason) async {
+    _validateId(reflectionId, '성찰 보고서 반려');
+
     try {
+      print('Service - 성찰 반려 시작: 문서 ID=$reflectionId, 사유=$reason');
+
       // 파이어베이스 연동 코드
       await _firestore.collection('reflections').doc(reflectionId).update({
         'status': 'rejected',
         'rejectionReason': reason,
         'rejectedAt': FieldValue.serverTimestamp()
       });
+
+      print('Service - Firestore 반려 처리 성공');
 
       // 로컬 캐시 업데이트
       DocumentSnapshot doc =
@@ -217,6 +280,10 @@ class ReflectionService {
   // 학생의 성찰 보고서 가져오기
   Future<FirebaseReflectionModel?> getStudentReflection(
       String studentId, int reflectionId) async {
+    if (studentId.isEmpty) {
+      throw Exception('학생 ID가 비어있습니다');
+    }
+
     try {
       // 파이어베이스 연동 코드
       QuerySnapshot querySnapshot = await _firestore
@@ -243,10 +310,48 @@ class ReflectionService {
     }
   }
 
+  // 성찰 보고서 승인 메서드
+  Future<void> approveReflection(String reflectionId) async {
+    _validateId(reflectionId, '성찰 보고서 승인');
+
+    try {
+      print('Service - 성찰 승인 시작: 문서 ID=$reflectionId');
+
+      // 파이어베이스 연동 코드
+      await _firestore.collection('reflections').doc(reflectionId).update(
+          {'status': 'accepted', 'approvedAt': FieldValue.serverTimestamp()});
+
+      print('Service - Firestore 승인 처리 성공');
+
+      // 로컬 캐시 업데이트
+      DocumentSnapshot doc =
+          await _firestore.collection('reflections').doc(reflectionId).get();
+
+      if (doc.exists) {
+        Map<String, dynamic> data = doc.data() as Map<String, dynamic>;
+        String studentId = data['studentId'] ?? '';
+        int reflectionId = data['reflectionId'] ?? 0;
+
+        if (studentId.isNotEmpty && reflectionId > 0) {
+          _reflectionStatuses['${studentId}_$reflectionId'] =
+              ReflectionStatus.accepted;
+        }
+      }
+    } catch (e) {
+      print('성찰 보고서 승인 오류: $e');
+      throw Exception('성찰 보고서 승인 중 오류가 발생했습니다: $e');
+    }
+  }
+
   // 학생의 성찰 보고서 상태 확인
   Future<ReflectionStatus> getReflectionStatus(
       String studentId, int reflectionId) async {
     try {
+      // 먼저 로컬 캐시 확인
+      if (_reflectionStatuses.containsKey('${studentId}_$reflectionId')) {
+        return _reflectionStatuses['${studentId}_$reflectionId']!;
+      }
+
       // 파이어베이스 연동 코드
       QuerySnapshot querySnapshot = await _firestore
           .collection('reflections')
@@ -263,17 +368,27 @@ class ReflectionService {
           querySnapshot.docs.first.data() as Map<String, dynamic>;
 
       String status = data['status'] ?? 'submitted';
+      ReflectionStatus result;
 
       switch (status) {
         case 'submitted':
-          return ReflectionStatus.submitted;
+          result = ReflectionStatus.submitted;
+          break;
         case 'rejected':
-          return ReflectionStatus.rejected;
+          result = ReflectionStatus.rejected;
+          break;
         case 'accepted':
-          return ReflectionStatus.accepted;
+          result = ReflectionStatus.accepted;
+          break;
         default:
-          return ReflectionStatus.notSubmitted;
+          result = ReflectionStatus.notSubmitted;
+          break;
       }
+
+      // 로컬 캐시에 저장
+      _reflectionStatuses['${studentId}_$reflectionId'] = result;
+
+      return result;
     } catch (e) {
       print('성찰 보고서 상태 조회 오류: $e');
 
@@ -410,6 +525,7 @@ class ReflectionService {
       questions: questions,
       answers: answers,
       submittedDate: submittedDate,
+      status: status,
     );
 
     // 클래스 목록에서 기존 항목이 있는지 확인
@@ -442,7 +558,7 @@ class ReflectionService {
   // 샘플 성찰 데이터 생성 (개발용)
   void createSampleReflections() {
     // 초기 설정값 세팅
-    _activeWeeks = 3; // 기본 2주차까지 활성화
+    _activeWeeks = 3; // 모든 주차 활성화
 
     // 마감일 설정을 현재 날짜보다 후로 변경 (MVP를 위해)
     _deadlines[1] =
@@ -471,6 +587,7 @@ class ReflectionService {
         week1Questions[3]: '친구들을 도와주고 함께 연습하는 것입니다.',
       },
       submittedDate: DateTime.now().subtract(const Duration(days: 2)),
+      status: ReflectionStatus.accepted,
     );
 
     // 2주차 성찰 샘플
@@ -492,6 +609,7 @@ class ReflectionService {
         week2Questions[3]: '이중 뛰기에 도전하고 싶습니다.',
       },
       submittedDate: DateTime.now().subtract(const Duration(days: 1)),
+      status: ReflectionStatus.submitted,
     );
 
     // 반려된 성찰 샘플
@@ -510,6 +628,8 @@ class ReflectionService {
         week1Questions[3]: '열심히 하는 역할입니다.',
       },
       submittedDate: DateTime.now().subtract(const Duration(days: 3)),
+      status: ReflectionStatus.rejected,
+      rejectionReason: '답변이 너무 짧습니다. 더 자세히 작성해주세요.',
     );
 
     // 샘플 데이터 저장

@@ -6,7 +6,7 @@ import '../../models/firebase_models.dart';
 import '../../providers/task_provider.dart';
 import '../../providers/student_provider.dart';
 import '../../providers/reflection_provider.dart';
-import '../../screens/student/reflection_detail_screen.dart';
+import '../student/reflection_detail_screen.dart';
 
 class ReflectionManagement extends StatefulWidget {
   final int selectedClassId;
