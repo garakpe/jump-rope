@@ -20,32 +20,28 @@ class _ReflectionScreenState extends State<ReflectionScreen> {
   String _statusMessage = '';
   bool _isLoading = false;
 
-  // 주차 활성화 상태 관리
-  List<bool> _weekEnabled = [true, false, false]; // 기본값: 1주차만 활성화
-  int _currentWeek = 1;
+  // 성찰 유형 활성화 상태 관리
+  List<bool> _reflectionTypeEnabled = [true, false, false]; // 기본값: 초기 성찰만 활성화
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      _loadCurrentWeek();
+      _loadActiveReflectionTypes();
     });
   }
 
-  // 현재 주차 로드
-  void _loadCurrentWeek() {
-    final taskProvider = Provider.of<TaskProvider>(context, listen: false);
+  // 활성화된 성찰 유형 로드
+  void _loadActiveReflectionTypes() {
     final reflectionProvider =
         Provider.of<ReflectionProvider>(context, listen: false);
 
-    final currentWeek = taskProvider.currentWeek;
-    final activeWeeks = reflectionProvider.activeWeeks;
+    final activeTypes = reflectionProvider.activeReflectionTypes;
 
     setState(() {
-      _currentWeek = currentWeek;
-
-      // 주차 활성화 상태 업데이트 (활성화된 주차까지만 활성화)
-      _weekEnabled = List.generate(3, (index) => activeWeeks >= index + 1);
+      // 성찰 유형 활성화 상태 업데이트 (활성화된 유형까지만 활성화)
+      _reflectionTypeEnabled =
+          List.generate(3, (index) => activeTypes >= index + 1);
     });
   }
 
@@ -73,7 +69,7 @@ class _ReflectionScreenState extends State<ReflectionScreen> {
                   ),
                   SizedBox(height: 8),
                   Text(
-                    '주차별 성찰 보고서를 작성하고 제출하세요',
+                    '체육 수업에 대한 성찰을 작성하고 제출하세요',
                     style: TextStyle(
                       fontSize: 15,
                       color: CupertinoColors.systemGrey,
@@ -172,8 +168,8 @@ class _ReflectionScreenState extends State<ReflectionScreen> {
       itemCount: reflectionCards.length,
       itemBuilder: (context, index) {
         final reflection = reflectionCards[index];
-        final weekNum = reflection.week;
-        final isEnabled = _weekEnabled[weekNum - 1];
+        final reflectionType = reflection.id; // 성찰 유형 ID
+        final isEnabled = _reflectionTypeEnabled[reflectionType - 1];
 
         return FutureBuilder<ReflectionStatus>(
           future: reflectionProvider.getSubmissionStatus(
@@ -249,7 +245,7 @@ class _ReflectionScreenState extends State<ReflectionScreen> {
                       ),
                       const SizedBox(width: 8),
                       Text(
-                        '${reflection.week}주차 성찰',
+                        reflection.title,
                         style: TextStyle(
                           fontSize: 16,
                           fontWeight: FontWeight.w600,
@@ -443,7 +439,7 @@ class _ReflectionScreenState extends State<ReflectionScreen> {
         (questions.length > 1 ? ' 외 ${questions.length - 1}개의 질문' : '');
   }
 
-// _navigateToReflectionDetail 메서드 수정
+  // _navigateToReflectionDetail 메서드
   void _navigateToReflectionDetail(ReflectionModel reflection,
       ReflectionStatus status, String studentId) async {
     setState(() {

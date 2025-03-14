@@ -123,7 +123,7 @@ class _ReflectionDetailScreenState extends State<ReflectionDetailScreen> {
       id: 'empty_${DateTime.now().millisecondsSinceEpoch}',
       studentId: studentId,
       reflectionId: reflectionId,
-      week: reflection.week,
+      week: 0,
       answers: {},
       submittedDate: DateTime.now(),
     );
@@ -213,7 +213,7 @@ class _ReflectionDetailScreenState extends State<ReflectionDetailScreen> {
           id: _submission?.id ?? '', // Include the existing ID if available
           studentId: user.studentId ?? '',
           reflectionId: widget.reflectionId,
-          week: reflection.week,
+          week: 0,
           answers: answers,
           submittedDate: DateTime.now(),
           studentName: user.name ?? '',

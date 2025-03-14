@@ -11,7 +11,7 @@ class ReflectionProvider extends ChangeNotifier {
   List<ReflectionModel> _reflectionCards = [];
   List<FirebaseReflectionModel> _submissions = [];
   Map<int, DateTime?> _deadlines = {};
-  int _activeWeeks = 1; // 현재 활성화된 주차
+  int _activeReflectionTypes = 1; // 현재 활성화된 성찰 유형
 
   // UI 상태
   bool _isLoading = false;
@@ -21,7 +21,7 @@ class ReflectionProvider extends ChangeNotifier {
   // 선택 상태
   int _selectedReflectionId = 0;
   String _selectedClass = '';
-  int _selectedWeek = 1;
+  int _selectedReflectionType = 1;
 
   // 캐시 상태
   final Map<String, Map<int, FirebaseReflectionModel>> _studentReflections = {};
@@ -31,7 +31,7 @@ class ReflectionProvider extends ChangeNotifier {
   List<FirebaseReflectionModel> get submissions => _submissions;
   List<ReflectionModel> get reflectionCards => _reflectionCards;
   int get selectedReflectionId => _selectedReflectionId;
-  int get activeWeeks => _activeWeeks;
+  int get activeReflectionTypes => _activeReflectionTypes;
   bool get isLoading => _isLoading;
   String get error => _error;
   String? get downloadUrl => _downloadUrl;
@@ -47,7 +47,7 @@ class ReflectionProvider extends ChangeNotifier {
     try {
       await Future.wait([
         _loadReflectionQuestions(),
-        _loadActiveWeeks(),
+        _loadActiveReflectionTypes(),
         _loadDeadlines(),
       ]);
     } catch (e) {
@@ -68,21 +68,21 @@ class ReflectionProvider extends ChangeNotifier {
     }
   }
 
-  // 활성화된 주차 정보 로드
-  Future<void> _loadActiveWeeks() async {
+  // 활성화된 성찰 유형 정보 로드
+  Future<void> _loadActiveReflectionTypes() async {
     try {
-      int weeks = await _reflectionService.getActiveWeeks();
-      if (weeks > 0) {
-        _activeWeeks = weeks;
+      int types = await _reflectionService.getActiveReflectionTypes();
+      if (types > 0) {
+        _activeReflectionTypes = types;
         notifyListeners();
       }
     } catch (e) {
-      // 활성화 주차 로드 실패는 UI에 영향을 크게 주지 않으므로 로그만 출력
-      print('활성화된 주차 정보 로드 실패: $e');
+      // 활성화 성찰 유형 로드 실패는 UI에 영향을 크게 주지 않으므로 로그만 출력
+      print('활성화된 성찰 유형 정보 로드 실패: $e');
     }
   }
 
-  // 주차별 마감 정보 로드
+  // 성찰 유형별 마감일 정보 로드
   Future<void> _loadDeadlines() async {
     try {
       final deadlines = await _reflectionService.getDeadlines();
@@ -99,44 +99,44 @@ class ReflectionProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  // 활성화된 주차 설정 (교사 전용)
-  Future<void> setActiveWeeks(int weeks) async {
-    if (weeks < 1 || weeks > 3) return;
+  // 활성화된 성찰 유형 설정 (교사 전용)
+  Future<void> setActiveReflectionTypes(int types) async {
+    if (types < 1 || types > 3) return;
 
     _setLoading(true);
 
     try {
-      await _reflectionService.setActiveWeeks(weeks);
-      _activeWeeks = weeks;
+      await _reflectionService.setActiveReflectionTypes(types);
+      _activeReflectionTypes = types;
       _setLoading(false);
     } catch (e) {
-      _handleError('주차 활성화 설정 실패', e);
+      _handleError('성찰 유형 활성화 설정 실패', e);
     }
   }
 
-  // 주차별 마감일 설정
-  Future<void> setWeekDeadline(int week, DateTime? deadline) async {
-    if (week < 1 || week > 3) return;
+  // 성찰 유형별 마감일 설정
+  Future<void> setDeadline(int reflectionType, DateTime? deadline) async {
+    if (reflectionType < 1 || reflectionType > 3) return;
 
     _setLoading(true);
 
     try {
-      await _reflectionService.setDeadline(week, deadline);
-      _deadlines[week] = deadline;
+      await _reflectionService.setDeadline(reflectionType, deadline);
+      _deadlines[reflectionType] = deadline;
       _setLoading(false);
     } catch (e) {
       _handleError('마감일 설정 실패', e);
     }
   }
 
-  // 학급과 주차 선택 및 성찰 데이터 구독
-  void selectClassAndWeek(String className, int week) {
+  // 학급과 성찰 유형 선택 및 성찰 데이터 구독
+  void selectClassAndReflectionType(String className, int reflectionType) {
     _selectedClass = className;
-    _selectedWeek = week;
+    _selectedReflectionType = reflectionType;
     _setLoading(true, notify: true);
     _clearError();
 
-    _reflectionService.getClassReflections(className, week).listen(
+    _reflectionService.getClassReflections(className, reflectionType).listen(
         (submissionsList) {
       _submissions = submissionsList;
       _setLoading(false);
@@ -152,8 +152,7 @@ class ReflectionProvider extends ChangeNotifier {
         (r) => r.id == submission.reflectionId,
         orElse: () => ReflectionModel(
           id: submission.reflectionId,
-          title: "${submission.week}주차 성찰",
-          week: submission.week,
+          title: _getReflectionTitle(submission.reflectionId),
           questions: submission.answers.keys.toList(),
         ),
       );
@@ -161,10 +160,23 @@ class ReflectionProvider extends ChangeNotifier {
       print("성찰 카드 찾기 실패: $e");
       return ReflectionModel(
         id: submission.reflectionId,
-        title: "${submission.week}주차 성찰",
-        week: submission.week,
+        title: _getReflectionTitle(submission.reflectionId),
         questions: submission.answers.keys.toList(),
       );
+    }
+  }
+
+  // 성찰 유형에 따른 제목 반환
+  String _getReflectionTitle(int reflectionId) {
+    switch (reflectionId) {
+      case 1:
+        return "초기 성찰";
+      case 2:
+        return "중기 성찰";
+      case 3:
+        return "최종 성찰";
+      default:
+        return "성찰";
     }
   }
 
@@ -175,7 +187,7 @@ class ReflectionProvider extends ChangeNotifier {
 
     try {
       print(
-          "Provider - 성찰 제출 시작: ${submission.studentId}, 주차: ${submission.week}");
+          "Provider - 성찰 제출 시작: ${submission.studentId}, 유형: ${submission.reflectionId}");
 
       // 성찰 카드 찾기
       final reflectionCard = _findReflectionCard(submission);
@@ -187,7 +199,6 @@ class ReflectionProvider extends ChangeNotifier {
         className: submission.className,
         group: submission.group,
         reflectionId: submission.reflectionId,
-        week: submission.week,
         questions: reflectionCard.questions,
         answers: submission.answers,
       );
@@ -225,7 +236,7 @@ class ReflectionProvider extends ChangeNotifier {
       ReflectionSubmission submission, ReflectionModel reflectionCard) {
     try {
       print(
-          "로컬에 임시 저장: ${submission.studentId}, 주차: ${submission.week}, ID: ${submission.id}");
+          "로컬에 임시 저장: ${submission.studentId}, 유형: ${submission.reflectionId}, ID: ${submission.id}");
 
       // 상태 업데이트
       _updateSubmissionStatus(submission.studentId, submission.reflectionId,
@@ -248,7 +259,7 @@ class ReflectionProvider extends ChangeNotifier {
         studentName: submission.studentName,
         className: submission.className,
         group: submission.group,
-        week: submission.week,
+        week: 0, // 필요없는 필드지만 모델에 있으므로 기본값 설정
         questions: reflectionCard.questions,
         answers: submission.answers,
         submittedDate: submission.submittedDate,
@@ -311,7 +322,8 @@ class ReflectionProvider extends ChangeNotifier {
         _updateStudentCache(submission, updatedSubmission);
 
         // 상태 업데이트 (학생용 화면에 반영되도록)
-        _reflectionStatuses['${submission.studentId}_${submission.week}'] =
+        _reflectionStatuses[
+                '${submission.studentId}_${submission.reflectionId}'] =
             ReflectionStatus.rejected;
 
         break;
@@ -325,10 +337,12 @@ class ReflectionProvider extends ChangeNotifier {
   void _updateStudentCache(FirebaseReflectionModel oldSubmission,
       FirebaseReflectionModel newSubmission) {
     if (_studentReflections.containsKey(oldSubmission.studentId)) {
-      for (var week in _studentReflections[oldSubmission.studentId]!.keys) {
-        if (_studentReflections[oldSubmission.studentId]![week]!.id ==
+      for (var reflectionType
+          in _studentReflections[oldSubmission.studentId]!.keys) {
+        if (_studentReflections[oldSubmission.studentId]![reflectionType]!.id ==
             oldSubmission.id) {
-          _studentReflections[oldSubmission.studentId]![week] = newSubmission;
+          _studentReflections[oldSubmission.studentId]![reflectionType] =
+              newSubmission;
           break;
         }
       }
@@ -419,7 +433,7 @@ class ReflectionProvider extends ChangeNotifier {
       id: reflection.id,
       studentId: reflection.studentId,
       reflectionId: reflectionId,
-      week: reflection.week,
+      week: 0, // 사용하지 않는 필드
       answers: reflection.answers,
       submittedDate: reflection.submittedDate,
       studentName: reflection.studentName,
@@ -446,7 +460,7 @@ class ReflectionProvider extends ChangeNotifier {
       id: tmpId,
       studentId: studentId,
       reflectionId: reflectionId,
-      week: reflection.week,
+      week: 0, // 사용하지 않는 필드
       answers: {},
       submittedDate: DateTime.now(),
     );
@@ -459,7 +473,7 @@ class ReflectionProvider extends ChangeNotifier {
       id: reflection.id,
       studentId: reflection.studentId,
       reflectionId: reflectionId,
-      week: reflection.week,
+      week: 0, // 사용하지 않는 필드
       answers: reflection.answers,
       submittedDate: reflection.submittedDate,
       studentName: reflection.studentName,
@@ -470,7 +484,7 @@ class ReflectionProvider extends ChangeNotifier {
     );
   }
 
-  // 주차별 학급 제출 현황 가져오기
+  // 학급별 제출 현황 가져오기
   Future<Map<String, int>> getSubmissionStatsByClass(String className) async {
     _setLoading(true);
 
@@ -495,7 +509,7 @@ class ReflectionProvider extends ChangeNotifier {
 
     try {
       _downloadUrl = await _reflectionService.generateReflectionExcel(
-          _selectedClass, _selectedWeek);
+          _selectedClass, _selectedReflectionType);
       _setLoading(false);
       return _downloadUrl!;
     } catch (e) {
@@ -547,7 +561,8 @@ class ReflectionProvider extends ChangeNotifier {
         _updateStudentCache(submission, updatedSubmission);
 
         // 상태 업데이트
-        _reflectionStatuses['${submission.studentId}_${submission.week}'] =
+        _reflectionStatuses[
+                '${submission.studentId}_${submission.reflectionId}'] =
             ReflectionStatus.accepted;
 
         break;

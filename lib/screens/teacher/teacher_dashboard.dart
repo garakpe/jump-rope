@@ -1,14 +1,15 @@
 // lib/screens/teacher/teacher_dashboard.dart
 import 'package:flutter/material.dart';
+import '../../providers/reflection_provider.dart';
+import '../../providers/student_provider.dart';
 import 'package:provider/provider.dart';
 import '../../providers/auth_provider.dart';
-import '../../providers/reflection_provider.dart';
+import '../../providers/student_provider.dart' as studentprovider;
 import 'group_management.dart';
 import 'progress_management.dart';
 import 'reflection_management.dart';
 import 'student_upload_screen.dart';
 import '../../providers/task_provider.dart';
-import '../../providers/student_provider.dart';
 
 class TeacherDashboard extends StatefulWidget {
   const TeacherDashboard({Key? key}) : super(key: key);
@@ -386,12 +387,12 @@ class _TeacherDashboardState extends State<TeacherDashboard>
 
       // 학급 정보 업데이트
       final classNumString = value.toString();
-      Provider.of<StudentProvider>(context, listen: false)
+      Provider.of<studentprovider.StudentProvider>(context, listen: false)
           .setSelectedClass(classNumString);
       Provider.of<TaskProvider>(context, listen: false)
           .selectClass(classNumString);
       Provider.of<ReflectionProvider>(context, listen: false)
-          .selectClassAndWeek(classNumString, 1);
+          .selectClassAndReflectionType(classNumString, 1);
 
       // 첫 번째 탭으로 리셋
       _tabController.animateTo(0);

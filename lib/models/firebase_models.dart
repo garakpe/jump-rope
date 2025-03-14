@@ -192,11 +192,12 @@ class FirebaseReflectionModel {
   final String studentName;
   final String className;
   final int group;
-  final int week;
+  final int week; // 하위 호환성을 위해 유지, 사용하지 않음
+  final int reflectionId; // 추가: 성찰 유형 ID (1:초기, 2:중기, 3:최종)
   final List<String> questions;
   final Map<String, String> answers;
   final DateTime submittedDate;
-  // 새 필드 추가
+  // 상태 관련 필드
   final ReflectionStatus status;
   final String? rejectionReason;
   final DateTime? reviewedDate;
@@ -209,7 +210,8 @@ class FirebaseReflectionModel {
     required this.studentName,
     required this.className,
     required this.group,
-    required this.week,
+    required this.week, // 하위 호환성을 위해 유지
+    this.reflectionId = 0, // 기본값 설정 (이전 데이터 호환용)
     required this.questions,
     required this.answers,
     required this.submittedDate,
@@ -265,13 +267,23 @@ class FirebaseReflectionModel {
       });
     }
 
+    // 성찰 유형 ID 처리 (추가)
+    int reflectionId = 0;
+    if (data['reflectionId'] != null && data['reflectionId'] is int) {
+      reflectionId = data['reflectionId'] as int;
+    } else if (data['week'] != null && data['week'] is int) {
+      // 이전 데이터는 week가 1, 2, 3이었으므로 그것을 reflectionId로 활용
+      reflectionId = data['week'] as int;
+    }
+
     return FirebaseReflectionModel(
       id: doc.id,
       studentId: data['studentId'] ?? '',
       studentName: data['studentName'] ?? '',
       className: data['className'] ?? '',
       group: data['group'] ?? 0,
-      week: data['week'] ?? 0,
+      week: data['week'] ?? 0, // 하위 호환성
+      reflectionId: reflectionId, // reflectionId 필드 추가
       questions: List<String>.from(data['questions'] ?? []),
       answers: Map<String, String>.from(data['answers'] ?? {}),
       submittedDate: submittedDate,
@@ -316,13 +328,23 @@ class FirebaseReflectionModel {
       });
     }
 
+    // 성찰 유형 ID 처리 (추가)
+    int reflectionId = 0;
+    if (data['reflectionId'] != null) {
+      reflectionId = data['reflectionId'] as int;
+    } else if (data['week'] != null) {
+      // 이전 데이터는 week가 1, 2, 3이었으므로 그것을 reflectionId로 활용
+      reflectionId = data['week'] as int;
+    }
+
     return FirebaseReflectionModel(
       id: id,
       studentId: data['studentId'] ?? '',
       studentName: data['studentName'] ?? '',
       className: data['className'] ?? '',
       group: data['group'] ?? 0,
-      week: data['week'] ?? 0,
+      week: data['week'] ?? 0, // 하위 호환성
+      reflectionId: reflectionId, // reflectionId 필드 추가
       questions: List<String>.from(data['questions'] ?? []),
       answers: Map<String, String>.from(data['answers'] ?? {}),
       submittedDate: data['submittedDate'] is DateTime
@@ -359,7 +381,8 @@ class FirebaseReflectionModel {
       'studentName': studentName,
       'className': className,
       'group': group,
-      'week': week,
+      'week': week, // 하위 호환성을 위해 유지
+      'reflectionId': reflectionId, // reflectionId 필드 추가
       'questions': questions,
       'answers': answers,
       'submittedDate': Timestamp.fromDate(submittedDate),
@@ -380,6 +403,7 @@ class FirebaseReflectionModel {
     String? className,
     int? group,
     int? week,
+    int? reflectionId,
     List<String>? questions,
     Map<String, String>? answers,
     DateTime? submittedDate,
@@ -396,6 +420,7 @@ class FirebaseReflectionModel {
       className: className ?? this.className,
       group: group ?? this.group,
       week: week ?? this.week,
+      reflectionId: reflectionId ?? this.reflectionId,
       questions: questions ?? this.questions,
       answers: answers ?? this.answers,
       submittedDate: submittedDate ?? this.submittedDate,

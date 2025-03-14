@@ -1,12 +1,10 @@
 // lib/screens/teacher/reflection_management.dart
 import 'package:flutter/material.dart';
-import 'package:flutter/cupertino.dart';
 import 'package:provider/provider.dart';
 import '../../models/reflection_model.dart';
 import '../../models/firebase_models.dart';
-import '../../providers/task_provider.dart';
-import '../../providers/student_provider.dart';
 import '../../providers/reflection_provider.dart';
+import '../../providers/student_provider.dart' as studentprovider;
 import '../student/reflection_detail_screen.dart';
 import 'package:intl/intl.dart';
 
@@ -26,8 +24,8 @@ class _ReflectionManagementState extends State<ReflectionManagement> {
   ReflectionSubmission? _selectedSubmission;
   String _statusMessage = '';
   bool _isLoading = false;
-  int _selectedWeek = 1; // 현재 선택된 주차 추가
-  Map<int, DateTime?> _deadlines = {}; // 주차별 마감일
+  int _selectedReflectionType = 1; // 초기 성찰(1), 중기 성찰(2), 최종 성찰(3)
+  Map<int, DateTime?> _deadlines = {}; // 성찰 유형별 마감일
 
   @override
   void initState() {
@@ -39,8 +37,8 @@ class _ReflectionManagementState extends State<ReflectionManagement> {
         // 선택된 학급에 대한 성찰 데이터 로드
         final reflectionProvider =
             Provider.of<ReflectionProvider>(context, listen: false);
-        reflectionProvider.selectClassAndWeek(
-            widget.selectedClassId.toString(), 1); // 1주차부터 시작
+        reflectionProvider.selectClassAndReflectionType(
+            widget.selectedClassId.toString(), 1); // 초기 성찰부터 시작
 
         // 마감일 정보 로드
         _loadDeadlines();
@@ -81,14 +79,10 @@ class _ReflectionManagementState extends State<ReflectionManagement> {
       return _buildSubmissionDetail();
     }
 
-    // 학생 목록 가져오기
-    final taskProvider = Provider.of<TaskProvider>(context);
-    final currentWeek = taskProvider.currentWeek;
-
     return Column(
       children: [
         // 헤더 영역
-        _buildHeaderCard(currentWeek),
+        _buildHeaderCard(),
         const SizedBox(height: 16),
 
         // 상태 메시지
@@ -135,16 +129,14 @@ class _ReflectionManagementState extends State<ReflectionManagement> {
 
         // 성찰 카드 그리드
         Expanded(
-          child: _buildReflectionGrid(currentWeek),
+          child: _buildReflectionGrid(),
         ),
       ],
     );
   }
 
   // 헤더 카드
-  Widget _buildHeaderCard(int currentWeek) {
-    final taskProvider = Provider.of<TaskProvider>(context, listen: false);
-
+  Widget _buildHeaderCard() {
     return Card(
       elevation: 2,
       shape: RoundedRectangleBorder(
@@ -152,71 +144,37 @@ class _ReflectionManagementState extends State<ReflectionManagement> {
       ),
       child: Padding(
         padding: const EdgeInsets.all(16.0),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        child: Column(
           children: [
             Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Icon(Icons.book, color: Colors.amber.shade700),
-                const SizedBox(width: 8),
-                Text(
-                  '성찰 관리',
-                  style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.amber.shade700,
-                  ),
+                Row(
+                  children: [
+                    Icon(Icons.book, color: Colors.amber.shade700),
+                    const SizedBox(width: 8),
+                    Text(
+                      '성찰 관리',
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.amber.shade700,
+                      ),
+                    ),
+                  ],
                 ),
               ],
             ),
 
-            // 주차 설정 UI
+            const SizedBox(height: 16),
+
+            // 성찰 유형 선택 버튼 그룹
             Row(
+              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
               children: [
-                Text(
-                  '현재 주차:',
-                  style: TextStyle(
-                    fontWeight: FontWeight.w500,
-                    color: Colors.grey.shade700,
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 4),
-                  decoration: BoxDecoration(
-                    color: Colors.amber.shade50,
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: Colors.amber.shade200),
-                  ),
-                  child: DropdownButtonHideUnderline(
-                    child: DropdownButton<int>(
-                      value: currentWeek,
-                      items: [1, 2, 3].map((week) {
-                        return DropdownMenuItem<int>(
-                          value: week,
-                          child: Padding(
-                            padding:
-                                const EdgeInsets.symmetric(horizontal: 8.0),
-                            child: Text(
-                              '$week주차',
-                              style: TextStyle(
-                                fontWeight: currentWeek == week
-                                    ? FontWeight.bold
-                                    : FontWeight.normal,
-                                color: Colors.amber.shade900,
-                              ),
-                            ),
-                          ),
-                        );
-                      }).toList(),
-                      onChanged: (value) {
-                        if (value != null) {
-                          _updateCurrentWeek(value);
-                        }
-                      },
-                    ),
-                  ),
-                ),
+                _buildReflectionTypeButton(1, '초기 성찰'),
+                _buildReflectionTypeButton(2, '중기 성찰'),
+                _buildReflectionTypeButton(3, '최종 성찰'),
               ],
             ),
           ],
@@ -225,231 +183,163 @@ class _ReflectionManagementState extends State<ReflectionManagement> {
     );
   }
 
-  // 현재 주차 업데이트 메서드
-  void _updateCurrentWeek(int newWeek) async {
-    setState(() {
-      _isLoading = true;
-      _statusMessage = '주차 정보 업데이트 중...';
-    });
-
-    try {
-      final taskProvider = Provider.of<TaskProvider>(context, listen: false);
-      taskProvider.setCurrentWeek(newWeek);
-
-      // 주차 변경 시 선택된 주차도 변경
-      _selectedWeek = newWeek;
-
-      // 리스트 업데이트를 위해 ReflectionProvider 업데이트
-      final reflectionProvider =
-          Provider.of<ReflectionProvider>(context, listen: false);
-      reflectionProvider.selectClassAndWeek(
-          widget.selectedClassId.toString(), newWeek);
-
-      setState(() {
-        _isLoading = false;
-        _statusMessage =
-            '성공: $newWeek주차로 설정되었습니다. 이제 학생들은 $newWeek주차 성찰까지 작성할 수 있습니다.';
-      });
-    } catch (e) {
-      setState(() {
-        _isLoading = false;
-        _statusMessage = '오류: 주차 정보 업데이트 실패 - $e';
-      });
-    }
-  }
-
-  // 학생 성찰 보고서 보기 메서드
-  Future<void> _viewStudentReflection(
-      FirebaseStudentModel student, int reflectionId) async {
-    try {
-      setState(() {
-        _isLoading = true;
-      });
-
-      final reflectionProvider =
-          Provider.of<ReflectionProvider>(context, listen: false);
-
-      // 학생 성찰 데이터 가져오기 (로컬이나 서버에서)
-      final submission = await reflectionProvider.getSubmission(
-          student.studentId, reflectionId);
-
-      setState(() {
-        _isLoading = false;
-      });
-
-      if (submission != null) {
-        // ReflectionDetailScreen으로 이동하여 성찰 보고서 보기
-        final result = await Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (context) => ReflectionDetailScreen(
-              reflectionId: reflectionId,
-              submission: submission,
-              isTeacher: true, // 교사 모드로 설정
-            ),
-          ),
-        );
-
-        // 결과가 true이면 상태 업데이트
-        if (result == true) {
-          reflectionProvider.selectClassAndWeek(
-              widget.selectedClassId.toString(), _selectedWeek);
+  // 성찰 유형 선택 버튼
+  Widget _buildReflectionTypeButton(int type, String label) {
+    final isSelected = _selectedReflectionType == type;
+    return OutlinedButton(
+      onPressed: () {
+        if (_selectedReflectionType != type) {
           setState(() {
-            _statusMessage = '${student.name}의 성찰 보고서를 확인했습니다.';
+            _selectedReflectionType = type;
           });
+          // 리스트 업데이트를 위해 ReflectionProvider 업데이트
+          final reflectionProvider =
+              Provider.of<ReflectionProvider>(context, listen: false);
+          reflectionProvider.selectClassAndReflectionType(
+              widget.selectedClassId.toString(), type);
         }
-      } else {
-        setState(() {
-          _statusMessage = '${student.name}의 성찰 보고서를 불러올 수 없습니다.';
-        });
-      }
-    } catch (e) {
-      setState(() {
-        _isLoading = false;
-        _statusMessage = '오류 발생: $e';
-      });
-    }
+      },
+      style: OutlinedButton.styleFrom(
+        backgroundColor: isSelected ? Colors.amber.shade50 : Colors.white,
+        side: BorderSide(
+          color: isSelected ? Colors.amber.shade500 : Colors.grey.shade300,
+          width: isSelected ? 2 : 1,
+        ),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+        ),
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+      ),
+      child: Text(
+        label,
+        style: TextStyle(
+          color: isSelected ? Colors.amber.shade700 : Colors.grey.shade700,
+          fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+        ),
+      ),
+    );
   }
 
   // 성찰 그리드
-  Widget _buildReflectionGrid(int currentWeek) {
-    return GridView.builder(
-      padding: const EdgeInsets.all(12),
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 3,
-        childAspectRatio: 0.8, // 카드 비율 조정 - 더 세로로 길게
-        crossAxisSpacing: 16,
-        mainAxisSpacing: 16,
+  Widget _buildReflectionGrid() {
+    // 현재 선택된 성찰 유형에 대한 정보 가져오기
+    final reflectionCard = reflectionCards.firstWhere(
+      (card) => card.id == _selectedReflectionType,
+      orElse: () => reflectionCards.first,
+    );
+
+    final reflectionTitle = reflectionCard.title;
+    final DateTime? deadline = _deadlines[_selectedReflectionType];
+    final bool isDeadlinePassed =
+        deadline != null && deadline.isBefore(DateTime.now());
+
+    return Card(
+      elevation: 2,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(16),
       ),
-      itemCount: 3, // 3주차 성찰
-      itemBuilder: (context, index) {
-        final weekNum = index + 1;
-        final bool isActive = weekNum <= currentWeek;
-        final DateTime? deadline = _deadlines[weekNum];
-        final bool isDeadlinePassed =
-            deadline != null && deadline.isBefore(DateTime.now());
-
-        return Card(
-          elevation: 2,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16),
-          ),
-          child: Column(
-            children: [
-              // 카드 헤더
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    colors: isActive
-                        ? [Colors.amber.shade500, Colors.orange.shade400]
-                        : [Colors.grey.shade300, Colors.grey.shade400],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                  ),
-                  borderRadius: const BorderRadius.only(
-                    topLeft: Radius.circular(16),
-                    topRight: Radius.circular(16),
-                  ),
-                ),
-                child: Column(
+      child: Column(
+        children: [
+          // 카드 헤더
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: [Colors.amber.shade500, Colors.orange.shade400],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+              borderRadius: const BorderRadius.only(
+                topLeft: Radius.circular(16),
+                topRight: Radius.circular(16),
+              ),
+            ),
+            child: Column(
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Text(
-                          '$weekNum주차 성찰',
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontWeight: FontWeight.bold,
-                            fontSize: 16,
-                          ),
-                          textAlign: TextAlign.center,
-                        ),
-
-                        // 활성화 상태 아이콘
-                        Icon(
-                          isActive ? Icons.lock_open : Icons.lock,
-                          size: 16,
-                          color: Colors.white,
-                        ),
-                      ],
-                    ),
-
-                    // 마감일 표시
-                    if (deadline != null)
-                      Container(
-                        margin: const EdgeInsets.only(top: 8),
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 8, vertical: 4),
-                        decoration: BoxDecoration(
-                          color: isDeadlinePassed
-                              ? Colors.red.shade100
-                              : Colors.blue.shade100,
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: Text(
-                          isDeadlinePassed
-                              ? '마감됨: ${DateFormat('MM/dd HH:mm').format(deadline)}'
-                              : '마감일: ${DateFormat('MM/dd HH:mm').format(deadline)}',
-                          style: TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.bold,
-                            color: isDeadlinePassed
-                                ? Colors.red.shade900
-                                : Colors.blue.shade900,
-                          ),
-                        ),
+                    Text(
+                      reflectionTitle,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 16,
                       ),
+                      textAlign: TextAlign.center,
+                    ),
                   ],
                 ),
-              ),
 
-              // 마감 버튼을 여기에 명확하게 배치
-              if (isActive)
-                Container(
-                  width: double.infinity,
-                  margin: const EdgeInsets.fromLTRB(16, 12, 16, 8),
-                  child: ElevatedButton.icon(
-                    icon: Icon(
-                      isDeadlinePassed ? Icons.lock : Icons.timer_off,
-                      size: 16,
+                // 마감일 표시
+                if (deadline != null)
+                  Container(
+                    margin: const EdgeInsets.only(top: 8),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: isDeadlinePassed
+                          ? Colors.red.shade100
+                          : Colors.blue.shade100,
+                      borderRadius: BorderRadius.circular(12),
                     ),
-                    label: Text(
-                      isDeadlinePassed ? '마감됨' : '접수마감',
-                      style: const TextStyle(fontSize: 14),
-                    ),
-                    onPressed: isDeadlinePassed
-                        ? () => _reopenDeadline(weekNum)
-                        : () => _setDeadline(weekNum),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: isDeadlinePassed
-                          ? Colors.grey.shade400
-                          : Colors.red.shade400,
-                      padding: const EdgeInsets.symmetric(vertical: 10),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(8),
+                    child: Text(
+                      isDeadlinePassed
+                          ? '마감됨: ${DateFormat('MM/dd HH:mm').format(deadline)}'
+                          : '마감일: ${DateFormat('MM/dd HH:mm').format(deadline)}',
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.bold,
+                        color: isDeadlinePassed
+                            ? Colors.red.shade900
+                            : Colors.blue.shade900,
                       ),
                     ),
                   ),
-                ),
-
-              // 학생 목록 (남은 공간 모두 차지)
-              Expanded(
-                child: isActive
-                    ? _buildStudentList(weekNum)
-                    : _buildInactiveWeekView(weekNum),
-              ),
-            ],
+              ],
+            ),
           ),
-        );
-      },
+
+          // 마감 버튼
+          Container(
+            width: double.infinity,
+            margin: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+            child: ElevatedButton.icon(
+              icon: Icon(
+                isDeadlinePassed ? Icons.lock : Icons.timer_off,
+                size: 16,
+              ),
+              label: Text(
+                isDeadlinePassed ? '마감됨' : '접수마감',
+                style: const TextStyle(fontSize: 14),
+              ),
+              onPressed: isDeadlinePassed
+                  ? () => _reopenDeadline(_selectedReflectionType)
+                  : () => _setDeadline(_selectedReflectionType),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: isDeadlinePassed
+                    ? Colors.grey.shade400
+                    : Colors.red.shade400,
+                padding: const EdgeInsets.symmetric(vertical: 10),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
+              ),
+            ),
+          ),
+
+          // 학생 목록
+          Expanded(
+            child: _buildStudentList(_selectedReflectionType),
+          ),
+        ],
+      ),
     );
   }
 
   // 접수마감 설정 함수
-  void _setDeadline(int weekNum) {
+  void _setDeadline(int reflectionType) {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
@@ -465,12 +355,12 @@ class _ReflectionManagementState extends State<ReflectionManagement> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              '$weekNum주차 성찰 보고서 접수를 마감하시겠습니까?',
+              '${_getReflectionTypeName(reflectionType)} 보고서 접수를 마감하시겠습니까?',
               style: const TextStyle(fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 12),
             Text(
-              '마감 시 학생들은 더 이상 $weekNum주차 성찰 보고서를 제출할 수 없습니다.',
+              '마감 시 학생들은 더 이상 ${_getReflectionTypeName(reflectionType)} 보고서를 제출할 수 없습니다.',
               style: TextStyle(color: Colors.grey.shade700),
             ),
             const SizedBox(height: 12),
@@ -498,7 +388,7 @@ class _ReflectionManagementState extends State<ReflectionManagement> {
             label: const Text('마감하기'),
             onPressed: () {
               Navigator.pop(context);
-              _processDeadline(weekNum);
+              _processDeadline(reflectionType);
             },
             style: ElevatedButton.styleFrom(
               backgroundColor: Colors.red,
@@ -509,11 +399,26 @@ class _ReflectionManagementState extends State<ReflectionManagement> {
     );
   }
 
+  // 성찰 유형 이름 가져오기
+  String _getReflectionTypeName(int reflectionType) {
+    switch (reflectionType) {
+      case 1:
+        return '초기 성찰';
+      case 2:
+        return '중기 성찰';
+      case 3:
+        return '최종 성찰';
+      default:
+        return '성찰';
+    }
+  }
+
   // 마감 처리 함수
-  Future<void> _processDeadline(int weekNum) async {
+  Future<void> _processDeadline(int reflectionType) async {
     setState(() {
       _isLoading = true;
-      _statusMessage = '$weekNum주차 성찰 보고서 마감 처리 중...';
+      _statusMessage =
+          '${_getReflectionTypeName(reflectionType)} 보고서 마감 처리 중...';
     });
 
     try {
@@ -521,13 +426,14 @@ class _ReflectionManagementState extends State<ReflectionManagement> {
           Provider.of<ReflectionProvider>(context, listen: false);
 
       // 현재 시간으로 마감일 설정
-      await reflectionProvider.setWeekDeadline(weekNum, DateTime.now());
+      await reflectionProvider.setDeadline(reflectionType, DateTime.now());
 
       // 마감일 정보 다시 로드
       await _loadDeadlines();
 
       setState(() {
-        _statusMessage = '$weekNum주차 성찰 보고서가 마감되었습니다.';
+        _statusMessage =
+            '${_getReflectionTypeName(reflectionType)} 보고서가 마감되었습니다.';
       });
     } catch (e) {
       setState(() {
@@ -541,7 +447,7 @@ class _ReflectionManagementState extends State<ReflectionManagement> {
   }
 
   // 마감 재오픈 함수
-  void _reopenDeadline(int weekNum) {
+  void _reopenDeadline(int reflectionType) {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
@@ -557,12 +463,12 @@ class _ReflectionManagementState extends State<ReflectionManagement> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              '$weekNum주차 성찰 보고서 마감을 해제하시겠습니까?',
+              '${_getReflectionTypeName(reflectionType)} 보고서 마감을 해제하시겠습니까?',
               style: const TextStyle(fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 12),
             Text(
-              '마감 해제 시 학생들은 다시 $weekNum주차 성찰 보고서를 제출할 수 있습니다.',
+              '마감 해제 시 학생들은 다시 ${_getReflectionTypeName(reflectionType)} 보고서를 제출할 수 있습니다.',
               style: TextStyle(color: Colors.grey.shade700),
             ),
           ],
@@ -577,7 +483,7 @@ class _ReflectionManagementState extends State<ReflectionManagement> {
             label: const Text('마감 해제'),
             onPressed: () {
               Navigator.pop(context);
-              _processReopenDeadline(weekNum);
+              _processReopenDeadline(reflectionType);
             },
             style: ElevatedButton.styleFrom(
               backgroundColor: Colors.blue,
@@ -589,10 +495,11 @@ class _ReflectionManagementState extends State<ReflectionManagement> {
   }
 
   // 마감 해제 처리 함수
-  Future<void> _processReopenDeadline(int weekNum) async {
+  Future<void> _processReopenDeadline(int reflectionType) async {
     setState(() {
       _isLoading = true;
-      _statusMessage = '$weekNum주차 성찰 보고서 마감 해제 중...';
+      _statusMessage =
+          '${_getReflectionTypeName(reflectionType)} 보고서 마감 해제 중...';
     });
 
     try {
@@ -600,14 +507,15 @@ class _ReflectionManagementState extends State<ReflectionManagement> {
           Provider.of<ReflectionProvider>(context, listen: false);
 
       // 마감일을 한 달 후로 설정 (사실상 마감 해제)
-      await reflectionProvider.setWeekDeadline(
-          weekNum, DateTime.now().add(const Duration(days: 30)));
+      await reflectionProvider.setDeadline(
+          reflectionType, DateTime.now().add(const Duration(days: 30)));
 
       // 마감일 정보 다시 로드
       await _loadDeadlines();
 
       setState(() {
-        _statusMessage = '$weekNum주차 성찰 보고서 마감이 해제되었습니다.';
+        _statusMessage =
+            '${_getReflectionTypeName(reflectionType)} 보고서 마감이 해제되었습니다.';
       });
     } catch (e) {
       setState(() {
@@ -620,47 +528,13 @@ class _ReflectionManagementState extends State<ReflectionManagement> {
     }
   }
 
-  // 비활성화된 주차 표시
-  Widget _buildInactiveWeekView(int weekNum) {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(
-            Icons.lock_outline,
-            size: 32,
-            color: Colors.grey.shade400,
-          ),
-          const SizedBox(height: 8),
-          Text(
-            '비활성화됨',
-            style: TextStyle(
-              color: Colors.grey.shade500,
-              fontWeight: FontWeight.w500,
-            ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            '현재 주차를 변경하여 활성화',
-            style: TextStyle(
-              fontSize: 12,
-              color: Colors.grey.shade500,
-            ),
-            textAlign: TextAlign.center,
-          ),
-        ],
-      ),
-    );
-  }
-
   // 학생 목록 이벤트 핸들러 업데이트
-  Widget _buildStudentList(int weekNum) {
-    final studentProvider = Provider.of<StudentProvider>(context);
+  Widget _buildStudentList(int reflectionType) {
+    final studentProvider = Provider.of<studentprovider.StudentProvider>(context);
     final reflectionProvider = Provider.of<ReflectionProvider>(context);
 
     final students = studentProvider.students;
-    final reflectionId =
-        reflectionCards.firstWhere((r) => r.week == weekNum).id;
+    final reflectionId = reflectionType; // 성찰 유형 ID 직접 사용
 
     // 학생 로딩 중인 경우 로딩 표시
     if (studentProvider.isLoading) {
@@ -831,6 +705,59 @@ class _ReflectionManagementState extends State<ReflectionManagement> {
     );
   }
 
+  // 학생 성찰 보고서 보기 메서드
+  Future<void> _viewStudentReflection(
+      FirebaseStudentModel student, int reflectionId) async {
+    try {
+      setState(() {
+        _isLoading = true;
+      });
+
+      final reflectionProvider =
+          Provider.of<ReflectionProvider>(context, listen: false);
+
+      // 학생 성찰 데이터 가져오기 (로컬이나 서버에서)
+      final submission = await reflectionProvider.getSubmission(
+          student.studentId, reflectionId);
+
+      setState(() {
+        _isLoading = false;
+      });
+
+      if (submission != null) {
+        // ReflectionDetailScreen으로 이동하여 성찰 보고서 보기
+        final result = await Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => ReflectionDetailScreen(
+              reflectionId: reflectionId,
+              submission: submission,
+              isTeacher: true, // 교사 모드로 설정
+            ),
+          ),
+        );
+
+        // 결과가 true이면 상태 업데이트
+        if (result == true) {
+          reflectionProvider.selectClassAndReflectionType(
+              widget.selectedClassId.toString(), _selectedReflectionType);
+          setState(() {
+            _statusMessage = '${student.name}의 성찰 보고서를 확인했습니다.';
+          });
+        }
+      } else {
+        setState(() {
+          _statusMessage = '${student.name}의 성찰 보고서를 불러올 수 없습니다.';
+        });
+      }
+    } catch (e) {
+      setState(() {
+        _isLoading = false;
+        _statusMessage = '오류 발생: $e';
+      });
+    }
+  }
+
   Widget _buildSubmissionDetail() {
     if (_selectedSubmission == null) return const SizedBox.shrink();
 
@@ -858,7 +785,7 @@ class _ReflectionManagementState extends State<ReflectionManagement> {
                     Icon(Icons.book, color: Colors.amber.shade700),
                     const SizedBox(width: 8),
                     Text(
-                      '${_selectedSubmission!.studentName}의 ${reflection.week}주차 성찰',
+                      '${_selectedSubmission!.studentName}의 ${reflection.title}',
                       style: TextStyle(
                         fontSize: 18,
                         fontWeight: FontWeight.bold,

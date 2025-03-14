@@ -11,8 +11,8 @@ class ReflectionService {
   final Map<String, List<FirebaseReflectionModel>> _reflectionsByClass = {};
   final Map<String, Map<int, FirebaseReflectionModel>> _studentReflections = {};
   final Map<String, ReflectionStatus> _reflectionStatuses = {};
-  int _activeWeeks = 1; // 기본값: 1주차만 활성화
-  final Map<int, DateTime?> _deadlines = {}; // 주차별 마감일
+  int _activeReflectionTypes = 3; // 기본값: 모든 성찰 유형 활성화
+  final Map<int, DateTime?> _deadlines = {}; // 성찰 유형별 마감일
 
   ReflectionService() {
     // 샘플 데이터 초기화
@@ -26,8 +26,8 @@ class ReflectionService {
     }
   }
 
-  // 활성화된 주차 가져오기
-  Future<int> getActiveWeeks() async {
+  // 활성화된 성찰 유형 가져오기
+  Future<int> getActiveReflectionTypes() async {
     try {
       // 파이어베이스 연동 코드
       DocumentSnapshot doc = await _firestore
@@ -37,21 +37,21 @@ class ReflectionService {
 
       if (doc.exists) {
         Map<String, dynamic> data = doc.data() as Map<String, dynamic>;
-        return data['activeWeeks'] ?? 1;
+        return data['activeReflectionTypes'] ?? 3;
       }
 
-      return _activeWeeks;
+      return _activeReflectionTypes;
     } catch (e) {
-      print('활성화된 주차 정보 가져오기 오류: $e');
+      print('활성화된 성찰 유형 정보 가져오기 오류: $e');
       // 오류 발생 시 로컬 값 반환
-      return _activeWeeks;
+      return _activeReflectionTypes;
     }
   }
 
-  // 활성화된 주차 설정 (교사 전용)
-  Future<void> setActiveWeeks(int weeks) async {
-    if (weeks < 1 || weeks > 3) {
-      throw Exception('주차는 1~3 사이여야 합니다');
+  // 활성화된 성찰 유형 설정 (교사 전용)
+  Future<void> setActiveReflectionTypes(int types) async {
+    if (types < 1 || types > 3) {
+      throw Exception('성찰 유형은 1~3 사이여야 합니다');
     }
 
     try {
@@ -60,15 +60,15 @@ class ReflectionService {
           .collection('app_settings')
           .doc('reflection_settings')
           .set({
-        'activeWeeks': weeks,
+        'activeReflectionTypes': types,
         'updatedAt': FieldValue.serverTimestamp(),
       }, SetOptions(merge: true));
 
-      _activeWeeks = weeks;
+      _activeReflectionTypes = types;
     } catch (e) {
-      print('활성화된 주차 설정 오류: $e');
+      print('활성화된 성찰 유형 설정 오류: $e');
       // 로컬 구현
-      _activeWeeks = weeks;
+      _activeReflectionTypes = types;
       throw Exception('설정 저장 중 오류가 발생했습니다: $e');
     }
   }
@@ -88,13 +88,13 @@ class ReflectionService {
 
         Map<int, DateTime?> result = {};
         deadlinesData.forEach((key, value) {
-          int week = int.tryParse(key) ?? 0;
-          if (week > 0 && value != null) {
+          int reflectionType = int.tryParse(key) ?? 0;
+          if (reflectionType > 0 && value != null) {
             if (value is Timestamp) {
-              result[week] = value.toDate();
+              result[reflectionType] = value.toDate();
             } else if (value is String) {
               try {
-                result[week] = DateTime.parse(value);
+                result[reflectionType] = DateTime.parse(value);
               } catch (e) {
                 print('마감일 파싱 오류: $e');
               }
@@ -114,9 +114,9 @@ class ReflectionService {
   }
 
   // 마감일 설정 (교사 전용)
-  Future<void> setDeadline(int week, DateTime? deadline) async {
-    if (week < 1 || week > 3) {
-      throw Exception('주차는 1~3 사이여야 합니다');
+  Future<void> setDeadline(int reflectionType, DateTime? deadline) async {
+    if (reflectionType < 1 || reflectionType > 3) {
+      throw Exception('성찰 유형은 1~3 사이여야 합니다');
     }
 
     try {
@@ -126,17 +126,17 @@ class ReflectionService {
           .doc('reflection_settings')
           .set({
         'deadlines': {
-          week.toString():
+          reflectionType.toString():
               deadline != null ? Timestamp.fromDate(deadline) : null,
         },
         'updatedAt': FieldValue.serverTimestamp(),
       }, SetOptions(merge: true));
 
-      _deadlines[week] = deadline;
+      _deadlines[reflectionType] = deadline;
     } catch (e) {
       print('마감일 설정 오류: $e');
       // 로컬 구현
-      _deadlines[week] = deadline;
+      _deadlines[reflectionType] = deadline;
       throw Exception('마감일 설정 중 오류가 발생했습니다: $e');
     }
   }
@@ -148,11 +148,10 @@ class ReflectionService {
     required String className,
     required int group,
     required int reflectionId,
-    required int week,
     required List<String> questions,
     required Map<String, String> answers,
   }) async {
-    print("Service - 성찰 제출 시작: $studentId, 주차: $week");
+    print("Service - 성찰 제출 시작: $studentId, 유형: $reflectionId");
 
     // 파이어베이스 연동 코드
     final reflectionData = {
@@ -161,7 +160,7 @@ class ReflectionService {
       'className': className,
       'group': group,
       'reflectionId': reflectionId,
-      'week': week,
+      'week': 0, // 사용하지 않는 필드이지만 호환성을 위해 유지
       'questions': questions,
       'answers': answers,
       'submittedDate': FieldValue.serverTimestamp(),
@@ -206,7 +205,6 @@ class ReflectionService {
         className,
         group,
         reflectionId,
-        week,
         questions,
         answers,
         DateTime.now(), // 서버 타임스탬프를 사용할 수 없으므로 현재 시간 사용
@@ -230,7 +228,6 @@ class ReflectionService {
         className,
         group,
         reflectionId,
-        week,
         questions,
         answers,
         DateTime.now(),
@@ -398,15 +395,15 @@ class ReflectionService {
     }
   }
 
-  // 학급의 주차별 성찰 보고서 가져오기
+  // 학급의 성찰 유형별 보고서 가져오기
   Stream<List<FirebaseReflectionModel>> getClassReflections(
-      String className, int week) {
+      String className, int reflectionType) {
     try {
       // 파이어베이스 연동 코드
       return _firestore
           .collection('reflections')
           .where('className', isEqualTo: className)
-          .where('week', isEqualTo: week)
+          .where('reflectionId', isEqualTo: reflectionType)
           .snapshots()
           .map((snapshot) => snapshot.docs
               .map((doc) => FirebaseReflectionModel.fromFirestore(doc))
@@ -416,9 +413,10 @@ class ReflectionService {
 
       // 로컬 구현
       final classReflections = _reflectionsByClass[className] ?? [];
-      final weekReflections =
-          classReflections.where((r) => r.week == week).toList();
-      return Stream.value(weekReflections);
+      final typeReflections = classReflections
+          .where((r) => r.reflectionId == reflectionType)
+          .toList();
+      return Stream.value(typeReflections);
     }
   }
 
@@ -479,7 +477,8 @@ class ReflectionService {
   }
 
   // 성찰 보고서 엑셀 다운로드 URL 생성
-  Future<String> generateReflectionExcel(String className, int week) async {
+  Future<String> generateReflectionExcel(
+      String className, int reflectionType) async {
     try {
       // 실제 구현은 Cloud Functions를 통해 진행
       // 현재는 임시 구현으로 가짜 URL 반환
@@ -488,14 +487,29 @@ class ReflectionService {
       QuerySnapshot snapshot = await _firestore
           .collection('reflections')
           .where('className', isEqualTo: className)
-          .where('week', isEqualTo: week)
+          .where('reflectionId', isEqualTo: reflectionType)
           .get();
 
       // 이 부분에서 Cloud Functions를 호출하여 Excel 생성 요청
       // 실제 코드는 Firebase 프로젝트에 따라 다름
 
+      String reflectionTypeName = "";
+      switch (reflectionType) {
+        case 1:
+          reflectionTypeName = "초기성찰";
+          break;
+        case 2:
+          reflectionTypeName = "중기성찰";
+          break;
+        case 3:
+          reflectionTypeName = "최종성찰";
+          break;
+        default:
+          reflectionTypeName = "성찰";
+      }
+
       // 임시 URL 반환
-      return 'https://example.com/download/reflection_${className}_week${week}_${DateTime.now().millisecondsSinceEpoch}.xlsx';
+      return 'https://example.com/download/reflection_${className}_${reflectionTypeName}_${DateTime.now().millisecondsSinceEpoch}.xlsx';
     } catch (e) {
       print('엑셀 생성 오류: $e');
       throw Exception('엑셀 파일 생성 중 오류가 발생했습니다: $e');
@@ -510,7 +524,6 @@ class ReflectionService {
       String className,
       int group,
       int reflectionId,
-      int week,
       List<String> questions,
       Map<String, String> answers,
       DateTime submittedDate,
@@ -521,7 +534,7 @@ class ReflectionService {
       studentName: studentName,
       className: className,
       group: group,
-      week: week,
+      week: 0, // 사용하지 않는 필드이지만 모델 호환성을 위해 유지
       questions: questions,
       answers: answers,
       submittedDate: submittedDate,
@@ -530,8 +543,8 @@ class ReflectionService {
 
     // 클래스 목록에서 기존 항목이 있는지 확인
     if (_reflectionsByClass.containsKey(className)) {
-      final index = _reflectionsByClass[className]!
-          .indexWhere((r) => r.studentId == studentId && r.week == week);
+      final index = _reflectionsByClass[className]!.indexWhere(
+          (r) => r.studentId == studentId && r.reflectionId == reflectionId);
 
       if (index >= 0) {
         // 기존 항목 업데이트
@@ -558,19 +571,19 @@ class ReflectionService {
   // 샘플 성찰 데이터 생성 (개발용)
   void createSampleReflections() {
     // 초기 설정값 세팅
-    _activeWeeks = 3; // 모든 주차 활성화
+    _activeReflectionTypes = 3; // 모든 성찰 유형 활성화
 
     // 마감일 설정을 현재 날짜보다 후로 변경 (MVP를 위해)
     _deadlines[1] =
-        DateTime.now().add(const Duration(days: 30)); // 1주차는 한달 후 마감
+        DateTime.now().add(const Duration(days: 30)); // 초기 성찰은 한달 후 마감
     _deadlines[2] =
-        DateTime.now().add(const Duration(days: 30)); // 2주차도 한달 후 마감
+        DateTime.now().add(const Duration(days: 30)); // 중기 성찰도 한달 후 마감
     _deadlines[3] =
-        DateTime.now().add(const Duration(days: 30)); // 3주차도 한달 후 마감
+        DateTime.now().add(const Duration(days: 30)); // 최종 성찰도 한달 후 마감
 
-    // 1주차 성찰 샘플
-    final week1Questions =
-        reflectionCards.firstWhere((card) => card.week == 1).questions;
+    // 초기 성찰 샘플
+    final initialQuestions =
+        reflectionCards.firstWhere((card) => card.id == 1).questions;
 
     final sampleReflection1 = FirebaseReflectionModel(
       id: 'sample1',
@@ -578,21 +591,22 @@ class ReflectionService {
       studentName: '김철수',
       className: '1',
       group: 1,
-      week: 1,
-      questions: week1Questions,
+      week: 0, // 사용하지 않음
+      reflectionId: 1,
+      questions: initialQuestions,
       answers: {
-        week1Questions[0]: '줄넘기를 잘하고 친구들과 협동하는 것입니다.',
-        week1Questions[1]: '매일 연습하고 선생님 말씀을 잘 듣는 것이 필요합니다.',
-        week1Questions[2]: '기본적인 뛰기는 할 수 있지만 더 연습이 필요합니다.',
-        week1Questions[3]: '친구들을 도와주고 함께 연습하는 것입니다.',
+        initialQuestions[0]: '줄넘기를 잘하고 친구들과 협동하는 것입니다.',
+        initialQuestions[1]: '매일 연습하고 선생님 말씀을 잘 듣는 것이 필요합니다.',
+        initialQuestions[2]: '기본적인 뛰기는 할 수 있지만 더 연습이 필요합니다.',
+        initialQuestions[3]: '친구들을 도와주고 함께 연습하는 것입니다.',
       },
       submittedDate: DateTime.now().subtract(const Duration(days: 2)),
       status: ReflectionStatus.accepted,
     );
 
-    // 2주차 성찰 샘플
-    final week2Questions =
-        reflectionCards.firstWhere((card) => card.week == 2).questions;
+    // 중기 성찰 샘플
+    final midQuestions =
+        reflectionCards.firstWhere((card) => card.id == 2).questions;
 
     final sampleReflection2 = FirebaseReflectionModel(
       id: 'sample2',
@@ -600,13 +614,14 @@ class ReflectionService {
       studentName: '홍길동',
       className: '1',
       group: 2,
-      week: 2,
-      questions: week2Questions,
+      week: 0, // 사용하지 않음
+      reflectionId: 2,
+      questions: midQuestions,
       answers: {
-        week2Questions[0]: '양발 모아 뛰기가 가장 어려웠습니다.',
-        week2Questions[1]: '매일 10분씩 연습했습니다.',
-        week2Questions[2]: '서로 응원해주는 점은 좋았지만, 시간 관리가 부족했습니다.',
-        week2Questions[3]: '이중 뛰기에 도전하고 싶습니다.',
+        midQuestions[0]: '양발 모아 뛰기가 가장 어려웠습니다.',
+        midQuestions[1]: '매일 10분씩 연습했습니다.',
+        midQuestions[2]: '서로 응원해주는 점은 좋았지만, 시간 관리가 부족했습니다.',
+        midQuestions[3]: '이중 뛰기에 도전하고 싶습니다.',
       },
       submittedDate: DateTime.now().subtract(const Duration(days: 1)),
       status: ReflectionStatus.submitted,
@@ -619,13 +634,14 @@ class ReflectionService {
       studentName: '이영희',
       className: '1',
       group: 3,
-      week: 1,
-      questions: week1Questions,
+      week: 0, // 사용하지 않음
+      reflectionId: 1,
+      questions: initialQuestions,
       answers: {
-        week1Questions[0]: '잘 모르겠습니다.',
-        week1Questions[1]: '열심히 하겠습니다.',
-        week1Questions[2]: '보통이요.',
-        week1Questions[3]: '열심히 하는 역할입니다.',
+        initialQuestions[0]: '잘 모르겠습니다.',
+        initialQuestions[1]: '열심히 하겠습니다.',
+        initialQuestions[2]: '보통이요.',
+        initialQuestions[3]: '열심히 하는 역할입니다.',
       },
       submittedDate: DateTime.now().subtract(const Duration(days: 3)),
       status: ReflectionStatus.rejected,

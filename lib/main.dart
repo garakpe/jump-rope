@@ -3,11 +3,11 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter_web_plugins/flutter_web_plugins.dart';
-import 'app.dart';
-import 'providers/auth_provider.dart';
-import 'providers/task_provider.dart';
-import 'providers/reflection_provider.dart';
-import 'providers/student_provider.dart';
+import './app.dart';
+import './providers/auth_provider.dart';
+import './providers/student_provider.dart';
+import './providers/task_provider.dart';
+import './providers/reflection_provider.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 // 전역 네비게이터 키
