@@ -380,18 +380,27 @@ class ReflectionProvider extends ChangeNotifier {
         return _createSubmissionFromCache(studentId, reflectionId);
       }
 
-      // 로컬 캐시에 없으면 서비스 호출
-      final reflection = await _reflectionService.getStudentReflection(
-          studentId, reflectionId);
+      // 로컬 캐시에 없으면 서비스 호출 시도
+      try {
+        final reflection = await _reflectionService.getStudentReflection(
+            studentId, reflectionId);
 
-      if (reflection == null) {
+        if (reflection == null) {
+          // 파이어베이스에 데이터가 없으면 빈 양식 생성
+          return _createEmptySubmission(studentId, reflectionId);
+        }
+
+        return _createSubmissionFromFirebase(reflection, reflectionId);
+      } catch (e) {
+        print('성찰 서비스 조회 실패: $e - 빈 양식을 생성합니다.');
+        // 서비스 호출 실패 시 빈 양식 반환
         return _createEmptySubmission(studentId, reflectionId);
       }
-
-      return _createSubmissionFromFirebase(reflection, reflectionId);
     } catch (e) {
+      print('성찰 데이터 조회 중 오류 발생: $e');
       _setError('성찰 데이터 조회 실패: $e');
-      return null;
+      // 오류 발생해도 빈 양식 반환
+      return _createEmptySubmission(studentId, reflectionId);
     }
   }
 
@@ -424,11 +433,20 @@ class ReflectionProvider extends ChangeNotifier {
   // 빈 제출 데이터 생성
   ReflectionSubmission _createEmptySubmission(
       String studentId, int reflectionId) {
+    // reflectionId에 해당하는 모델 찾기, 없으면 첫 번째 모델 사용
+    final ReflectionModel reflection = reflectionCards.firstWhere(
+      (r) => r.id == reflectionId,
+      orElse: () => reflectionCards.first,
+    );
+
+    // 아이디 생성 (로컬 임시 ID)
+    final String tmpId = 'empty_${DateTime.now().millisecondsSinceEpoch}';
+
     return ReflectionSubmission(
-      id: 'empty_${DateTime.now().millisecondsSinceEpoch}',
+      id: tmpId,
       studentId: studentId,
       reflectionId: reflectionId,
-      week: reflectionCards.firstWhere((r) => r.id == reflectionId).week,
+      week: reflection.week,
       answers: {},
       submittedDate: DateTime.now(),
     );

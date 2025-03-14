@@ -443,7 +443,7 @@ class _ReflectionScreenState extends State<ReflectionScreen> {
         (questions.length > 1 ? ' 외 ${questions.length - 1}개의 질문' : '');
   }
 
-  // 성찰 상세 화면으로 이동하는 함수
+// _navigateToReflectionDetail 메서드 수정
   void _navigateToReflectionDetail(ReflectionModel reflection,
       ReflectionStatus status, String studentId) async {
     setState(() {
@@ -455,8 +455,14 @@ class _ReflectionScreenState extends State<ReflectionScreen> {
           Provider.of<ReflectionProvider>(context, listen: false);
 
       // 제출 정보 가져오기
-      final submission =
-          await reflectionProvider.getSubmission(studentId, reflection.id);
+      ReflectionSubmission? submission;
+      try {
+        submission =
+            await reflectionProvider.getSubmission(studentId, reflection.id);
+      } catch (e) {
+        print('성찰 데이터 조회 실패: $e - 빈 양식으로 진행합니다.');
+        // 오류 발생 시 null 유지 (detail 화면에서 빈 양식 생성)
+      }
 
       if (!mounted) return;
 

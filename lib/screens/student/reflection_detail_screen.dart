@@ -64,28 +64,46 @@ class _ReflectionDetailScreenState extends State<ReflectionDetailScreen> {
     });
 
     try {
+      // 현재 reflectionId에 해당하는 성찰 카드 가져오기
+      ReflectionModel currentReflection = reflectionCards.firstWhere(
+        (r) => r.id == widget.reflectionId,
+        orElse: () => reflectionCards.first, // 없으면 첫 번째 카드 사용
+      );
+
       // 제출 정보가 이미 있는 경우 그대로 사용
       if (widget.submission != null) {
         _submission = widget.submission;
         _submissionStatus = widget.submission!.status;
         _initControllers(widget.submission!.answers);
       } else {
-        // 서버에서 제출 정보 로드
+        // 서버에서 제출 정보 로드 시도
         final studentId = user.studentId ?? '';
         final reflectionId = widget.reflectionId;
 
-        // 성찰 상태 확인
-        _submissionStatus = await reflectionProvider.getSubmissionStatus(
-            studentId, reflectionId);
+        try {
+          // 성찰 상태 확인
+          _submissionStatus = await reflectionProvider.getSubmissionStatus(
+              studentId, reflectionId);
 
-        // 제출 정보 로드
-        _submission =
-            await reflectionProvider.getSubmission(studentId, reflectionId);
+          // 제출 정보 로드
+          _submission =
+              await reflectionProvider.getSubmission(studentId, reflectionId);
 
-        if (_submission != null) {
-          _initControllers(_submission!.answers);
+          if (_submission != null) {
+            _initControllers(_submission!.answers);
+          } else {
+            // 제출 정보가 없으면 빈 submission 생성
+            _createEmptySubmission(studentId, reflectionId, currentReflection);
+          }
+        } catch (e) {
+          print('성찰 데이터 로드 오류: $e');
+          // 오류 발생 시 하드코딩된 질문 사용
+          _createEmptySubmission(studentId, reflectionId, currentReflection);
         }
       }
+
+      // 성찰 카드의 질문으로 컨트롤러 초기화 (아직 초기화되지 않은 경우)
+      _initControllersFromReflectionCard(currentReflection);
 
       setState(() {
         _isLoading = false;
@@ -98,19 +116,38 @@ class _ReflectionDetailScreenState extends State<ReflectionDetailScreen> {
     }
   }
 
-  // 컨트롤러 초기화
-  void _initControllers(Map<String, String> answers) {
-    final reflection = reflectionCards.firstWhere(
-      (r) => r.id == widget.reflectionId,
-      orElse: () => reflectionCards.first,
+  // 빈 제출 데이터 생성 (파이어베이스에 데이터가 없는 경우 사용)
+  void _createEmptySubmission(
+      String studentId, int reflectionId, ReflectionModel reflection) {
+    _submission = ReflectionSubmission(
+      id: 'empty_${DateTime.now().millisecondsSinceEpoch}',
+      studentId: studentId,
+      reflectionId: reflectionId,
+      week: reflection.week,
+      answers: {},
+      submittedDate: DateTime.now(),
     );
+    _submissionStatus = ReflectionStatus.notSubmitted;
+  }
 
-    for (var question in reflection.questions) {
-      final answer = answers[question] ?? '';
+  // 컨트롤러 초기화 (제출된 답변이 있는 경우)
+  void _initControllers(Map<String, String> answers) {
+    for (var entry in answers.entries) {
+      final question = entry.key;
+      final answer = entry.value;
       if (!_controllers.containsKey(question)) {
         _controllers[question] = TextEditingController(text: answer);
       } else {
         _controllers[question]!.text = answer;
+      }
+    }
+  }
+
+  // 성찰 카드의 질문으로 컨트롤러 초기화 (답변이 없는 경우)
+  void _initControllersFromReflectionCard(ReflectionModel reflection) {
+    for (var question in reflection.questions) {
+      if (!_controllers.containsKey(question)) {
+        _controllers[question] = TextEditingController();
       }
     }
   }
@@ -129,12 +166,13 @@ class _ReflectionDetailScreenState extends State<ReflectionDetailScreen> {
       return;
     }
 
-    // 답변 유효성 검사
-    final reflection = reflectionCards.firstWhere(
+    // 현재 reflectionId에 해당하는 성찰 카드 가져오기
+    ReflectionModel reflection = reflectionCards.firstWhere(
       (r) => r.id == widget.reflectionId,
-      orElse: () => reflectionCards.first,
+      orElse: () => reflectionCards.first, // 없으면 첫 번째 카드 사용
     );
 
+    // 답변 유효성 검사
     // 답변 수집
     final answers = <String, String>{};
     bool allAnswered = true;
@@ -238,44 +276,16 @@ class _ReflectionDetailScreenState extends State<ReflectionDetailScreen> {
   }
 
   Widget _buildReflectionDetail() {
-    if (_submission == null) {
-      return Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(
-              Icons.error_outline,
-              size: 64,
-              color: Colors.orange.shade300,
-            ),
-            const SizedBox(height: 16),
-            const Text(
-              '성찰 데이터를 찾을 수 없습니다',
-              style: TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              '뒤로 가서 다시 시도해주세요',
-              style: TextStyle(
-                color: Colors.grey.shade600,
-              ),
-            ),
-          ],
-        ),
-      );
-    }
-
+    // 현재 reflectionId에 해당하는 성찰 카드 가져오기
     final reflection = reflectionCards.firstWhere(
       (r) => r.id == widget.reflectionId,
-      orElse: () => reflectionCards.first,
+      orElse: () => reflectionCards.first, // 없으면 첫 번째 카드 사용
     );
 
     // 반려 사유 표시
     Widget rejectionWidget = const SizedBox.shrink();
     if (_submissionStatus == ReflectionStatus.rejected &&
+        _submission != null &&
         _submission!.rejectionReason != null &&
         _submission!.rejectionReason!.isNotEmpty) {
       rejectionWidget = Container(
@@ -413,13 +423,14 @@ class _ReflectionDetailScreenState extends State<ReflectionDetailScreen> {
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       Text(
-                        '제출자: ${_submission!.studentName}',
+                        '제출자: ${_submission?.studentName ?? ''}',
                         style: const TextStyle(
                           fontSize: 14,
                           fontWeight: FontWeight.w500,
                         ),
                       ),
-                      if (_submissionStatus != ReflectionStatus.notSubmitted)
+                      if (_submissionStatus != ReflectionStatus.notSubmitted &&
+                          _submission != null)
                         Text(
                           '제출일: ${DateFormat('yyyy-MM-dd HH:mm').format(_submission!.submittedDate)}',
                           style: TextStyle(
@@ -431,7 +442,7 @@ class _ReflectionDetailScreenState extends State<ReflectionDetailScreen> {
                   ),
 
                   // Document ID for debugging (can be removed in production)
-                  if (_submission!.id.isNotEmpty)
+                  if (_submission != null && _submission!.id.isNotEmpty)
                     Padding(
                       padding: const EdgeInsets.only(top: 8.0),
                       child: Text(

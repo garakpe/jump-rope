@@ -745,12 +745,51 @@ class _ReflectionManagementState extends State<ReflectionManagement> {
                   );
                 }
               },
-              leading: Text(
-                '${student.group}',
-                style: TextStyle(
-                  fontWeight: FontWeight.bold,
-                  color: Colors.amber.shade800,
-                  fontSize: 12,
+              // 학번과 모둠 번호 모두 표시
+              leading: SizedBox(
+                width: 80, // 너비 조정
+                child: Row(
+                  children: [
+                    // 학번 표시
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 4, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: Colors.amber.shade50,
+                        borderRadius: BorderRadius.circular(4),
+                        border:
+                            Border.all(color: Colors.amber.shade200, width: 1),
+                      ),
+                      child: Text(
+                        student.studentId,
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.amber.shade800,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 4),
+                    // 모둠 번호 표시
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 4, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: Colors.blue.shade50,
+                        borderRadius: BorderRadius.circular(4),
+                        border:
+                            Border.all(color: Colors.blue.shade200, width: 1),
+                      ),
+                      child: Text(
+                        '${student.group}모둠',
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.blue.shade800,
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
               ),
               title: Text(
