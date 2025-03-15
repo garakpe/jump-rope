@@ -22,13 +22,19 @@ class _ReflectionScreenState extends State<ReflectionScreen> {
 
   // 성찰 유형 활성화 상태 관리
   List<bool> _reflectionTypeEnabled = [true, false, false]; // 기본값: 초기 성찰만 활성화
+  final int _lastMask = 0; // 마지막으로 처리한 마스크 값
 
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _loadActiveReflectionTypes();
-    });
+    _loadActiveReflectionTypes();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // 의존성이 변경될 때마다 활성화 상태 확인
+    _loadActiveReflectionTypes();
   }
 
 // 활성화된 성찰 유형 로드 메서드 수정
@@ -48,53 +54,66 @@ class _ReflectionScreenState extends State<ReflectionScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return CupertinoPageScaffold(
-      backgroundColor: CupertinoColors.systemGroupedBackground,
-      child: SafeArea(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // iOS 스타일 헤더
-            const Padding(
-              padding: EdgeInsets.all(16.0),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    '성찰 일지',
-                    style: TextStyle(
-                      fontSize: 28,
-                      fontWeight: FontWeight.bold,
-                      letterSpacing: -0.5,
-                    ),
+    // Provider 변경을 감지하기 위해 Consumer 사용
+    return Consumer<ReflectionProvider>(
+      builder: (context, reflectionProvider, child) {
+        // 빌드 시 각 성찰 유형별 활성화 여부 다시 확인
+        _reflectionTypeEnabled = [
+          reflectionProvider.isReflectionTypeActive(1), // 초기 성찰
+          reflectionProvider.isReflectionTypeActive(2), // 중기 성찰
+          reflectionProvider.isReflectionTypeActive(3), // 최종 성찰
+        ];
+
+        return CupertinoPageScaffold(
+          // 기존 코드 그대로 유지
+          backgroundColor: CupertinoColors.systemGroupedBackground,
+          child: SafeArea(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // iOS 스타일 헤더
+                const Padding(
+                  padding: EdgeInsets.all(16.0),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        '성찰 일지',
+                        style: TextStyle(
+                          fontSize: 28,
+                          fontWeight: FontWeight.bold,
+                          letterSpacing: -0.5,
+                        ),
+                      ),
+                      SizedBox(height: 8),
+                      Text(
+                        '체육 수업에 대한 성찰을 작성하고 제출하세요',
+                        style: TextStyle(
+                          fontSize: 15,
+                          color: CupertinoColors.systemGrey,
+                          letterSpacing: -0.2,
+                        ),
+                      ),
+                    ],
                   ),
-                  SizedBox(height: 8),
-                  Text(
-                    '체육 수업에 대한 성찰을 작성하고 제출하세요',
-                    style: TextStyle(
-                      fontSize: 15,
-                      color: CupertinoColors.systemGrey,
-                      letterSpacing: -0.2,
-                    ),
-                  ),
-                ],
-              ),
+                ),
+
+                // 상태 메시지
+                if (_statusMessage.isNotEmpty) _buildStatusMessage(),
+
+                // 로딩 표시
+                if (_isLoading)
+                  const Center(child: CupertinoActivityIndicator(radius: 16)),
+
+                // 성찰 카드 목록
+                Expanded(
+                  child: _buildReflectionCards(),
+                ),
+              ],
             ),
-
-            // 상태 메시지
-            if (_statusMessage.isNotEmpty) _buildStatusMessage(),
-
-            // 로딩 표시
-            if (_isLoading)
-              const Center(child: CupertinoActivityIndicator(radius: 16)),
-
-            // 성찰 카드 목록
-            Expanded(
-              child: _buildReflectionCards(),
-            ),
-          ],
-        ),
-      ),
+          ),
+        );
+      },
     );
   }
 

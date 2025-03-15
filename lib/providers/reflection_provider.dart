@@ -1,4 +1,5 @@
 // lib/providers/reflection_provider.dart
+import 'dart:async';
 import 'package:flutter/material.dart';
 import '../models/reflection_model.dart';
 import '../models/firebase_models.dart';
@@ -37,9 +38,19 @@ class ReflectionProvider extends ChangeNotifier {
   String? get downloadUrl => _downloadUrl;
   Map<int, DateTime?> get deadlines => _deadlines;
 
+  // 추가: 설정 변경 구독용 변수
+  StreamSubscription? _settingsSubscription;
+
   // 생성자: 기본 데이터 로드
   ReflectionProvider() {
     _initializeData();
+    _subscribeToSettingsChanges(); // 설정 변경 실시간 감지
+  }
+
+  @override
+  void dispose() {
+    _settingsSubscription?.cancel(); // 구독 취소
+    super.dispose();
   }
 
   // 초기 데이터 로드
@@ -53,6 +64,22 @@ class ReflectionProvider extends ChangeNotifier {
     } catch (e) {
       _handleError('초기 데이터 로드 실패', e);
     }
+  }
+
+  // 추가: 설정 변경 구독
+  void _subscribeToSettingsChanges() {
+    _settingsSubscription =
+        _reflectionService.getSettingsStream().listen((data) {
+      if (data.containsKey('activeReflectionMask')) {
+        final newMask = data['activeReflectionMask'] as int;
+        if (newMask != _activeReflectionMask) {
+          _activeReflectionMask = newMask;
+          _activeReflectionTypes = _countActiveBits(newMask);
+          notifyListeners(); // UI 갱신 트리거
+          print('성찰 활성화 마스크 업데이트: $_activeReflectionMask');
+        }
+      }
+    });
   }
 
   // 성찰 질문 목록 로드
@@ -79,7 +106,7 @@ class ReflectionProvider extends ChangeNotifier {
 // 게터 추가
   int get activeReflectionMask => _activeReflectionMask;
 
-// 특정 성찰 유형이 활성화되었는지 확인하는 메서드
+  // 특정 성찰 유형이 활성화되었는지 확인하는 메서드
   bool isReflectionTypeActive(int reflectionType) {
     if (reflectionType < 1 || reflectionType > 3) return false;
     int mask = 1 << (reflectionType - 1); // 비트마스크로 변환

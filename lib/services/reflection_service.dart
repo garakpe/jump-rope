@@ -59,6 +59,24 @@ class ReflectionService {
     }
   }
 
+  // 추가: 설정 변경 스트림 제공
+  Stream<DocumentSnapshot> getReflectionSettingsStream() {
+    return _firestore
+        .collection('app_settings')
+        .doc('reflection_settings')
+        .snapshots();
+  }
+
+  // 추가: 설정 변경 스트림 제공
+  Stream<Map<String, dynamic>> getSettingsStream() {
+    return _firestore
+        .collection('app_settings')
+        .doc('reflection_settings')
+        .snapshots()
+        .map((snapshot) =>
+            snapshot.exists ? (snapshot.data() as Map<String, dynamic>) : {});
+  }
+
   Future<void> setActiveReflectionMask(int mask) async {
     try {
       // 파이어베이스 연동 코드
