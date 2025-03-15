@@ -26,6 +26,68 @@ class ReflectionService {
     }
   }
 
+  // 비트마스크 메서드 추가
+  Future<int> getActiveReflectionMask() async {
+    try {
+      // 파이어베이스 연동 코드
+      DocumentSnapshot doc = await _firestore
+          .collection('app_settings')
+          .doc('reflection_settings')
+          .get();
+
+      if (doc.exists) {
+        Map<String, dynamic> data = doc.data() as Map<String, dynamic>;
+
+        // 마스크가 있으면 마스크 사용, 없으면 activeReflectionTypes로 변환
+        if (data.containsKey('activeReflectionMask')) {
+          return data['activeReflectionMask'];
+        } else if (data.containsKey('activeReflectionTypes')) {
+          // 이전 방식으로 저장된 데이터를 마스크로 변환
+          int types = data['activeReflectionTypes'];
+          int mask = 0;
+          for (int i = 0; i < types; i++) {
+            mask |= (1 << i);
+          }
+          return mask;
+        }
+      }
+
+      return 1; // 기본값: 초기 성찰만
+    } catch (e) {
+      print('활성화된 성찰 유형 마스크 가져오기 오류: $e');
+      return 1; // 기본값: 초기 성찰만
+    }
+  }
+
+  Future<void> setActiveReflectionMask(int mask) async {
+    try {
+      // 파이어베이스 연동 코드
+      await _firestore
+          .collection('app_settings')
+          .doc('reflection_settings')
+          .set({
+        'activeReflectionMask': mask,
+        // 하위 호환성을 위해 activeReflectionTypes도 저장
+        'activeReflectionTypes': _countActiveBits(mask),
+        'updatedAt': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
+    } catch (e) {
+      print('활성화된 성찰 유형 마스크 설정 오류: $e');
+      throw Exception('설정 저장 중 오류가 발생했습니다: $e');
+    }
+  }
+
+// 활성화된 비트 수 계산 도우미 메서드
+  int _countActiveBits(int mask) {
+    int count = 0;
+    for (int i = 0; i < 3; i++) {
+      if ((mask & (1 << i)) != 0) {
+        count++;
+      }
+    }
+    return count;
+  }
+
   // 활성화된 성찰 유형 가져오기
   Future<int> getActiveReflectionTypes() async {
     try {

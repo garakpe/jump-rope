@@ -68,16 +68,86 @@ class ReflectionProvider extends ChangeNotifier {
     }
   }
 
-  // 활성화된 성찰 유형 정보 로드
+// 비트마스크 상수 추가
+  static const int INITIAL_REFLECTION = 1; // 2^0 = 1
+  static const int MID_REFLECTION = 2; // 2^1 = 2
+  static const int FINAL_REFLECTION = 4; // 2^2 = 4
+
+// 기존 _activeReflectionTypes 유지하면서 비트마스크 추가
+  int _activeReflectionMask = INITIAL_REFLECTION; // 기본값: 초기 성찰만 활성화
+
+// 게터 추가
+  int get activeReflectionMask => _activeReflectionMask;
+
+// 특정 성찰 유형이 활성화되었는지 확인하는 메서드
+  bool isReflectionTypeActive(int reflectionType) {
+    if (reflectionType < 1 || reflectionType > 3) return false;
+    int mask = 1 << (reflectionType - 1); // 비트마스크로 변환
+    return (_activeReflectionMask & mask) != 0;
+  }
+
+// 성찰 유형 활성화/비활성화 메서드
+  Future<void> toggleReflectionType(int reflectionType, bool isActive) async {
+    if (reflectionType < 1 || reflectionType > 3) return;
+
+    int mask = 1 << (reflectionType - 1); // 비트마스크로 변환
+
+    if (isActive) {
+      _activeReflectionMask |= mask; // 활성화
+    } else {
+      _activeReflectionMask &= ~mask; // 비활성화
+    }
+
+    try {
+      await _reflectionService.setActiveReflectionMask(_activeReflectionMask);
+
+      // 호환성을 위해 _activeReflectionTypes도 업데이트
+      _activeReflectionTypes = _countActiveBits(_activeReflectionMask);
+
+      notifyListeners();
+    } catch (e) {
+      print('성찰 유형 상태 변경 실패: $e');
+      throw Exception('성찰 유형 상태 변경 중 오류가 발생했습니다: $e');
+    }
+  }
+
+// 활성화된 비트 수 계산 도우미 메서드
+  int _countActiveBits(int mask) {
+    int count = 0;
+    for (int i = 0; i < 3; i++) {
+      if ((mask & (1 << i)) != 0) {
+        count++;
+      }
+    }
+    return count;
+  }
+
+// 기존 _loadActiveReflectionTypes 메서드 수정
   Future<void> _loadActiveReflectionTypes() async {
     try {
+      // 마스크 먼저 로드 시도
+      int mask = await _reflectionService.getActiveReflectionMask();
+      if (mask > 0) {
+        _activeReflectionMask = mask;
+        _activeReflectionTypes = _countActiveBits(mask);
+        notifyListeners();
+        return;
+      }
+
+      // 기존 방식으로 로드 (하위 호환성)
       int types = await _reflectionService.getActiveReflectionTypes();
       if (types > 0) {
         _activeReflectionTypes = types;
+
+        // 이전 방식으로 마스크 설정
+        _activeReflectionMask = 0;
+        for (int i = 0; i < types; i++) {
+          _activeReflectionMask |= (1 << i);
+        }
+
         notifyListeners();
       }
     } catch (e) {
-      // 활성화 성찰 유형 로드 실패는 UI에 영향을 크게 주지 않으므로 로그만 출력
       print('활성화된 성찰 유형 정보 로드 실패: $e');
     }
   }

@@ -91,12 +91,14 @@ class _ReflectionManagementState extends State<ReflectionManagement> {
             margin: const EdgeInsets.only(bottom: 16),
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
-              color: _statusMessage.contains('성공')
+              color: _statusMessage.contains('성공') ||
+                      _statusMessage.contains('활성화')
                   ? Colors.green.shade50
                   : Colors.orange.shade50,
               borderRadius: BorderRadius.circular(12),
               border: Border.all(
-                color: _statusMessage.contains('성공')
+                color: _statusMessage.contains('성공') ||
+                        _statusMessage.contains('활성화')
                     ? Colors.green.shade200
                     : Colors.orange.shade200,
               ),
@@ -104,10 +106,12 @@ class _ReflectionManagementState extends State<ReflectionManagement> {
             child: Row(
               children: [
                 Icon(
-                  _statusMessage.contains('성공')
+                  _statusMessage.contains('성공') ||
+                          _statusMessage.contains('활성화')
                       ? Icons.check_circle
                       : Icons.info_outline,
-                  color: _statusMessage.contains('성공')
+                  color: _statusMessage.contains('성공') ||
+                          _statusMessage.contains('활성화')
                       ? Colors.green.shade600
                       : Colors.orange.shade600,
                 ),
@@ -137,6 +141,8 @@ class _ReflectionManagementState extends State<ReflectionManagement> {
 
   // 헤더 카드
   Widget _buildHeaderCard() {
+    final reflectionProvider = Provider.of<ReflectionProvider>(context);
+
     return Card(
       elevation: 2,
       shape: RoundedRectangleBorder(
@@ -168,6 +174,57 @@ class _ReflectionManagementState extends State<ReflectionManagement> {
 
             const SizedBox(height: 16),
 
+            // 성찰 유형 활성화/비활성화 설정 영역 추가
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: Colors.amber.shade50,
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    '성찰 보고서 활성화 설정',
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 16,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  const Text(
+                    '학생들이 접근할 수 있는 성찰 보고서를 선택하세요.',
+                    style: TextStyle(
+                      fontSize: 14,
+                      color: Colors.grey,
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+
+                  // 초기 성찰 토글
+                  _buildReflectionTypeToggle(1, '초기 성찰'),
+
+                  // 중기 성찰 토글
+                  _buildReflectionTypeToggle(2, '중기 성찰'),
+
+                  // 최종 성찰 토글
+                  _buildReflectionTypeToggle(3, '최종 성찰'),
+
+                  const SizedBox(height: 8),
+                  Text(
+                    '* 비활성화된 성찰은 학생들이 접근할 수 없습니다.',
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontStyle: FontStyle.italic,
+                      color: Colors.grey.shade600,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+            const SizedBox(height: 16),
+
             // 성찰 유형 선택 버튼 그룹
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceEvenly,
@@ -179,6 +236,54 @@ class _ReflectionManagementState extends State<ReflectionManagement> {
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  // 성찰 유형 활성화/비활성화 토글 위젯 추가
+  Widget _buildReflectionTypeToggle(int type, String label) {
+    final reflectionProvider = Provider.of<ReflectionProvider>(context);
+    final isActive = reflectionProvider.isReflectionTypeActive(type);
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(
+            label,
+            style: const TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+          Switch(
+            value: isActive,
+            activeColor: Colors.amber.shade600,
+            onChanged: (newValue) async {
+              setState(() {
+                _isLoading = true;
+                _statusMessage = '성찰 유형 상태 변경 중...';
+              });
+
+              try {
+                await reflectionProvider.toggleReflectionType(type, newValue);
+
+                setState(() {
+                  _isLoading = false;
+                  _statusMessage = newValue
+                      ? '$label 보고서가 활성화되었습니다. 학생들이 이제 접근할 수 있습니다.'
+                      : '$label 보고서가 비활성화되었습니다. 학생들이 더 이상 접근할 수 없습니다.';
+                });
+              } catch (e) {
+                setState(() {
+                  _isLoading = false;
+                  _statusMessage = '상태 변경 중 오류가 발생했습니다: $e';
+                });
+              }
+            },
+          ),
+        ],
       ),
     );
   }
@@ -530,7 +635,8 @@ class _ReflectionManagementState extends State<ReflectionManagement> {
 
   // 학생 목록 이벤트 핸들러 업데이트
   Widget _buildStudentList(int reflectionType) {
-    final studentProvider = Provider.of<studentprovider.StudentProvider>(context);
+    final studentProvider =
+        Provider.of<studentprovider.StudentProvider>(context);
     final reflectionProvider = Provider.of<ReflectionProvider>(context);
 
     final students = studentProvider.students;

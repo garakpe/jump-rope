@@ -31,17 +31,18 @@ class _ReflectionScreenState extends State<ReflectionScreen> {
     });
   }
 
-  // 활성화된 성찰 유형 로드
+// 활성화된 성찰 유형 로드 메서드 수정
   void _loadActiveReflectionTypes() {
     final reflectionProvider =
         Provider.of<ReflectionProvider>(context, listen: false);
 
-    final activeTypes = reflectionProvider.activeReflectionTypes;
-
     setState(() {
-      // 성찰 유형 활성화 상태 업데이트 (활성화된 유형까지만 활성화)
-      _reflectionTypeEnabled =
-          List.generate(3, (index) => activeTypes >= index + 1);
+      // 각 성찰 유형별 활성화 여부 확인
+      _reflectionTypeEnabled = [
+        reflectionProvider.isReflectionTypeActive(1), // 초기 성찰
+        reflectionProvider.isReflectionTypeActive(2), // 중기 성찰
+        reflectionProvider.isReflectionTypeActive(3), // 최종 성찰
+      ];
     });
   }
 
