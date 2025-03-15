@@ -169,6 +169,13 @@ class _ReflectionDetailScreenState extends State<ReflectionDetailScreen> {
     if (classNumToUse.isEmpty && (user.className ?? '').isNotEmpty) {
       classNumToUse = user.className!;
     }
+    // 학번 가져오기
+    String studentNumToUse = ''; // 기본값
+    if ((user.studentId ?? '').length >= 2) {
+      // 학번에서 뒤의 2자리를 studentNum으로 사용
+      studentNumToUse = user.studentId!.substring(user.studentId!.length - 2);
+    }
+
     // 현재 reflectionId에 해당하는 성찰 카드 가져오기
     ReflectionModel reflection = reflectionCards.firstWhere(
       (r) => r.id == widget.reflectionId,
@@ -215,6 +222,7 @@ class _ReflectionDetailScreenState extends State<ReflectionDetailScreen> {
           studentName: user.name ?? '',
           className: user.className ?? '',
           classNum: classNumToUse, // 여기서 처리된 classNum 값 사용
+          studentNum: studentNumToUse, // studentNum 필드 추가
           group: int.tryParse(user.group ?? '0') ?? 0,
           status: ReflectionStatus.submitted,
         ),

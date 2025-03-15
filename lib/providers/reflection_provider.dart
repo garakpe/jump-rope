@@ -274,6 +274,7 @@ class ReflectionProvider extends ChangeNotifier {
         studentName: submission.studentName,
         className: submission.className,
         classNum: classNumToUse, // 여기에 처리된 classNum 추가
+        studentNum: submission.studentNum, // studentNum 추가
         group: submission.group,
         reflectionId: submission.reflectionId,
         questions: reflectionCard.questions,

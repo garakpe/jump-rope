@@ -193,6 +193,7 @@ class FirebaseReflectionModel {
   final String studentName;
   final String className;
   final String classNum; // 추가된 필드
+  final String studentNum; // 추가한 필드
   final int group;
   final int week;
   final int reflectionId;
@@ -211,6 +212,7 @@ class FirebaseReflectionModel {
     required this.studentName,
     required this.className,
     this.classNum = '', // 기본값 설정
+    this.studentNum = '', // 기본값 설정
     required this.group,
     required this.week,
     this.reflectionId = 0,
@@ -284,6 +286,7 @@ class FirebaseReflectionModel {
       studentName: data['studentName'] ?? '',
       className: data['className'] ?? '',
       classNum: data['classNum'] ?? '', // classNum 필드 추가
+      studentNum: data['studentNum'] ?? '', // studentNum 필드 추가
       group: data['group'] ?? 0,
       week: data['week'] ?? 0, // 하위 호환성
       reflectionId: reflectionId, // reflectionId 필드 추가
@@ -346,6 +349,7 @@ class FirebaseReflectionModel {
       studentName: data['studentName'] ?? '',
       className: data['className'] ?? '',
       classNum: data['classNum'] ?? '', // classNum 필드 추가
+      studentNum: data['studentNum'] ?? '',
       group: data['group'] ?? 0,
       week: data['week'] ?? 0, // 하위 호환성
       reflectionId: reflectionId, // reflectionId 필드 추가
@@ -385,6 +389,7 @@ class FirebaseReflectionModel {
       'studentName': studentName,
       'className': className,
       'classNum': classNum, // classNum 필드 추가
+      'studentNum': studentNum, // studentNum 필드 추가
       'group': group,
       'week': week, // 하위 호환성을 위해 유지
       'reflectionId': reflectionId, // reflectionId 필드 추가
@@ -407,6 +412,7 @@ class FirebaseReflectionModel {
     String? studentName,
     String? className,
     String? classNum, // classNum 파라미터 추가
+    String? studentNum, // studentNum 파라미터 추가
     int? group,
     int? week,
     int? reflectionId,
@@ -425,6 +431,7 @@ class FirebaseReflectionModel {
       studentName: studentName ?? this.studentName,
       className: className ?? this.className,
       classNum: classNum ?? this.classNum, // classNum 필드 복사
+      studentNum: studentNum ?? this.studentNum, // studentNum 필드 복사
       group: group ?? this.group,
       week: week ?? this.week,
       reflectionId: reflectionId ?? this.reflectionId,
@@ -451,6 +458,7 @@ class ReflectionSubmission {
   final String studentName;
   final String className;
   final String classNum; // 추가된 필드
+  final String studentNum; // 추가한 필드
   final int group;
   final ReflectionStatus status;
   final String? rejectionReason;
@@ -465,6 +473,7 @@ class ReflectionSubmission {
     this.studentName = '',
     this.className = '',
     this.classNum = '', // 기본값 설정
+    this.studentNum = '', // 기본값 설정
     this.group = 0,
     this.status = ReflectionStatus.submitted,
     this.rejectionReason,
@@ -481,6 +490,7 @@ class ReflectionSubmission {
     String? studentName,
     String? className,
     String? classNum, // classNum 파라미터 추가
+    String? studentNum, // studentNum 파라미터 추가
     int? group,
     ReflectionStatus? status,
     String? rejectionReason,
@@ -495,6 +505,7 @@ class ReflectionSubmission {
       studentName: studentName ?? this.studentName,
       className: className ?? this.className,
       classNum: classNum ?? this.classNum, // classNum 필드 복사
+      studentNum: studentNum ?? this.studentNum, // studentNum 필드 복사
       group: group ?? this.group,
       status: status ?? this.status,
       rejectionReason: rejectionReason ?? this.rejectionReason,

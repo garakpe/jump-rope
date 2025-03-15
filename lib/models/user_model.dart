@@ -3,6 +3,7 @@ class UserModel {
   final String? studentId;
   final String? className;
   final String? classNum; // 추가: 반 정보
+  final String? studentNum; // 추가된 필드
   final String? group;
   final bool isTeacher;
 
@@ -11,6 +12,7 @@ class UserModel {
     this.studentId,
     this.className,
     this.classNum, // 생성자에 추가
+    this.studentNum, // 생성자에 추가
     this.group,
     this.isTeacher = false,
   });

@@ -209,6 +209,7 @@ class ReflectionService {
     required String studentName,
     required String className,
     required String classNum, // classNum 파라미터 추가
+    required String studentNum, // studentNum 파라미터 추가
     required int group,
     required int reflectionId,
     required List<String> questions,
@@ -222,6 +223,7 @@ class ReflectionService {
       'studentName': studentName,
       'className': className,
       'classNum': classNum, // classNum 필드 추가
+      'studentNum': studentNum,
       'group': group,
       'reflectionId': reflectionId,
       'week': 0, // 사용하지 않는 필드이지만 호환성을 위해 유지
@@ -268,6 +270,7 @@ class ReflectionService {
         studentName,
         className,
         classNum, // classNum 전달
+        "",
         group,
         reflectionId,
         questions,
@@ -292,6 +295,7 @@ class ReflectionService {
         studentName,
         className,
         classNum, // classNum 전달
+        "",
         group,
         reflectionId,
         questions,
@@ -589,6 +593,7 @@ class ReflectionService {
       String studentName,
       String className,
       String classNum, // classNum 파라미터 추가
+      String studentNum, // studentNum 파라미터 추가
       int group,
       int reflectionId,
       List<String> questions,
@@ -601,6 +606,7 @@ class ReflectionService {
       studentName: studentName,
       className: className,
       classNum: classNum, // classNum 필드 할당
+      studentNum: studentNum, // studentNum 필드 할당
       group: group,
       week: 0, // 사용하지 않는 필드이지만 모델 호환성을 위해 유지
       questions: questions,
