@@ -125,8 +125,8 @@ class _ReflectionManagementState extends State<ReflectionManagement>
       final reflectionProvider =
           Provider.of<ReflectionProvider>(context, listen: false);
 
-      final stats = await reflectionProvider
-          .getSubmissionStatsByClass(widget.selectedClassId.toString());
+      final stats = await reflectionProvider.getSubmissionStatsByClass(
+          widget.selectedClassId.toString(), reflectionType);
 
       // 캐시에 저장
       setState(() {

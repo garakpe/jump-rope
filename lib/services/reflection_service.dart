@@ -490,7 +490,8 @@ class ReflectionService {
     }
   }
 
-  Future<Map<String, int>> getSubmissionStatsByClass(String classNum) async {
+  Future<Map<String, int>> getSubmissionStatsByClass(
+      String classNum, int reflectionType) async {
     Map<String, int> stats = {
       'total': 0, // 전체 학생 수
       'submitted': 0, // 제출한 학생 수
@@ -507,10 +508,11 @@ class ReflectionService {
 
       stats['total'] = studentsSnapshot.docs.length;
 
-      // 제출 현황 조회 - classNum으로 필터링
+      // 제출 현황 조회 - classNum과 reflectionType으로 필터링
       QuerySnapshot reflectionsSnapshot = await _firestore
           .collection('reflections')
           .where('classNum', isEqualTo: classNum)
+          .where('reflectionId', isEqualTo: reflectionType) // 성찰 유형으로 필터링 추가
           .get();
 
       // 상태별 카운트

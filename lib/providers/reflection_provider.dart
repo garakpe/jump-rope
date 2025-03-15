@@ -566,13 +566,13 @@ class ReflectionProvider extends ChangeNotifier {
     );
   }
 
-  // 학급별 제출 현황 가져오기
-  Future<Map<String, int>> getSubmissionStatsByClass(String className) async {
+  Future<Map<String, int>> getSubmissionStatsByClass(
+      String className, int reflectionType) async {
     _setLoading(true);
 
     try {
-      final stats =
-          await _reflectionService.getSubmissionStatsByClass(className);
+      final stats = await _reflectionService.getSubmissionStatsByClass(
+          className, reflectionType);
       _setLoading(false);
       return stats;
     } catch (e) {
