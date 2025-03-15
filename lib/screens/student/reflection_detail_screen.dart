@@ -152,7 +152,6 @@ class _ReflectionDetailScreenState extends State<ReflectionDetailScreen> {
     }
   }
 
-  // 성찰 보고서 수정 제출
   Future<void> _submitReflection() async {
     final authProvider = Provider.of<AuthProvider>(context, listen: false);
     final reflectionProvider =
@@ -165,23 +164,24 @@ class _ReflectionDetailScreenState extends State<ReflectionDetailScreen> {
       });
       return;
     }
-
+// 여기서 user.classNum이 설정되어 있는지 확인
+    String classNumToUse = user.classNum ?? '';
+    if (classNumToUse.isEmpty && (user.className ?? '').isNotEmpty) {
+      classNumToUse = user.className!;
+    }
     // 현재 reflectionId에 해당하는 성찰 카드 가져오기
     ReflectionModel reflection = reflectionCards.firstWhere(
       (r) => r.id == widget.reflectionId,
-      orElse: () => reflectionCards.first, // 없으면 첫 번째 카드 사용
+      orElse: () => reflectionCards.first,
     );
 
-    // 답변 유효성 검사
-    // 답변 수집
+    // 답변 유효성 검사 및 수집
     final answers = <String, String>{};
     bool allAnswered = true;
     List<String> emptyQuestions = [];
 
     for (var question in reflection.questions) {
       final answer = _controllers[question]?.text.trim() ?? '';
-
-      // 답변이 비어있거나 너무 짧은 경우
       if (answer.isEmpty || answer.length < 5) {
         allAnswered = false;
         emptyQuestions.add(question);
@@ -192,11 +192,7 @@ class _ReflectionDetailScreenState extends State<ReflectionDetailScreen> {
 
     if (!allAnswered) {
       setState(() {
-        if (emptyQuestions.isNotEmpty) {
-          _statusMessage = '모든 질문에 충분한 답변을 작성해 주세요.';
-        } else {
-          _statusMessage = '답변은 5자 이상 작성해 주세요.';
-        }
+        _statusMessage = '모든 질문에 충분한 답변을 작성해 주세요.';
       });
       return;
     }
@@ -210,7 +206,7 @@ class _ReflectionDetailScreenState extends State<ReflectionDetailScreen> {
       // 성찰 보고서 제출
       await reflectionProvider.submitReflection(
         ReflectionSubmission(
-          id: _submission?.id ?? '', // Include the existing ID if available
+          id: _submission?.id ?? '',
           studentId: user.studentId ?? '',
           reflectionId: widget.reflectionId,
           week: 0,
@@ -218,6 +214,7 @@ class _ReflectionDetailScreenState extends State<ReflectionDetailScreen> {
           submittedDate: DateTime.now(),
           studentName: user.name ?? '',
           className: user.className ?? '',
+          classNum: classNumToUse, // 여기서 처리된 classNum 값 사용
           group: int.tryParse(user.group ?? '0') ?? 0,
           status: ReflectionStatus.submitted,
         ),
@@ -232,7 +229,7 @@ class _ReflectionDetailScreenState extends State<ReflectionDetailScreen> {
       // 잠시 후 이전 화면으로 이동
       Future.delayed(const Duration(seconds: 2), () {
         if (mounted) {
-          Navigator.of(context).pop(true); // 업데이트 성공 표시
+          Navigator.of(context).pop(true);
         }
       });
     } catch (e) {

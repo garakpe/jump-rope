@@ -250,7 +250,6 @@ class ReflectionProvider extends ChangeNotifier {
     }
   }
 
-  // 성찰 제출
   Future<void> submitReflection(ReflectionSubmission submission) async {
     _setLoading(true);
     _clearError();
@@ -262,11 +261,19 @@ class ReflectionProvider extends ChangeNotifier {
       // 성찰 카드 찾기
       final reflectionCard = _findReflectionCard(submission);
 
+      // submission 객체에서 직접 classNum 값을 사용
+      // classNum 값이 null이거나 비어있으면 className을 사용
+      String classNumToUse = submission.classNum;
+      if (classNumToUse.isEmpty && submission.className.isNotEmpty) {
+        classNumToUse = submission.className;
+      }
+
       // 서버에 저장하고 문서 ID 받기
       String docId = await _reflectionService.submitReflection(
         studentId: submission.studentId,
         studentName: submission.studentName,
         className: submission.className,
+        classNum: classNumToUse, // 여기에 처리된 classNum 추가
         group: submission.group,
         reflectionId: submission.reflectionId,
         questions: reflectionCard.questions,
@@ -328,6 +335,7 @@ class ReflectionProvider extends ChangeNotifier {
         studentId: submission.studentId,
         studentName: submission.studentName,
         className: submission.className,
+        classNum: submission.classNum, // classNum 필드 추가
         group: submission.group,
         week: 0, // 필요없는 필드지만 모델에 있으므로 기본값 설정
         questions: reflectionCard.questions,
@@ -508,6 +516,7 @@ class ReflectionProvider extends ChangeNotifier {
       submittedDate: reflection.submittedDate,
       studentName: reflection.studentName,
       className: reflection.className,
+      classNum: reflection.classNum, // classNum 필드 추가
       group: reflection.group,
       status: reflection.status,
       rejectionReason: reflection.rejectionReason,
@@ -533,6 +542,7 @@ class ReflectionProvider extends ChangeNotifier {
       week: 0, // 사용하지 않는 필드
       answers: {},
       submittedDate: DateTime.now(),
+      classNum: '', // classNum 필드 추가 (빈 값으로)
     );
   }
 
@@ -548,6 +558,7 @@ class ReflectionProvider extends ChangeNotifier {
       submittedDate: reflection.submittedDate,
       studentName: reflection.studentName,
       className: reflection.className,
+      classNum: reflection.classNum, // classNum 필드 추가
       group: reflection.group,
       status: reflection.status,
       rejectionReason: reflection.rejectionReason,

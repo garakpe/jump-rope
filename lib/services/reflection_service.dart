@@ -208,6 +208,7 @@ class ReflectionService {
     required String studentId,
     required String studentName,
     required String className,
+    required String classNum, // classNum 파라미터 추가
     required int group,
     required int reflectionId,
     required List<String> questions,
@@ -220,6 +221,7 @@ class ReflectionService {
       'studentId': studentId,
       'studentName': studentName,
       'className': className,
+      'classNum': classNum, // classNum 필드 추가
       'group': group,
       'reflectionId': reflectionId,
       'week': 0, // 사용하지 않는 필드이지만 호환성을 위해 유지
@@ -265,6 +267,7 @@ class ReflectionService {
         studentId,
         studentName,
         className,
+        classNum, // classNum 전달
         group,
         reflectionId,
         questions,
@@ -288,6 +291,7 @@ class ReflectionService {
         studentId,
         studentName,
         className,
+        classNum, // classNum 전달
         group,
         reflectionId,
         questions,
@@ -584,6 +588,7 @@ class ReflectionService {
       String studentId,
       String studentName,
       String className,
+      String classNum, // classNum 파라미터 추가
       int group,
       int reflectionId,
       List<String> questions,
@@ -595,6 +600,7 @@ class ReflectionService {
       studentId: studentId,
       studentName: studentName,
       className: className,
+      classNum: classNum, // classNum 필드 할당
       group: group,
       week: 0, // 사용하지 않는 필드이지만 모델 호환성을 위해 유지
       questions: questions,
@@ -652,6 +658,7 @@ class ReflectionService {
       studentId: '12345',
       studentName: '김철수',
       className: '1',
+      classNum: '1-1', // classNum 필드 추가
       group: 1,
       week: 0, // 사용하지 않음
       reflectionId: 1,
@@ -675,6 +682,7 @@ class ReflectionService {
       studentId: '67890',
       studentName: '홍길동',
       className: '1',
+      classNum: '1-2', // classNum 필드 추가
       group: 2,
       week: 0, // 사용하지 않음
       reflectionId: 2,
@@ -695,6 +703,7 @@ class ReflectionService {
       studentId: '54321',
       studentName: '이영희',
       className: '1',
+      classNum: '1-3', // classNum 필드 추가
       group: 3,
       week: 0, // 사용하지 않음
       reflectionId: 1,

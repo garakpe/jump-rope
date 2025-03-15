@@ -29,6 +29,7 @@ class _ReflectionManagementState extends State<ReflectionManagement>
   Map<int, DateTime?> _deadlines = {}; // 성찰 유형별 마감일
   late TabController _tabController;
   final Map<int, Map<String, int>> _statsCache = {}; // 성찰 유형별 통계 캐시
+  final ScrollController _scrollController = ScrollController(); // 스크롤 컨트롤러 추가
 
   @override
   void initState() {
@@ -60,6 +61,7 @@ class _ReflectionManagementState extends State<ReflectionManagement>
   void dispose() {
     _tabController.removeListener(_handleTabChange);
     _tabController.dispose();
+    _scrollController.dispose(); // 스크롤 컨트롤러 해제
     super.dispose();
   }
 
@@ -150,9 +152,12 @@ class _ReflectionManagementState extends State<ReflectionManagement>
         // 상태 메시지
         if (_statusMessage.isNotEmpty) _buildStatusMessage(),
 
-        // 탭 내용
+        // 탭 내용 - Expanded와 SingleChildScrollView로 감싸서 스크롤 가능하도록 수정
         Expanded(
-          child: _buildReflectionGrid(),
+          child: SingleChildScrollView(
+            controller: _scrollController,
+            child: _buildReflectionGrid(),
+          ),
         ),
       ],
     );
@@ -187,16 +192,36 @@ class _ReflectionManagementState extends State<ReflectionManagement>
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                const Row(
+                // 제목 부분
+                Row(
                   children: [
-                    Icon(Icons.book, color: Colors.white, size: 24),
-                    SizedBox(width: 8),
-                    Text(
+                    const Icon(Icons.book, color: Colors.white, size: 24),
+                    const SizedBox(width: 8),
+                    const Text(
                       '성찰 관리',
                       style: TextStyle(
                         fontSize: 18,
                         fontWeight: FontWeight.bold,
                         color: Colors.white,
+                      ),
+                    ),
+                    // 성찰 보고서 활성화 설정 버튼 추가
+                    const SizedBox(width: 8),
+                    ElevatedButton.icon(
+                      icon: const Icon(Icons.settings, size: 16),
+                      label: const Text('성찰 활성화 설정'),
+                      onPressed: () => _showActivationSettingsDialog(),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.white,
+                        foregroundColor: Colors.amber.shade800,
+                        elevation: 0,
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 8,
+                        ),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(20),
+                        ),
                       ),
                     ),
                   ],
@@ -227,10 +252,91 @@ class _ReflectionManagementState extends State<ReflectionManagement>
               ],
             ),
           ),
-
-          // 성찰 보고서 활성화 설정 영역
-          _buildReflectionActivationSettings(),
         ],
+      ),
+    );
+  }
+
+  // 성찰 활성화 설정 다이얼로그 표시
+  void _showActivationSettingsDialog() {
+    showDialog(
+      context: context,
+      builder: (context) => Dialog(
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(20),
+        ),
+        child: Container(
+          width: 600, // 다이얼로그 최대 너비 설정
+          constraints: const BoxConstraints(maxWidth: 600),
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // 다이얼로그 헤더
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: [Colors.amber.shade400, Colors.orange.shade300],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                    ),
+                    borderRadius: const BorderRadius.only(
+                      topLeft: Radius.circular(20),
+                      topRight: Radius.circular(20),
+                    ),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(
+                        Icons.settings,
+                        color: Colors.white,
+                        size: 24,
+                      ),
+                      const SizedBox(width: 12),
+                      const Text(
+                        '성찰 보고서 활성화 설정',
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.white,
+                        ),
+                      ),
+                      const Spacer(),
+                      IconButton(
+                        icon: const Icon(Icons.close, color: Colors.white),
+                        onPressed: () => Navigator.of(context).pop(),
+                      ),
+                    ],
+                  ),
+                ),
+
+                // 설정 내용 표시
+                Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: _buildReflectionActivationSettings(),
+                ),
+
+                // 하단 버튼
+                Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: ElevatedButton(
+                    onPressed: () => Navigator.of(context).pop(),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.amber.shade600,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                    child: const Text('설정 완료'),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
       ),
     );
   }
@@ -333,67 +439,34 @@ class _ReflectionManagementState extends State<ReflectionManagement>
     );
   }
 
-  // 성찰 보고서 활성화 설정 영역
+  // 성찰 보고서 활성화 설정 영역 (다이얼로그용으로 수정)
   Widget _buildReflectionActivationSettings() {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: [Colors.amber.shade50, Colors.orange.shade50],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          '학생들이 접근할 수 있는 성찰 보고서를 선택하세요.',
+          style: TextStyle(
+            fontSize: 14,
+            color: Colors.grey.shade700,
+          ),
         ),
-        borderRadius: const BorderRadius.only(
-          bottomLeft: Radius.circular(16),
-          bottomRight: Radius.circular(16),
+        const SizedBox(height: 16),
+
+        // 성찰 유형 활성화 토글
+        _buildReflectionTypeToggleList(),
+
+        // 안내 메시지
+        const SizedBox(height: 8),
+        Text(
+          '* 비활성화된 성찰은 학생들에게 표시되지 않으며 접근할 수 없습니다.',
+          style: TextStyle(
+            fontSize: 12,
+            fontStyle: FontStyle.italic,
+            color: Colors.grey.shade600,
+          ),
         ),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Icon(
-                Icons.visibility,
-                color: Colors.amber.shade800,
-                size: 20,
-              ),
-              const SizedBox(width: 8),
-              Text(
-                '성찰 보고서 활성화 설정',
-                style: TextStyle(
-                  fontWeight: FontWeight.bold,
-                  fontSize: 16,
-                  color: Colors.amber.shade800,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          Text(
-            '학생들이 접근할 수 있는 성찰 보고서를 선택하세요.',
-            style: TextStyle(
-              fontSize: 14,
-              color: Colors.grey.shade700,
-            ),
-          ),
-          const SizedBox(height: 16),
-
-          // 성찰 유형 활성화 토글
-          _buildReflectionTypeToggleList(),
-
-          // 안내 메시지
-          const SizedBox(height: 8),
-          Text(
-            '* 비활성화된 성찰은 학생들에게 표시되지 않으며 접근할 수 없습니다.',
-            style: TextStyle(
-              fontSize: 12,
-              fontStyle: FontStyle.italic,
-              color: Colors.grey.shade600,
-            ),
-          ),
-        ],
-      ),
+      ],
     );
   }
 
@@ -572,6 +645,9 @@ class _ReflectionManagementState extends State<ReflectionManagement>
                                   ? '$label 보고서가 활성화되었습니다. 학생들이 이제 접근할 수 있습니다.'
                                   : '$label 보고서가 비활성화되었습니다. 학생들이 더 이상 접근할 수 없습니다.';
                             });
+
+                            // 다이얼로그 닫기
+                            Navigator.of(context).pop();
                           } catch (e) {
                             setState(() {
                               _isLoading = false;
@@ -832,10 +908,12 @@ class _ReflectionManagementState extends State<ReflectionManagement>
               ],
             ),
           ),
-
-          // 학생 목록
-          Expanded(
-            child: _buildStudentList(_selectedReflectionType),
+          // 학생 목록 - 스크롤 가능하도록 영역 크기 조정
+          SizedBox(
+            height: MediaQuery.of(context).size.height * 0.5, // 화면 높이의 50%로 제한
+            child: SingleChildScrollView(
+              child: _buildStudentList(_selectedReflectionType),
+            ),
           ),
 
           // 엑셀 다운로드 버튼
@@ -1087,137 +1165,7 @@ class _ReflectionManagementState extends State<ReflectionManagement>
     );
   }
 
-  // 마감 해제 처리 함수
-  Future<void> _processReopenDeadline(int reflectionType) async {
-    setState(() {
-      _isLoading = true;
-      _statusMessage =
-          '${_getReflectionTypeName(reflectionType)} 보고서 마감 해제 중...';
-    });
-
-    try {
-      final reflectionProvider =
-          Provider.of<ReflectionProvider>(context, listen: false);
-
-      // 마감일을 한 달 후로 설정 (사실상 마감 해제)
-      await reflectionProvider.setDeadline(
-          reflectionType, DateTime.now().add(const Duration(days: 30)));
-
-      // 마감일 정보 다시 로드
-      await _loadDeadlines();
-
-      setState(() {
-        _statusMessage =
-            '${_getReflectionTypeName(reflectionType)} 보고서 마감이 해제되었습니다.';
-      });
-    } catch (e) {
-      setState(() {
-        _statusMessage = '마감 해제 중 오류가 발생했습니다: $e';
-      });
-    } finally {
-      setState(() {
-        _isLoading = false;
-      });
-    }
-  }
-
-  // 엑셀 다운로드 생성
-  Future<void> _generateExcelDownload() async {
-    setState(() {
-      _isLoading = true;
-      _statusMessage = '엑셀 파일 생성 중...';
-    });
-
-    try {
-      final reflectionProvider =
-          Provider.of<ReflectionProvider>(context, listen: false);
-
-      final url = await reflectionProvider.generateExcelDownloadUrl();
-
-      setState(() {
-        _isLoading = false;
-        _statusMessage = '엑셀 파일이 생성되었습니다. 다운로드 URL: $url';
-      });
-
-      // 다운로드 성공 다이얼로그 표시
-      showDialog(
-        context: context,
-        builder: (context) => AlertDialog(
-          title: Row(
-            children: [
-              Icon(Icons.check_circle, color: Colors.green.shade600),
-              const SizedBox(width: 8),
-              const Text('엑셀 파일 생성 완료'),
-            ],
-          ),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text(
-                '성찰 보고서 데이터가 엑셀 파일로 생성되었습니다.',
-                style: TextStyle(fontWeight: FontWeight.bold),
-              ),
-              const SizedBox(height: 12),
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: Colors.blue.shade50,
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: Colors.blue.shade200),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text(
-                      '다운로드 URL:',
-                      style: TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      url,
-                      style: const TextStyle(fontSize: 11),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('닫기'),
-            ),
-            ElevatedButton.icon(
-              icon: const Icon(Icons.copy, size: 16),
-              label: const Text('URL 복사'),
-              onPressed: () {
-                // URL 복사 기능 (실제 구현 시)
-                Navigator.pop(context);
-              },
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.blue,
-                foregroundColor: Colors.white,
-              ),
-            ),
-          ],
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16),
-          ),
-        ),
-      );
-    } catch (e) {
-      setState(() {
-        _isLoading = false;
-        _statusMessage = '엑셀 파일 생성 중 오류가 발생했습니다: $e';
-      });
-    }
-  }
-
-  // 학생 목록 이벤트 핸들러 업데이트
+  // 학생 목록 구현 (기존 코드 재사용)
   Widget _buildStudentList(int reflectionType) {
     final studentProvider =
         Provider.of<studentprovider.StudentProvider>(context);
@@ -1284,10 +1232,8 @@ class _ReflectionManagementState extends State<ReflectionManagement>
 
     return Padding(
       padding: const EdgeInsets.all(16),
-      child: ListView.builder(
-        itemCount: sortedGroups.length,
-        itemBuilder: (context, groupIndex) {
-          final groupNum = sortedGroups[groupIndex];
+      child: Column(
+        children: sortedGroups.map((groupNum) {
           final groupStudents = groupedStudents[groupNum]!;
 
           // 각 모둠 내에서 학생 이름 기준으로 정렬
@@ -1368,12 +1314,12 @@ class _ReflectionManagementState extends State<ReflectionManagement>
               ],
             ),
           );
-        },
+        }).toList(),
       ),
     );
   }
 
-  // 학생 목록 아이템 위젯
+  // 학생 목록 아이템은 기존 코드 활용
   Widget _buildStudentListItem(
       FirebaseStudentModel student, ReflectionStatus status, int reflectionId) {
     // 상태에 따른 디자인 설정
@@ -1532,7 +1478,7 @@ class _ReflectionManagementState extends State<ReflectionManagement>
     );
   }
 
-  // 빠른 액션 버튼 위젯
+  // 빠른 액션 버튼 위젯, 상태 디자인과 나머지 함수들은 기존 코드 활용
   Widget _buildQuickActionButton(
     IconData icon,
     String label,
@@ -1574,6 +1520,136 @@ class _ReflectionManagementState extends State<ReflectionManagement>
         return (Colors.orange, '반려됨', Icons.warning_amber_outlined);
       case ReflectionStatus.accepted:
         return (Colors.green, '승인됨', Icons.verified_outlined);
+    }
+  }
+
+// 마감 해제 처리 함수
+  Future<void> _processReopenDeadline(int reflectionType) async {
+    setState(() {
+      _isLoading = true;
+      _statusMessage =
+          '${_getReflectionTypeName(reflectionType)} 보고서 마감 해제 중...';
+    });
+
+    try {
+      final reflectionProvider =
+          Provider.of<ReflectionProvider>(context, listen: false);
+
+      // 마감일을 한 달 후로 설정 (사실상 마감 해제)
+      await reflectionProvider.setDeadline(
+          reflectionType, DateTime.now().add(const Duration(days: 30)));
+
+      // 마감일 정보 다시 로드
+      await _loadDeadlines();
+
+      setState(() {
+        _statusMessage =
+            '${_getReflectionTypeName(reflectionType)} 보고서 마감이 해제되었습니다.';
+      });
+    } catch (e) {
+      setState(() {
+        _statusMessage = '마감 해제 중 오류가 발생했습니다: $e';
+      });
+    } finally {
+      setState(() {
+        _isLoading = false;
+      });
+    }
+  }
+
+  // 엑셀 다운로드 생성
+  Future<void> _generateExcelDownload() async {
+    setState(() {
+      _isLoading = true;
+      _statusMessage = '엑셀 파일 생성 중...';
+    });
+
+    try {
+      final reflectionProvider =
+          Provider.of<ReflectionProvider>(context, listen: false);
+
+      final url = await reflectionProvider.generateExcelDownloadUrl();
+
+      setState(() {
+        _isLoading = false;
+        _statusMessage = '엑셀 파일이 생성되었습니다. 다운로드 URL: $url';
+      });
+
+      // 다운로드 성공 다이얼로그 표시
+      showDialog(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: Row(
+            children: [
+              Icon(Icons.check_circle, color: Colors.green.shade600),
+              const SizedBox(width: 8),
+              const Text('엑셀 파일 생성 완료'),
+            ],
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                '성찰 보고서 데이터가 엑셀 파일로 생성되었습니다.',
+                style: TextStyle(fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 12),
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.blue.shade50,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: Colors.blue.shade200),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      '다운로드 URL:',
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      url,
+                      style: const TextStyle(fontSize: 11),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('닫기'),
+            ),
+            ElevatedButton.icon(
+              icon: const Icon(Icons.copy, size: 16),
+              label: const Text('URL 복사'),
+              onPressed: () {
+                // URL 복사 기능 (실제 구현 시)
+                Navigator.pop(context);
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.blue,
+                foregroundColor: Colors.white,
+              ),
+            ),
+          ],
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
+        ),
+      );
+    } catch (e) {
+      setState(() {
+        _isLoading = false;
+        _statusMessage = '엑셀 파일 생성 중 오류가 발생했습니다: $e';
+      });
     }
   }
 
@@ -1852,76 +1928,80 @@ class _ReflectionManagementState extends State<ReflectionManagement>
         ),
         const SizedBox(height: 16),
 
-        // 질문 및 답변 목록
+        // 질문 및 답변 목록 - 스크롤 추가
         Expanded(
-          child: ListView.builder(
-            itemCount: reflection.questions.length,
-            itemBuilder: (context, index) {
-              final question = reflection.questions[index];
-              final answer = _selectedSubmission!.answers[question] ?? '';
+          child: SingleChildScrollView(
+            child: ListView.builder(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              itemCount: reflection.questions.length,
+              itemBuilder: (context, index) {
+                final question = reflection.questions[index];
+                final answer = _selectedSubmission!.answers[question] ?? '';
 
-              return Card(
-                elevation: 1,
-                margin: const EdgeInsets.only(bottom: 16),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(16),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // 질문 헤더
-                    Container(
-                      width: double.infinity,
-                      padding: const EdgeInsets.all(16),
-                      decoration: BoxDecoration(
-                        color: Colors.amber.shade50,
-                        borderRadius: const BorderRadius.only(
-                          topLeft: Radius.circular(16),
-                          topRight: Radius.circular(16),
+                return Card(
+                  elevation: 1,
+                  margin: const EdgeInsets.only(bottom: 16),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // 질문 헤더
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          color: Colors.amber.shade50,
+                          borderRadius: const BorderRadius.only(
+                            topLeft: Radius.circular(16),
+                            topRight: Radius.circular(16),
+                          ),
+                        ),
+                        child: Text(
+                          '${index + 1}. $question',
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            color: Colors.amber.shade800,
+                          ),
                         ),
                       ),
-                      child: Text(
-                        '${index + 1}. $question',
-                        style: TextStyle(
-                          fontWeight: FontWeight.bold,
-                          color: Colors.amber.shade800,
-                        ),
-                      ),
-                    ),
 
-                    // 답변 영역
-                    Padding(
-                      padding: const EdgeInsets.all(16.0),
-                      child: TextField(
-                        controller: TextEditingController(text: answer),
-                        maxLines: 4,
-                        readOnly: true, // 읽기 전용
-                        decoration: InputDecoration(
-                          hintText: '학생 답변...',
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
-                            borderSide:
-                                BorderSide(color: Colors.amber.shade200),
+                      // 답변 영역
+                      Padding(
+                        padding: const EdgeInsets.all(16.0),
+                        child: TextField(
+                          controller: TextEditingController(text: answer),
+                          maxLines: 4,
+                          readOnly: true, // 읽기 전용
+                          decoration: InputDecoration(
+                            hintText: '학생 답변...',
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12),
+                              borderSide:
+                                  BorderSide(color: Colors.amber.shade200),
+                            ),
+                            enabledBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12),
+                              borderSide:
+                                  BorderSide(color: Colors.amber.shade200),
+                            ),
+                            focusedBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12),
+                              borderSide:
+                                  BorderSide(color: Colors.amber.shade400),
+                            ),
+                            filled: true,
+                            fillColor: Colors.grey.shade50,
                           ),
-                          enabledBorder: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
-                            borderSide:
-                                BorderSide(color: Colors.amber.shade200),
-                          ),
-                          focusedBorder: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
-                            borderSide:
-                                BorderSide(color: Colors.amber.shade400),
-                          ),
-                          filled: true,
-                          fillColor: Colors.grey.shade50,
                         ),
                       ),
-                    ),
-                  ],
-                ),
-              );
-            },
+                    ],
+                  ),
+                );
+              },
+            ),
           ),
         ),
 
