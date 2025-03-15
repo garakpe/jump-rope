@@ -490,8 +490,7 @@ class ReflectionService {
     }
   }
 
-  // 학급별 제출 현황 통계 가져오기
-  Future<Map<String, int>> getSubmissionStatsByClass(String className) async {
+  Future<Map<String, int>> getSubmissionStatsByClass(String classNum) async {
     Map<String, int> stats = {
       'total': 0, // 전체 학생 수
       'submitted': 0, // 제출한 학생 수
@@ -500,18 +499,18 @@ class ReflectionService {
     };
 
     try {
-      // 학생 수 조회
+      // 학급의 전체 학생 수 조회 - classNum으로 필터링
       QuerySnapshot studentsSnapshot = await _firestore
           .collection('students')
-          .where('className', isEqualTo: className)
+          .where('classNum', isEqualTo: classNum)
           .get();
 
       stats['total'] = studentsSnapshot.docs.length;
 
-      // 제출 현황 조회
+      // 제출 현황 조회 - classNum으로 필터링
       QuerySnapshot reflectionsSnapshot = await _firestore
           .collection('reflections')
-          .where('className', isEqualTo: className)
+          .where('classNum', isEqualTo: classNum)
           .get();
 
       // 상태별 카운트
@@ -536,11 +535,11 @@ class ReflectionService {
     } catch (e) {
       print('제출 현황 통계 조회 오류: $e');
 
-      // 로컬 구현
-      stats['total'] = 30; // 임의의 학생 수
-      stats['submitted'] = 20;
-      stats['rejected'] = 5;
-      stats['accepted'] = 15;
+      // 오류 시 기본값 반환 (개발/디버깅용)
+      stats['total'] = 0;
+      stats['submitted'] = 0;
+      stats['rejected'] = 0;
+      stats['accepted'] = 0;
 
       return stats;
     }

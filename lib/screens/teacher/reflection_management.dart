@@ -386,7 +386,7 @@ class _ReflectionManagementState extends State<ReflectionManagement>
     );
   }
 
-  // 성찰 통계 위젯
+  // 성찰 통계 위젯 - 개선된 버전
   Widget _buildReflectionStatsWidget() {
     // 현재 선택된 성찰 유형의 통계
     final stats = _statsCache[_selectedReflectionType];
@@ -408,6 +408,8 @@ class _ReflectionManagementState extends State<ReflectionManagement>
             Icons.check_circle, '$submitted제출', Colors.blue.shade100),
         const SizedBox(width: 8),
         _buildStatBadge(Icons.cancel, '$rejected반려', Colors.orange.shade100),
+        const SizedBox(width: 8),
+        _buildStatBadge(Icons.verified, '$accepted승인', Colors.green.shade100),
       ],
     );
   }
@@ -717,7 +719,7 @@ class _ReflectionManagementState extends State<ReflectionManagement>
     );
   }
 
-  // 성찰 그리드
+  // 성찰 그리드 - 질문 미리보기 부분 삭제
   Widget _buildReflectionGrid() {
     // 현재 선택된 성찰 유형에 대한 정보 가져오기
     final reflectionCard = reflectionCards.firstWhere(
@@ -784,63 +786,7 @@ class _ReflectionManagementState extends State<ReflectionManagement>
                   ],
                 ),
 
-                // 질문 미리보기
-                Container(
-                  margin: const EdgeInsets.only(top: 12),
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: Colors.amber.shade200),
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        "질문 미리보기",
-                        style: TextStyle(
-                          fontWeight: FontWeight.bold,
-                          color: Colors.amber.shade800,
-                          fontSize: 14,
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      ...reflectionCard.questions
-                          .take(2)
-                          .map(
-                            (question) => Padding(
-                              padding: const EdgeInsets.only(bottom: 4),
-                              child: Row(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Icon(Icons.circle,
-                                      size: 8, color: Colors.amber.shade400),
-                                  const SizedBox(width: 8),
-                                  Expanded(
-                                    child: Text(
-                                      question,
-                                      style: const TextStyle(fontSize: 13),
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          )
-                          .toList(),
-                      if (reflectionCard.questions.length > 2)
-                        Text(
-                          "외 ${reflectionCard.questions.length - 2}개 질문",
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: Colors.grey.shade600,
-                            fontStyle: FontStyle.italic,
-                          ),
-                        ),
-                    ],
-                  ),
-                ),
+                // 질문 미리보기 부분 삭제됨
               ],
             ),
           ),
@@ -933,7 +879,7 @@ class _ReflectionManagementState extends State<ReflectionManagement>
             child: ElevatedButton.icon(
               icon: const Icon(Icons.download, size: 18),
               label: const Text('엑셀로 내보내기'),
-              onPressed: () => _generateExcelDownload(),
+              onPressed: () => generateExcelDownload(),
               style: ElevatedButton.styleFrom(
                 backgroundColor: Colors.green.shade500,
                 foregroundColor: Colors.white,
@@ -1150,7 +1096,7 @@ class _ReflectionManagementState extends State<ReflectionManagement>
             label: const Text('마감 해제'),
             onPressed: () {
               Navigator.pop(context);
-              _processReopenDeadline(reflectionType);
+              processReopenDeadline(reflectionType);
             },
             style: ElevatedButton.styleFrom(
               backgroundColor: Colors.blue,
@@ -1165,7 +1111,7 @@ class _ReflectionManagementState extends State<ReflectionManagement>
     );
   }
 
-  // 학생 목록 구현 (기존 코드 재사용)
+  // 학생 목록 구현 (className, classNum으로 필터링하도록 수정됨)
   Widget _buildStudentList(int reflectionType) {
     final studentProvider =
         Provider.of<studentprovider.StudentProvider>(context);
@@ -1305,7 +1251,7 @@ class _ReflectionManagementState extends State<ReflectionManagement>
                         ReflectionStatus status =
                             snapshot.data ?? ReflectionStatus.notSubmitted;
 
-                        return _buildStudentListItem(
+                        return buildStudentListItem(
                             student, status, reflectionId);
                       },
                     );
@@ -1320,10 +1266,10 @@ class _ReflectionManagementState extends State<ReflectionManagement>
   }
 
   // 학생 목록 아이템은 기존 코드 활용
-  Widget _buildStudentListItem(
+  Widget buildStudentListItem(
       FirebaseStudentModel student, ReflectionStatus status, int reflectionId) {
     // 상태에 따른 디자인 설정
-    final (color, statusText, statusIcon) = _getStatusDesign(status);
+    final (color, statusText, statusIcon) = getStatusDesign(status);
 
     return InkWell(
       onTap: () {
@@ -1406,6 +1352,25 @@ class _ReflectionManagementState extends State<ReflectionManagement>
                                 ),
                               ),
                             ),
+                            if (student.classNum.isNotEmpty)
+                              Container(
+                                margin: const EdgeInsets.only(left: 4),
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 6,
+                                  vertical: 2,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: Colors.blue.shade50,
+                                  borderRadius: BorderRadius.circular(4),
+                                ),
+                                child: Text(
+                                  '반: ${student.classNum}',
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    color: Colors.blue.shade700,
+                                  ),
+                                ),
+                              ),
                           ],
                         ),
                       ],
@@ -1445,23 +1410,23 @@ class _ReflectionManagementState extends State<ReflectionManagement>
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         if (status == ReflectionStatus.submitted)
-                          _buildQuickActionButton(
+                          buildQuickActionButton(
                             Icons.check_circle,
                             '승인',
                             Colors.green,
-                            () => _approveReflection(student, reflectionId),
+                            () => approveReflection(student, reflectionId),
                           ),
                         if (status == ReflectionStatus.submitted)
                           const SizedBox(width: 8),
                         if (status == ReflectionStatus.submitted)
-                          _buildQuickActionButton(
+                          buildQuickActionButton(
                             Icons.cancel,
                             '반려',
                             Colors.orange,
-                            () => _showRejectDialog(student, reflectionId),
+                            () => showRejectDialog(student, reflectionId),
                           ),
                         if (status != ReflectionStatus.submitted)
-                          _buildQuickActionButton(
+                          buildQuickActionButton(
                             Icons.visibility,
                             '보기',
                             Colors.blue,
@@ -1479,7 +1444,7 @@ class _ReflectionManagementState extends State<ReflectionManagement>
   }
 
   // 빠른 액션 버튼 위젯, 상태 디자인과 나머지 함수들은 기존 코드 활용
-  Widget _buildQuickActionButton(
+  Widget buildQuickActionButton(
     IconData icon,
     String label,
     Color color,
@@ -1510,7 +1475,7 @@ class _ReflectionManagementState extends State<ReflectionManagement>
   }
 
   // 상태에 따른 디자인 변수 반환 함수
-  (Color, String, IconData) _getStatusDesign(ReflectionStatus status) {
+  (Color, String, IconData) getStatusDesign(ReflectionStatus status) {
     switch (status) {
       case ReflectionStatus.notSubmitted:
         return (Colors.grey, '미제출', Icons.cancel_outlined);
@@ -1524,7 +1489,7 @@ class _ReflectionManagementState extends State<ReflectionManagement>
   }
 
 // 마감 해제 처리 함수
-  Future<void> _processReopenDeadline(int reflectionType) async {
+  Future<void> processReopenDeadline(int reflectionType) async {
     setState(() {
       _isLoading = true;
       _statusMessage =
@@ -1558,7 +1523,7 @@ class _ReflectionManagementState extends State<ReflectionManagement>
   }
 
   // 엑셀 다운로드 생성
-  Future<void> _generateExcelDownload() async {
+  Future<void> generateExcelDownload() async {
     setState(() {
       _isLoading = true;
       _statusMessage = '엑셀 파일 생성 중...';
@@ -1654,7 +1619,7 @@ class _ReflectionManagementState extends State<ReflectionManagement>
   }
 
   // 성찰 보고서 승인 처리
-  Future<void> _approveReflection(
+  Future<void> approveReflection(
       FirebaseStudentModel student, int reflectionId) async {
     try {
       setState(() {
@@ -1697,7 +1662,7 @@ class _ReflectionManagementState extends State<ReflectionManagement>
   }
 
   // 반려 다이얼로그 표시
-  void _showRejectDialog(FirebaseStudentModel student, int reflectionId) async {
+  void showRejectDialog(FirebaseStudentModel student, int reflectionId) async {
     final reasonController = TextEditingController();
 
     final result = await showDialog<String>(
@@ -1770,12 +1735,12 @@ class _ReflectionManagementState extends State<ReflectionManagement>
 
     // 반려 사유가 입력되면 처리
     if (result != null && result.isNotEmpty) {
-      _rejectReflection(student, reflectionId, result);
+      rejectReflection(student, reflectionId, result);
     }
   }
 
   // 성찰 보고서 반려 처리
-  Future<void> _rejectReflection(
+  Future<void> rejectReflection(
       FirebaseStudentModel student, int reflectionId, String reason) async {
     try {
       setState(() {
@@ -1808,7 +1773,7 @@ class _ReflectionManagementState extends State<ReflectionManagement>
 
       // 목록 새로고침
       reflectionProvider.selectClassAndReflectionType(
-          widget.selectedClassId.toString(), reflectionId);
+          widget.selectedClassId.toString(), _selectedReflectionType);
     } catch (e) {
       setState(() {
         _isLoading = false;
