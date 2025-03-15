@@ -211,6 +211,12 @@ class ReflectionProvider extends ChangeNotifier {
     }
   }
 
+  // 성찰 유형의 마감 여부 확인 메서드 추가
+  bool isReflectionDeadlinePassed(int reflectionType) {
+    final deadline = _deadlines[reflectionType];
+    return deadline != null && deadline.isBefore(DateTime.now());
+  }
+
   // 성찰 유형별 마감일 설정
   Future<void> setDeadline(int reflectionType, DateTime? deadline) async {
     if (reflectionType < 1 || reflectionType > 3) return;

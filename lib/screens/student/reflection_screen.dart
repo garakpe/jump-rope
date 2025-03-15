@@ -213,13 +213,17 @@ class _ReflectionScreenState extends State<ReflectionScreen> {
     );
   }
 
-  // 개별 성찰 카드 위젯
   Widget _buildReflectionCard({
     required ReflectionModel reflection,
     required ReflectionStatus status,
     required bool isEnabled,
     required String studentId,
   }) {
+    // 마감 상태 확인 추가
+    final reflectionProvider = Provider.of<ReflectionProvider>(context);
+    final isDeadlinePassed =
+        reflectionProvider.isReflectionDeadlinePassed(reflection.id);
+
     // 상태에 따른 디자인 변수 설정
     final (cardColor, statusText, statusColor, statusIcon) =
         _getStatusDesign(status);
@@ -253,60 +257,98 @@ class _ReflectionScreenState extends State<ReflectionScreen> {
                   topRight: Radius.circular(16),
                 ),
               ),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Icon(
-                        CupertinoIcons.doc_text,
-                        color: cardColor,
-                        size: 20,
+                      Row(
+                        children: [
+                          Icon(
+                            CupertinoIcons.doc_text,
+                            color: cardColor,
+                            size: 20,
+                          ),
+                          const SizedBox(width: 8),
+                          Text(
+                            reflection.title,
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w600,
+                              color: cardColor,
+                            ),
+                          ),
+                        ],
                       ),
-                      const SizedBox(width: 8),
-                      Text(
-                        reflection.title,
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w600,
-                          color: cardColor,
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 10, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: isEnabled
+                              ? statusColor.withOpacity(0.1)
+                              : CupertinoColors.systemGrey4,
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              isEnabled ? statusIcon : CupertinoIcons.lock,
+                              size: 14,
+                              color: isEnabled
+                                  ? statusColor
+                                  : CupertinoColors.systemGrey,
+                            ),
+                            const SizedBox(width: 4),
+                            Text(
+                              isEnabled ? statusText : '비활성화',
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: isEnabled
+                                    ? statusColor
+                                    : CupertinoColors.systemGrey,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                          ],
                         ),
                       ),
                     ],
                   ),
-                  Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: isEnabled
-                          ? statusColor.withOpacity(0.1)
-                          : CupertinoColors.systemGrey4,
-                      borderRadius: BorderRadius.circular(20),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(
-                          isEnabled ? statusIcon : CupertinoIcons.lock,
-                          size: 14,
-                          color: isEnabled
-                              ? statusColor
-                              : CupertinoColors.systemGrey,
-                        ),
-                        const SizedBox(width: 4),
-                        Text(
-                          isEnabled ? statusText : '비활성화',
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: isEnabled
-                                ? statusColor
-                                : CupertinoColors.systemGrey,
-                            fontWeight: FontWeight.w500,
+
+                  // 마감 정보 표시 추가
+                  if (isDeadlinePassed)
+                    Container(
+                      margin: const EdgeInsets.only(top: 8),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 10, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: CupertinoColors.systemRed.withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(
+                            color: CupertinoColors.systemRed.withOpacity(0.3)),
+                      ),
+                      child: const Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            CupertinoIcons.clock,
+                            size: 14,
+                            color: CupertinoColors.systemRed,
                           ),
-                        ),
-                      ],
+                          SizedBox(width: 4),
+                          Text(
+                            '접수 마감됨',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: CupertinoColors.systemRed,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
-                  ),
                 ],
               ),
             ),
@@ -370,23 +412,33 @@ class _ReflectionScreenState extends State<ReflectionScreen> {
 
                   const SizedBox(height: 16),
 
-                  // 버튼
+                  // 버튼 - 마감된 경우 상태에 따라 버튼 표시 변경
                   SizedBox(
                     width: double.infinity,
                     child: CupertinoButton(
                       padding: const EdgeInsets.symmetric(vertical: 12),
-                      color:
-                          isEnabled ? cardColor : CupertinoColors.systemGrey4,
+                      color: isEnabled
+                          ? (isDeadlinePassed &&
+                                  status == ReflectionStatus.notSubmitted
+                              ? CupertinoColors.systemGrey3
+                              : cardColor)
+                          : CupertinoColors.systemGrey4,
                       borderRadius: BorderRadius.circular(12),
                       onPressed: isEnabled
-                          ? () => _navigateToReflectionDetail(
-                              reflection, status, studentId)
+                          ? (isDeadlinePassed &&
+                                  status == ReflectionStatus.notSubmitted
+                              ? null // 마감됐고 미제출 상태면 비활성화
+                              : () => _navigateToReflectionDetail(
+                                  reflection, status, studentId))
                           : null,
                       child: Text(
-                        _getButtonText(status, isEnabled),
+                        _getButtonText(status, isEnabled, isDeadlinePassed),
                         style: TextStyle(
                           color: isEnabled
-                              ? CupertinoColors.white
+                              ? (isDeadlinePassed &&
+                                      status == ReflectionStatus.notSubmitted
+                                  ? CupertinoColors.systemGrey
+                                  : CupertinoColors.white)
                               : CupertinoColors.systemGrey,
                           fontWeight: FontWeight.w600,
                         ),
@@ -436,17 +488,23 @@ class _ReflectionScreenState extends State<ReflectionScreen> {
     }
   }
 
-  // 버튼 텍스트 반환 함수
-  String _getButtonText(ReflectionStatus status, bool isEnabled) {
+// 버튼 텍스트 반환 함수 수정 - 마감 상태 고려
+  String _getButtonText(
+      ReflectionStatus status, bool isEnabled, bool isDeadlinePassed) {
     if (!isEnabled) return '현재 비활성화됨';
+
+    // 마감된 경우 미제출 상태는 "마감됨" 표시
+    if (isDeadlinePassed && status == ReflectionStatus.notSubmitted) {
+      return '마감됨';
+    }
 
     switch (status) {
       case ReflectionStatus.notSubmitted:
         return '성찰 작성하기';
       case ReflectionStatus.submitted:
-        return '제출한 성찰 보기';
+        return isDeadlinePassed ? '제출한 성찰 보기' : '제출한 성찰 보기/수정';
       case ReflectionStatus.rejected:
-        return '반려된 성찰 수정하기';
+        return isDeadlinePassed ? '반려된 성찰 보기' : '반려된 성찰 수정하기';
       case ReflectionStatus.accepted:
         return '승인된 성찰 보기';
     }

@@ -537,7 +537,12 @@ class _ReflectionDetailScreenState extends State<ReflectionDetailScreen> {
   }
 
   Widget _buildBottomBar() {
-    // 교사 모드일 경우 다른 UI 표시
+    final reflectionProvider =
+        Provider.of<ReflectionProvider>(context, listen: false);
+    final isDeadlinePassed =
+        reflectionProvider.isReflectionDeadlinePassed(widget.reflectionId);
+
+    // 교사 모드일 경우 다른 UI 표시 (기존 코드 유지)
     if (widget.isTeacher) {
       return SafeArea(
         child: Container(
@@ -617,7 +622,7 @@ class _ReflectionDetailScreenState extends State<ReflectionDetailScreen> {
       );
     }
 
-    // 기존 학생 모드 UI (승인된 경우 제출 버튼 숨김)
+    // 승인된 경우 제출 버튼 숨김 (기존 코드 유지)
     if (_submissionStatus == ReflectionStatus.accepted) {
       return SafeArea(
         child: Container(
@@ -644,6 +649,42 @@ class _ReflectionDetailScreenState extends State<ReflectionDetailScreen> {
                 '승인된 성찰 보고서는 수정할 수 없습니다.',
                 style: TextStyle(
                   color: CupertinoColors.systemGreen,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    // 마감된 경우 접수 마감 메시지 표시
+    if (isDeadlinePassed) {
+      return SafeArea(
+        child: Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: CupertinoColors.systemBackground,
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.05),
+                blurRadius: 4,
+                offset: const Offset(0, -2),
+              ),
+            ],
+          ),
+          child: const Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(
+                CupertinoIcons.clock,
+                color: CupertinoColors.systemRed,
+              ),
+              SizedBox(width: 8),
+              Text(
+                '접수가 마감되어 읽기만 가능합니다.',
+                style: TextStyle(
+                  color: CupertinoColors.systemRed,
                   fontWeight: FontWeight.w500,
                 ),
               ),
@@ -754,6 +795,15 @@ class _ReflectionDetailScreenState extends State<ReflectionDetailScreen> {
 
   // 제출 버튼 색상
   Color _getSubmitButtonColor() {
+    final reflectionProvider =
+        Provider.of<ReflectionProvider>(context, listen: false);
+    final isDeadlinePassed =
+        reflectionProvider.isReflectionDeadlinePassed(widget.reflectionId);
+
+    // 마감된 경우 버튼 색상 회색으로 변경
+    if (isDeadlinePassed) {
+      return Colors.grey;
+    }
     switch (_submissionStatus) {
       case ReflectionStatus.rejected:
         return Colors.red;
@@ -767,6 +817,15 @@ class _ReflectionDetailScreenState extends State<ReflectionDetailScreen> {
 
   // 제출 버튼 텍스트
   String _getSubmitButtonLabel() {
+    final reflectionProvider =
+        Provider.of<ReflectionProvider>(context, listen: false);
+    final isDeadlinePassed =
+        reflectionProvider.isReflectionDeadlinePassed(widget.reflectionId);
+
+    // 마감된 경우 버튼 텍스트 변경
+    if (isDeadlinePassed) {
+      return '접수 마감됨 (읽기 전용)';
+    }
     switch (_submissionStatus) {
       case ReflectionStatus.rejected:
         return '반려된 성찰 보고서 수정하기';
@@ -921,9 +980,16 @@ class _ReflectionDetailScreenState extends State<ReflectionDetailScreen> {
     }
   }
 
-  // 읽기 전용 상태 계산 로직
+// 읽기 전용 상태 계산 로직 수정
   bool _isReadOnly() {
-    // 교사 모드이거나 승인된 성찰은 읽기 전용
-    return widget.isTeacher || _submissionStatus == ReflectionStatus.accepted;
+    final reflectionProvider =
+        Provider.of<ReflectionProvider>(context, listen: false);
+    final isDeadlinePassed =
+        reflectionProvider.isReflectionDeadlinePassed(widget.reflectionId);
+
+    // 교사 모드이거나 승인된 성찰이거나 마감된 성찰은 읽기 전용
+    return widget.isTeacher ||
+        _submissionStatus == ReflectionStatus.accepted ||
+        isDeadlinePassed;
   }
 }
