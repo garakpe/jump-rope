@@ -15,7 +15,7 @@ class StudentService {
         name: '김철수',
         studentId: '12345',
         grade: '1',
-        group: 1,
+        group: '1',
         individualTasks: {
           '양발모아 뛰기': {
             'completed': true,
@@ -30,7 +30,7 @@ class StudentService {
         name: '홍길동',
         studentId: '67890',
         grade: '1',
-        group: 2,
+        group: '2',
         individualTasks: {
           '양발모아 뛰기': {
             'completed': true,
@@ -44,7 +44,7 @@ class StudentService {
         name: '이영희',
         studentId: '54321',
         grade: '1',
-        group: 3,
+        group: '3',
         individualTasks: {},
         groupTasks: {},
       ),
@@ -55,7 +55,7 @@ class StudentService {
         name: '박지민',
         studentId: '12346',
         grade: '2',
-        group: 1,
+        group: '1',
         individualTasks: {},
         groupTasks: {},
       ),
@@ -64,7 +64,7 @@ class StudentService {
         name: '최유리',
         studentId: '67891',
         grade: '2',
-        group: 2,
+        group: '2',
         individualTasks: {},
         groupTasks: {},
       ),
@@ -180,7 +180,7 @@ class StudentService {
           name: '학생$i',
           studentId: studentId,
           grade: grade,
-          group: groupNum,
+          group: groupNum.toString(),
           individualTasks: {},
           groupTasks: {},
           attendance: true,

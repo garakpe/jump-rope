@@ -59,7 +59,7 @@ class FirebaseStudentModel {
   final String studentId;
   final String grade;
   final String classNum;
-  final int group;
+  final String group;
   final Map<String, dynamic> individualTasks;
   final Map<String, dynamic> groupTasks;
   final bool attendance;
@@ -129,7 +129,7 @@ class FirebaseStudentModel {
       studentId: data['studentId'] ?? '',
       grade: data['grade'] ?? '',
       classNum: data['classNum'] ?? '',
-      group: data['group'] ?? 1,
+      group: (data['group'] ?? '1').toString(),
       individualTasks: processedIndividualTasks,
       groupTasks: processedGroupTasks,
       attendance: data['attendance'] ?? true,
@@ -143,7 +143,7 @@ class FirebaseStudentModel {
       studentId: data['studentId'] ?? '',
       grade: data['grade'] ?? '',
       classNum: data['classNum'] ?? '',
-      group: data['group'] ?? 1,
+      group: (data['group'] ?? '1').toString(),
       individualTasks: data['individualTasks'] ?? {},
       groupTasks: data['groupTasks'] ?? {},
       attendance: data['attendance'] ?? true,
@@ -156,7 +156,7 @@ class FirebaseStudentModel {
     String? studentId,
     String? grade,
     String? classNum,
-    int? group,
+    String? group,
     Map<String, dynamic>? individualTasks,
     Map<String, dynamic>? groupTasks,
     bool? attendance,
@@ -194,7 +194,7 @@ class FirebaseReflectionModel {
   final String grade;
   final String classNum; // 추가된 필드
   final String studentNum; // 추가한 필드
-  final int group;
+  final String group;
   final int week;
   final int reflectionId;
   final List<String> questions;
@@ -287,7 +287,7 @@ class FirebaseReflectionModel {
       grade: data['grade'] ?? '',
       classNum: data['classNum'] ?? '', // classNum 필드 추가
       studentNum: data['studentNum'] ?? '', // studentNum 필드 추가
-      group: data['group'] ?? 0,
+      group: (data['group'] ?? '0').toString(),
       week: data['week'] ?? 0, // 하위 호환성
       reflectionId: reflectionId, // reflectionId 필드 추가
       questions: List<String>.from(data['questions'] ?? []),
@@ -350,7 +350,7 @@ class FirebaseReflectionModel {
       grade: data['grade'] ?? '',
       classNum: data['classNum'] ?? '', // classNum 필드 추가
       studentNum: data['studentNum'] ?? '',
-      group: data['group'] ?? 0,
+      group: (data['group'] ?? '0').toString(),
       week: data['week'] ?? 0, // 하위 호환성
       reflectionId: reflectionId, // reflectionId 필드 추가
       questions: List<String>.from(data['questions'] ?? []),
@@ -413,7 +413,7 @@ class FirebaseReflectionModel {
     String? grade,
     String? classNum, // classNum 파라미터 추가
     String? studentNum, // studentNum 파라미터 추가
-    int? group,
+    String? group,
     int? week,
     int? reflectionId,
     List<String>? questions,
@@ -459,7 +459,7 @@ class ReflectionSubmission {
   final String grade;
   final String classNum; // 추가된 필드
   final String studentNum; // 추가한 필드
-  final int group;
+  final String group;
   final ReflectionStatus status;
   final String? rejectionReason;
 
@@ -474,7 +474,7 @@ class ReflectionSubmission {
     this.grade = '',
     this.classNum = '', // 기본값 설정
     this.studentNum = '', // 기본값 설정
-    this.group = 0,
+    this.group = '0',
     this.status = ReflectionStatus.submitted,
     this.rejectionReason,
   });
@@ -491,7 +491,7 @@ class ReflectionSubmission {
     String? grade,
     String? classNum, // classNum 파라미터 추가
     String? studentNum, // studentNum 파라미터 추가
-    int? group,
+    String? group,
     ReflectionStatus? status,
     String? rejectionReason,
   }) {

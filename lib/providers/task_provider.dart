@@ -159,8 +159,8 @@ class TaskProvider extends ChangeNotifier {
 
   // ============ 사용자 변경 및 설정 관련 메서드 ============
 
-  // 사용자 변경 처리
-  void handleUserChanged(String? newStudentId, int? groupId) {
+  // 사용자 변경 처리 메서드 수정
+  void handleUserChanged(String? newStudentId, String? groupId) {
     // 데이터 초기화
     _students = [];
     _studentCache.clear();
@@ -173,7 +173,7 @@ class TaskProvider extends ChangeNotifier {
       syncStudentDataFromServer(newStudentId);
 
       // 2. 학생의 모둠원 데이터 로드 (그룹 ID가 있는 경우)
-      if (groupId != null && groupId > 0) {
+      if (groupId != null && groupId.isNotEmpty && groupId != '0') {
         loadGroupMembers(groupId, '1'); // 1학년으로 가정 (필요시 동적으로 변경)
       }
     }
@@ -265,8 +265,8 @@ class TaskProvider extends ChangeNotifier {
   }
 
   // 모둠원 데이터 로드
-  Future<bool> loadGroupMembers(int groupId, String grade) async {
-    if (groupId <= 0 || grade.isEmpty) return false;
+  Future<bool> loadGroupMembers(String groupId, String grade) async {
+    if (groupId.isEmpty || grade.isEmpty) return false;
 
     _setLoading(true);
 
@@ -315,7 +315,6 @@ class TaskProvider extends ChangeNotifier {
     }
   }
 
-  // 서버에서 학생 데이터 동기화
   Future<StudentProgress?> syncStudentDataFromServer(String studentId) async {
     if (studentId.isEmpty) return null;
 
@@ -367,7 +366,7 @@ class TaskProvider extends ChangeNotifier {
 
         // 모둠원 정보 로드
         final groupId = studentData.group;
-        if (groupId > 0) {
+        if (groupId.isNotEmpty && groupId != '0') {
           // 학급 정보 결정 (classNum 우선, 없으면 grade)
           final classInfo = studentData.classNum.isNotEmpty
               ? studentData.classNum
@@ -466,7 +465,8 @@ class TaskProvider extends ChangeNotifier {
 
         // 모둠원 데이터도 함께 로드
         final studentGroup = studentData.group;
-        if (studentGroup > 0) {
+        if (studentGroup.isNotEmpty) {
+          // 모둠원 로드
           await loadGroupMembers(studentGroup, '1');
         }
       }
@@ -563,8 +563,8 @@ class TaskProvider extends ChangeNotifier {
   }
 
   // 단체줄넘기 시작 가능 여부 확인
-  bool canStartGroupActivities(int groupId) {
-    if (groupId <= 0) return false;
+  bool canStartGroupActivities(String groupId) {
+    if (groupId.isEmpty) return false;
 
     // 같은 그룹의 모든 학생 찾기
     List<StudentProgress> groupStudents =
@@ -595,8 +595,10 @@ class TaskProvider extends ChangeNotifier {
   }
 
   // 모둠별 도장 개수 가져오기
-  int getGroupStampCount(int groupNum) {
-    return _groupStampCounts[groupNum] ?? 0;
+  int getGroupStampCount(String groupNum) {
+    // String을 int로 변환하여 Map에서 직접 조회
+    int groupNumInt = int.tryParse(groupNum) ?? 0;
+    return _groupStampCounts[groupNumInt] ?? 0;
   }
 
   // ============ 데이터 변환 및 계산 메서드 ============
@@ -695,17 +697,26 @@ class TaskProvider extends ChangeNotifier {
   void _calculateGroupStampCounts() {
     _groupStampCounts.clear();
 
+    // Map<String, int> 타입의 임시 맵 생성
+    final Map<String, int> tempCounts = {};
+
     for (var student in _students) {
-      int groupNum = student.group;
+      String groupId = student.group;
+
       int individualCompleted =
           student.individualProgress.values.where((p) => p.isCompleted).length;
       int groupCompleted =
           student.groupProgress.values.where((p) => p.isCompleted).length;
 
-      _groupStampCounts[groupNum] = (_groupStampCounts[groupNum] ?? 0) +
-          individualCompleted +
-          groupCompleted;
+      tempCounts[groupId] =
+          (tempCounts[groupId] ?? 0) + individualCompleted + groupCompleted;
     }
+
+    // 문자열 키를 int 키로 변환하여 _groupStampCounts에 저장
+    tempCounts.forEach((stringKey, value) {
+      int intKey = int.tryParse(stringKey) ?? 0;
+      _groupStampCounts[intKey] = value;
+    });
   }
 
   // ============ 유틸리티 메서드 ============

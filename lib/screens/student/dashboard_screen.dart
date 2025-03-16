@@ -22,7 +22,7 @@ StudentProgress getCurrentStudent(TaskProvider taskProvider, String studentId) {
   return taskProvider.students.firstWhere(
       (s) => s.id == studentId || s.id == studentId,
       orElse: () => StudentProgress(
-          id: studentId, name: '', number: 0, group: 0, studentId: studentId));
+          id: studentId, name: '', number: 0, group: '', studentId: studentId));
 }
 
 class StudentDashboard extends StatefulWidget {
@@ -484,7 +484,7 @@ class _StudentDashboardState extends State<StudentDashboard>
     final currentStudent = getCurrentStudent(taskProvider, studentId);
 
     // 그룹 정보 가져오기
-    final group = int.tryParse(user?.group ?? '1') ?? 1;
+    final group = user?.group ?? '1'; // String 타입으로 직접 사용
 
     // 단체줄넘기 허용 여부 확인
     final canDoGroupTasks = taskProvider.canStartGroupActivities(group);

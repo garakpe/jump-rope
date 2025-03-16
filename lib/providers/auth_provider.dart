@@ -148,7 +148,7 @@ class AuthProvider extends ChangeNotifier {
         classNum: _firebaseStudent!.classNum.isNotEmpty
             ? _firebaseStudent!.classNum
             : _firebaseStudent!.grade, // classNum 우선, 없으면 grade 사용
-        group: _firebaseStudent!.group.toString(),
+        group: _firebaseStudent!.group, // 이미 String이므로 toString() 제거
         isTeacher: false,
       );
 
@@ -156,7 +156,7 @@ class AuthProvider extends ChangeNotifier {
       await _saveStudentLoginInfo(studentId, name);
 
       // TaskProvider에 사용자 변경 알림 (학생 로그인)
-      int? groupId = int.tryParse(_firebaseStudent!.group.toString());
+      String groupId = _firebaseStudent!.group;
       _notifyTaskProviderForUserChange(studentId, groupId);
     } catch (e) {
       _setError(e.toString());
@@ -173,8 +173,8 @@ class AuthProvider extends ChangeNotifier {
     await prefs.setString('name', name);
   }
 
-  // TaskProvider에 사용자 변경 알림
-  void _notifyTaskProviderForUserChange(String? studentId, int? groupId) {
+  // TaskProvider에 사용자 변경 알림 메서드 수정 (int? -> String?)
+  void _notifyTaskProviderForUserChange(String? studentId, String? groupId) {
     try {
       // navigatorKey를 통해 context 가져오기
       final context = navigatorKey.currentContext;

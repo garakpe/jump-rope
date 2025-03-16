@@ -31,7 +31,7 @@ class AuthService {
       name: '김철수',
       studentId: '12345',
       grade: '1',
-      group: 1,
+      group: '1',
       individualTasks: {
         '양발모아 뛰기': {'completed': true, 'completedDate': '2023-09-10 10:00:00'},
         '구보로 뛰기': {'completed': false, 'completedDate': null},

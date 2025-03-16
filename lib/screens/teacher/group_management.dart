@@ -23,7 +23,7 @@ class _GroupManagementState extends State<GroupManagement> {
   String _statusMessage = ''; // 상태 메시지
 
   // 모둠 변경을 추적하기 위한 임시 저장소
-  final Map<String, int> _pendingGroupChanges = {};
+  final Map<String, String> _pendingGroupChanges = {};
 
   @override
   void initState() {
@@ -277,10 +277,10 @@ class _GroupManagementState extends State<GroupManagement> {
     print('_buildGroupView 호출됨 - 학생 수: ${students.length}');
 
     // 그룹 목록 생성
-    final groups = <int>{};
+    final groups = <String>{};
     for (var student in students) {
       // 변경 예정인 모둠이 있으면 그 모둠을 사용, 없으면 현재 모둠 사용
-      int displayGroup = _pendingGroupChanges[student.id] ?? student.group;
+      String displayGroup = _pendingGroupChanges[student.id] ?? student.group;
       groups.add(displayGroup);
     }
 
@@ -325,9 +325,9 @@ class _GroupManagementState extends State<GroupManagement> {
       itemBuilder: (context, index) {
         final groupNum = groups.elementAt(index);
 
-        // 현재 표시할 모둠에 속한 학생들 (변경 예정인 모둠 반영)
+// 현재 표시할 모둠에 속한 학생들 (변경 예정인 모둠 반영)
         final groupStudents = students.where((s) {
-          int studentGroup = _pendingGroupChanges[s.id] ?? s.group;
+          String studentGroup = _pendingGroupChanges[s.id] ?? s.group;
           return studentGroup == groupNum;
         }).toList();
 
@@ -418,12 +418,12 @@ class _GroupManagementState extends State<GroupManagement> {
                         ],
                       ),
                       trailing: _isEditMode
-                          ? DropdownButton<int>(
+                          ? DropdownButton<String>(
                               value: _pendingGroupChanges[student.id] ??
                                   student.group,
                               items: List.generate(_totalGroups, (i) => i + 1)
-                                  .map((g) => DropdownMenuItem<int>(
-                                        value: g,
+                                  .map((g) => DropdownMenuItem<String>(
+                                        value: g.toString(),
                                         child: Text('$g모둠'),
                                       ))
                                   .toList(),
@@ -636,12 +636,12 @@ class _GroupManagementState extends State<GroupManagement> {
                     style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
                   ),
                   trailing: _isEditMode
-                      ? DropdownButton<int>(
+                      ? DropdownButton<String>(
                           value:
                               _pendingGroupChanges[student.id] ?? student.group,
                           items: List.generate(_totalGroups, (i) => i + 1)
-                              .map((g) => DropdownMenuItem<int>(
-                                    value: g,
+                              .map((g) => DropdownMenuItem<String>(
+                                    value: g.toString(),
                                     child: Text('$g모둠'),
                                   ))
                               .toList(),

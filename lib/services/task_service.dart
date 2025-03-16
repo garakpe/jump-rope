@@ -175,8 +175,8 @@ class TaskService {
 
   // 모둠원 데이터 가져오기
   Future<List<FirebaseStudentModel>> getGroupMembers(
-      int groupId, String grade) async {
-    if (groupId <= 0) {
+      String groupId, String grade) async {
+    if (groupId.isEmpty) {
       return [];
     }
 
@@ -215,7 +215,7 @@ class TaskService {
       } catch (e) {
         // 로컬 캐시에서 조회 시도
         result = _students.values
-            .where((student) => student.group == groupId)
+            .where((student) => student.group == groupId.toString())
             .toList();
       }
 
@@ -396,7 +396,7 @@ class TaskService {
         studentId: 'not_found',
         grade: '0',
         classNum: '0',
-        group: 0,
+        group: '0',
       ));
     }
   }
@@ -525,7 +525,7 @@ class TaskService {
   }
 
   // 모둠의 단체줄넘기 자격 확인
-  Future<bool> canStartGroupActivities(String grade, int groupId) async {
+  Future<bool> canStartGroupActivities(String grade, String groupId) async {
     try {
       // 모둠 학생들 가져오기
       QuerySnapshot students = await _firestore

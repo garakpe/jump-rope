@@ -1289,7 +1289,7 @@ class _ReflectionManagementState extends State<ReflectionManagement>
     }
   }
 
-  // 학생 목록 구현
+  // 학생 목록 구현 메서드 수정
   Widget _buildStudentList(int reflectionType) {
     final studentProvider = Provider.of<StudentProvider>(context);
     final reflectionProvider = Provider.of<ReflectionProvider>(context);
@@ -1310,7 +1310,7 @@ class _ReflectionManagementState extends State<ReflectionManagement>
     }
 
     // 모둠별로 학생 그룹화
-    final Map<int, List<FirebaseStudentModel>> groupedStudents = {};
+    final Map<String, List<FirebaseStudentModel>> groupedStudents = {};
     for (var student in students) {
       if (!groupedStudents.containsKey(student.group)) {
         groupedStudents[student.group] = [];
@@ -1318,8 +1318,13 @@ class _ReflectionManagementState extends State<ReflectionManagement>
       groupedStudents[student.group]!.add(student);
     }
 
-    // 모둠 번호 정렬
-    final sortedGroups = groupedStudents.keys.toList()..sort();
+    // 모둠 번호 정렬 (숫자 기준으로)
+    final sortedGroups = groupedStudents.keys.toList()
+      ..sort((a, b) {
+        int numA = int.tryParse(a) ?? 0;
+        int numB = int.tryParse(b) ?? 0;
+        return numA.compareTo(numB);
+      });
 
     return Padding(
       padding: const EdgeInsets.all(16),
@@ -1375,7 +1380,7 @@ class _ReflectionManagementState extends State<ReflectionManagement>
 
   // 모둠별 학생 그룹 위젯
   Widget _buildStudentGroup(
-      int groupNum,
+      String groupNum,
       List<FirebaseStudentModel> groupStudents,
       int reflectionId,
       ReflectionProvider reflectionProvider) {
@@ -1409,7 +1414,7 @@ class _ReflectionManagementState extends State<ReflectionManagement>
                   ),
                   child: Center(
                     child: Text(
-                      '$groupNum',
+                      groupNum,
                       style: TextStyle(
                         fontWeight: FontWeight.bold,
                         color: Colors.amber.shade800,

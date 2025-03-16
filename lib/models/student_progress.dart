@@ -15,7 +15,7 @@ class StudentProgress {
   final String id;
   final String name;
   final int number;
-  final int group;
+  final String group;
   final int currentLevel;
   final Map<String, TaskProgress> individualProgress;
   final Map<String, TaskProgress> groupProgress;
@@ -38,7 +38,7 @@ class StudentProgress {
     String? id,
     String? name,
     int? number,
-    int? group,
+    String? group,
     int? currentLevel,
     Map<String, TaskProgress>? individualProgress,
     Map<String, TaskProgress>? groupProgress,

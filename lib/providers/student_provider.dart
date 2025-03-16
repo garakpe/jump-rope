@@ -106,7 +106,7 @@ class StudentProvider extends ChangeNotifier {
   }
 
   // 학생 모둠 업데이트
-  Future<void> updateStudentGroup(String studentId, int newGroup) async {
+  Future<void> updateStudentGroup(String studentId, String newGroup) async {
     try {
       String? docId = await _getStudentDocId(studentId);
       if (docId == null) throw Exception("학생을 찾을 수 없습니다");
@@ -140,7 +140,7 @@ class StudentProvider extends ChangeNotifier {
 
   // 여러 학생의 모둠을 동시에 변경 (Map 사용)
   Future<void> updateGroupsForMultipleStudents(
-      Map<String, int> studentGroupMap) async {
+      Map<String, String> studentGroupMap) async {
     if (studentGroupMap.isEmpty) return;
 
     try {
@@ -196,7 +196,7 @@ class StudentProvider extends ChangeNotifier {
 
   // 모둠 일괄 변경 (여러 학생의 모둠을 한번에 변경)
   Future<void> updateGroupForStudents(
-      List<String> studentIds, int newGroup) async {
+      List<String> studentIds, String newGroup) async {
     if (studentIds.isEmpty) return;
 
     try {
@@ -284,7 +284,7 @@ class StudentProvider extends ChangeNotifier {
   }
 
   // 모둠별 학생 목록 가져오기
-  List<FirebaseStudentModel> getStudentsByGroup(int groupId) {
+  List<FirebaseStudentModel> getStudentsByGroup(String groupId) {
     return _students.where((student) => student.group == groupId).toList();
   }
 
@@ -295,8 +295,8 @@ class StudentProvider extends ChangeNotifier {
   }
 
   // 모둠별 학생 수 계산
-  Map<int, int> getGroupCounts() {
-    final counts = <int, int>{};
+  Map<String, int> getGroupCounts() {
+    final counts = <String, int>{};
     for (var student in _students) {
       counts[student.group] = (counts[student.group] ?? 0) + 1;
     }
@@ -304,8 +304,8 @@ class StudentProvider extends ChangeNotifier {
   }
 
   // 현재 모둠 목록 가져오기
-  List<int> getGroupList() {
-    final groups = <int>{};
+  List<String> getGroupList() {
+    final groups = <String>{};
     for (var student in _students) {
       groups.add(student.group);
     }

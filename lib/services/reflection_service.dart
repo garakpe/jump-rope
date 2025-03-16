@@ -216,7 +216,7 @@ class ReflectionService {
     required String grade,
     required String classNum,
     required String studentNum,
-    required int group,
+    required String group,
     required int reflectionId,
     required List<String> questions,
     required Map<String, String> answers,

@@ -88,8 +88,8 @@ class _ProgressManagementState extends State<ProgressManagement> {
       );
     }
 
-    // 모둠 정보 계산
-    final currentGroups = <int>{};
+// 모둠 정보 계산
+    final currentGroups = <String>{};
     for (var student in students) {
       currentGroups.add(student.group);
     }
@@ -310,7 +310,7 @@ class _ProgressManagementState extends State<ProgressManagement> {
         : TaskModel.getGroupTasks();
 
     // 모둠별로 학생 그룹화
-    final Map<int, List<StudentProgress>> groupedStudents = {};
+    final Map<String, List<StudentProgress>> groupedStudents = {};
     for (var student in students) {
       if (!groupedStudents.containsKey(student.group)) {
         groupedStudents[student.group] = [];
@@ -379,7 +379,7 @@ class _ProgressManagementState extends State<ProgressManagement> {
                           ),
                           child: Center(
                             child: Text(
-                              '$groupNum',
+                              groupNum,
                               style: const TextStyle(
                                 color: Colors.white,
                                 fontWeight: FontWeight.bold,
@@ -885,7 +885,7 @@ class _ProgressManagementState extends State<ProgressManagement> {
       final student = taskProvider.students.firstWhere(
         (s) => s.id == studentId,
         orElse: () => StudentProgress(
-            id: "", name: "", number: 0, group: 0, studentId: ''),
+            id: "", name: "", number: 0, group: '', studentId: ''),
       );
 
       // 이미 완료된 과제인지 확인

@@ -223,7 +223,7 @@ class _ReflectionDetailScreenState extends State<ReflectionDetailScreen> {
           grade: user.grade ?? '',
           classNum: classNumToUse, // 여기서 처리된 classNum 값 사용
           studentNum: studentNumToUse, // studentNum 필드 추가
-          group: int.tryParse(user.group ?? '0') ?? 0,
+          group: user.group ?? '',
           status: ReflectionStatus.submitted,
         ),
       );
