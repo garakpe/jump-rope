@@ -1,6 +1,7 @@
-// lib/screens/teacher/progress_management.dart 수정된 코드
+// lib/screens/teacher/progress_management.dart - iOS-style redesign
 
 import 'package:flutter/material.dart';
+import 'package:flutter/cupertino.dart';
 import 'package:provider/provider.dart';
 import '../../models/task_model.dart';
 import '../../providers/task_provider.dart';
@@ -63,7 +64,7 @@ class _ProgressManagementState extends State<ProgressManagement> {
     // 학생이 없는 경우 로딩 표시 또는 메시지 표시
     if (isLoading) {
       return const Center(
-        child: CircularProgressIndicator(),
+        child: CupertinoActivityIndicator(radius: 16),
       );
     }
 
@@ -72,11 +73,15 @@ class _ProgressManagementState extends State<ProgressManagement> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.school_outlined, size: 64, color: Colors.grey.shade300),
+            Icon(CupertinoIcons.person_2,
+                size: 64, color: Colors.grey.shade300),
             const SizedBox(height: 16),
             Text(
               '학급을 선택하고 학생을 추가해주세요',
-              style: TextStyle(color: Colors.grey.shade600),
+              style: TextStyle(
+                  color: Colors.grey.shade600,
+                  fontWeight: FontWeight.w500,
+                  fontSize: 16),
             ),
           ],
         ),
@@ -95,39 +100,55 @@ class _ProgressManagementState extends State<ProgressManagement> {
       children: [
         // 헤더 영역
         _buildHeaderCard(),
-        const SizedBox(height: 16),
+        const SizedBox(height: 12),
 
         // 오프라인 모드 알림
         if (isOffline)
           Container(
-            margin: const EdgeInsets.symmetric(vertical: 8),
-            padding: const EdgeInsets.all(12),
+            margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
             decoration: BoxDecoration(
-              color: Colors.orange.shade50,
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: Colors.orange.shade200),
+              color: const Color(0xFFFFF9E6), // 옅은 노란색
+              borderRadius: BorderRadius.circular(14),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.05),
+                  blurRadius: 6,
+                  offset: const Offset(0, 2),
+                ),
+              ],
             ),
             child: Row(
               children: [
-                Icon(Icons.info_outline, color: Colors.orange.shade700),
-                const SizedBox(width: 8),
-                Expanded(
+                const Icon(CupertinoIcons.wifi_slash,
+                    color: CupertinoColors.systemOrange),
+                const SizedBox(width: 10),
+                const Expanded(
                   child: Text(
                     '오프라인 모드: 변경 사항은 네트워크 연결이 복구되면 동기화됩니다',
-                    style: TextStyle(color: Colors.orange.shade700),
+                    style: TextStyle(
+                      color: CupertinoColors.systemOrange,
+                      fontSize: 14,
+                      fontWeight: FontWeight.w500,
+                    ),
                   ),
                 ),
-                TextButton(
+                CupertinoButton(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  child: const Text(
+                    '동기화',
+                    style: TextStyle(
+                      color: CupertinoColors.activeBlue,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
                   onPressed: () {
                     taskProvider.syncData();
                     ScaffoldMessenger.of(context).showSnackBar(
                       const SnackBar(content: Text('데이터 동기화 중...')),
                     );
                   },
-                  child: Text(
-                    '동기화',
-                    style: TextStyle(color: Colors.orange.shade700),
-                  ),
                 ),
               ],
             ),
@@ -142,10 +163,20 @@ class _ProgressManagementState extends State<ProgressManagement> {
   }
 
   Widget _buildHeaderCard() {
-    return Card(
-      elevation: 2,
-      shape: RoundedRectangleBorder(
+    // iOS 스타일로 헤더 리디자인
+    return Container(
+      margin: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+      decoration: BoxDecoration(
+        color: Colors.white,
         borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 10,
+            spreadRadius: 0,
+            offset: const Offset(0, 1),
+          ),
+        ],
       ),
       child: Padding(
         padding: const EdgeInsets.all(16.0),
@@ -155,35 +186,35 @@ class _ProgressManagementState extends State<ProgressManagement> {
             Row(
               children: [
                 Icon(
-                  Icons.school,
+                  _viewMode == 'individual'
+                      ? CupertinoIcons.person_crop_circle
+                      : CupertinoIcons.person_3_fill,
                   color: _viewMode == 'individual'
-                      ? Colors.blue.shade700
-                      : Colors.green.shade700,
+                      ? CupertinoColors.activeBlue
+                      : CupertinoColors.activeGreen,
+                  size: 22,
                 ),
-                const SizedBox(width: 8),
+                const SizedBox(width: 10),
                 Text(
                   '${widget.selectedClassId}반 학습 현황',
                   style: TextStyle(
                     fontSize: 18,
-                    fontWeight: FontWeight.bold,
+                    fontWeight: FontWeight.w600,
                     color: _viewMode == 'individual'
-                        ? Colors.blue.shade700
-                        : Colors.green.shade700,
+                        ? CupertinoColors.activeBlue
+                        : CupertinoColors.activeGreen,
                   ),
                 ),
               ],
             ),
+            // iOS 스타일 세그먼트 컨트롤
             Container(
               decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(24),
-                gradient: LinearGradient(
-                  colors: [Colors.blue.shade400, Colors.green.shade400],
-                  begin: Alignment.centerLeft,
-                  end: Alignment.centerRight,
-                ),
+                color: const Color(0xFFEEEEEE),
+                borderRadius: BorderRadius.circular(8),
               ),
-              padding: const EdgeInsets.all(2),
               child: Row(
+                mainAxisSize: MainAxisSize.min,
                 children: [
                   GestureDetector(
                     onTap: () {
@@ -200,15 +231,25 @@ class _ProgressManagementState extends State<ProgressManagement> {
                         color: _viewMode == 'individual'
                             ? Colors.white
                             : Colors.transparent,
-                        borderRadius: BorderRadius.circular(22),
+                        borderRadius: BorderRadius.circular(8),
+                        boxShadow: _viewMode == 'individual'
+                            ? [
+                                BoxShadow(
+                                  color: Colors.black.withOpacity(0.08),
+                                  blurRadius: 2,
+                                  spreadRadius: 0,
+                                  offset: const Offset(0, 1),
+                                ),
+                              ]
+                            : null,
                       ),
                       child: Text(
                         '개인줄넘기',
                         style: TextStyle(
                           color: _viewMode == 'individual'
-                              ? Colors.blue.shade700
-                              : Colors.white,
-                          fontWeight: FontWeight.bold,
+                              ? CupertinoColors.activeBlue
+                              : Colors.grey.shade700,
+                          fontWeight: FontWeight.w500,
                           fontSize: 14,
                         ),
                       ),
@@ -229,15 +270,25 @@ class _ProgressManagementState extends State<ProgressManagement> {
                         color: _viewMode == 'group'
                             ? Colors.white
                             : Colors.transparent,
-                        borderRadius: BorderRadius.circular(22),
+                        borderRadius: BorderRadius.circular(8),
+                        boxShadow: _viewMode == 'group'
+                            ? [
+                                BoxShadow(
+                                  color: Colors.black.withOpacity(0.08),
+                                  blurRadius: 2,
+                                  spreadRadius: 0,
+                                  offset: const Offset(0, 1),
+                                ),
+                              ]
+                            : null,
                       ),
                       child: Text(
                         '단체줄넘기',
                         style: TextStyle(
                           color: _viewMode == 'group'
-                              ? Colors.green.shade700
-                              : Colors.white,
-                          fontWeight: FontWeight.bold,
+                              ? CupertinoColors.activeGreen
+                              : Colors.grey.shade700,
+                          fontWeight: FontWeight.w500,
                           fontSize: 14,
                         ),
                       ),
@@ -270,349 +321,522 @@ class _ProgressManagementState extends State<ProgressManagement> {
     // 모둠 번호 정렬
     final sortedGroups = groupedStudents.keys.toList()..sort();
 
-    return SingleChildScrollView(
-      child: Column(
-        children: sortedGroups.map((groupNum) {
-          final groupStudents = groupedStudents[groupNum]!;
-          // 각 모둠 내에서 학생 이름 기준으로 정렬
-          groupStudents.sort((a, b) => a.name.compareTo(b.name));
+    return ListView.builder(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      itemCount: sortedGroups.length,
+      itemBuilder: (context, index) {
+        final groupNum = sortedGroups[index];
+        final groupStudents = groupedStudents[groupNum]!;
+        // 각 모둠 내에서 학생 이름 기준으로 정렬
+        groupStudents.sort((a, b) => a.name.compareTo(b.name));
 
-          // 모둠의 단체줄넘기 자격 여부 확인
-          final qualification = _checkGroupQualification(groupStudents);
+        // 모둠의 단체줄넘기 자격 여부 확인
+        final qualification = _checkGroupQualification(groupStudents);
 
-          return Card(
-            elevation: 2,
-            margin: const EdgeInsets.only(bottom: 16),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(16),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // 모둠 헤더
+        return Container(
+          margin: const EdgeInsets.only(bottom: 16),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(16),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.05),
+                blurRadius: 10,
+                spreadRadius: 0,
+                offset: const Offset(0, 2),
+              ),
+            ],
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // 모둠 헤더 - iOS 스타일로 리디자인
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                decoration: BoxDecoration(
+                  color: _viewMode == 'individual'
+                      ? const Color(0xFFE5F1FC) // 밝은 파란색 배경
+                      : const Color(0xFFE6F7EC), // 밝은 녹색 배경
+                  borderRadius: const BorderRadius.only(
+                    topLeft: Radius.circular(16),
+                    topRight: Radius.circular(16),
+                  ),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Row(
+                      children: [
+                        Container(
+                          width: 30,
+                          height: 30,
+                          decoration: BoxDecoration(
+                            color: _viewMode == 'individual'
+                                ? CupertinoColors.activeBlue
+                                : CupertinoColors.activeGreen,
+                            shape: BoxShape.circle,
+                          ),
+                          child: Center(
+                            child: Text(
+                              '$groupNum',
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontWeight: FontWeight.bold,
+                                fontSize: 15,
+                              ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Text(
+                          '모둠 (${groupStudents.length}명)',
+                          style: TextStyle(
+                            fontWeight: FontWeight.w600,
+                            fontSize: 16,
+                            color: _viewMode == 'individual'
+                                ? CupertinoColors.activeBlue
+                                : CupertinoColors.activeGreen,
+                          ),
+                        ),
+                      ],
+                    ),
+                    if (_viewMode == 'group')
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 6,
+                        ),
+                        decoration: BoxDecoration(
+                          color: qualification.qualified
+                              ? const Color(0xFFE6F7EC)
+                              : const Color(0xFFF5F5F5),
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(
+                            color: qualification.qualified
+                                ? CupertinoColors.activeGreen
+                                : Colors.grey.shade300,
+                            width: 1,
+                          ),
+                        ),
+                        child: Row(
+                          children: [
+                            Icon(
+                              qualification.qualified
+                                  ? CupertinoIcons.check_mark_circled_solid
+                                  : CupertinoIcons.timer,
+                              color: qualification.qualified
+                                  ? CupertinoColors.activeGreen
+                                  : Colors.grey.shade600,
+                              size: 16,
+                            ),
+                            const SizedBox(width: 6),
+                            Text(
+                              qualification.qualified
+                                  ? '단체줄넘기 가능'
+                                  : '${qualification.count}/${qualification.needed}',
+                              style: TextStyle(
+                                color: qualification.qualified
+                                    ? CupertinoColors.activeGreen
+                                    : Colors.grey.shade700,
+                                fontSize: 13,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+
+              // iOS 스타일 진도표
+              _buildIOSStyleProgressTable(groupStudents, tasks, qualification),
+
+              // 단체줄넘기 자격 알림 (개인줄넘기 탭에서만 표시)
+              if (_viewMode == 'individual' && !qualification.qualified)
                 Container(
                   width: double.infinity,
-                  padding: const EdgeInsets.all(16),
+                  margin: const EdgeInsets.all(16),
+                  padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
-                    color: _viewMode == 'individual'
-                        ? Colors.blue.shade100
-                        : Colors.green.shade100,
-                    borderRadius: const BorderRadius.only(
-                      topLeft: Radius.circular(16),
-                      topRight: Radius.circular(16),
+                    color: const Color(0xFFE5F1FC), // 옅은 파란색
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: CupertinoColors.systemBlue.withOpacity(0.3),
+                      width: 1,
                     ),
                   ),
                   child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Text(
-                        '$groupNum모둠 (${groupStudents.length}명)',
-                        style: TextStyle(
-                          fontWeight: FontWeight.bold,
-                          fontSize: 16,
-                          color: _viewMode == 'individual'
-                              ? Colors.blue.shade800
-                              : Colors.green.shade800,
+                      const Icon(
+                        CupertinoIcons.info_circle_fill,
+                        color: CupertinoColors.systemBlue,
+                        size: 18,
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: RichText(
+                          text: TextSpan(
+                            style: const TextStyle(
+                              color: CupertinoColors.systemBlue,
+                              fontSize: 14,
+                              height: 1.3,
+                            ),
+                            children: [
+                              const TextSpan(
+                                text: '개인줄넘기 목표: ',
+                                style: TextStyle(fontWeight: FontWeight.w600),
+                              ),
+                              TextSpan(
+                                text:
+                                    '${qualification.count}/${qualification.needed} 완료',
+                              ),
+                              TextSpan(
+                                text:
+                                    ' (${qualification.needed - qualification.count}개 더 필요)',
+                                style: TextStyle(
+                                  color: CupertinoColors.systemBlue
+                                      .withOpacity(0.7),
+                                  fontSize: 13,
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
                       ),
-                      if (_viewMode == 'group')
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 12,
-                            vertical: 6,
-                          ),
-                          decoration: BoxDecoration(
-                            color: qualification.qualified
-                                ? Colors.green.shade200
-                                : Colors.grey.shade200,
-                            borderRadius: BorderRadius.circular(16),
-                          ),
-                          child: Text(
-                            qualification.qualified
-                                ? '단체줄넘기 시작 가능!'
-                                : '개인 성공 ${qualification.count}/${qualification.needed}',
-                            style: TextStyle(
-                              color: qualification.qualified
-                                  ? Colors.green.shade900
-                                  : Colors.grey.shade800,
-                              fontSize: 12,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                        ),
                     ],
                   ),
                 ),
+            ],
+          ),
+        );
+      },
+    );
+  }
 
-                // 진도표
-                SingleChildScrollView(
-                  scrollDirection: Axis.horizontal,
-                  child: SingleChildScrollView(
-                    child: DataTable(
-                      columnSpacing: 10,
-                      headingRowColor: WidgetStateProperty.all(
-                        _viewMode == 'individual'
-                            ? Colors.blue.shade50
-                            : Colors.green.shade50,
-                      ),
-                      dataRowColor: WidgetStateProperty.all(Colors.white),
-                      border: TableBorder.all(
-                        color: Colors.grey.shade300,
-                        width: 1,
-                      ),
-                      columns: [
-                        const DataColumn(
-                          label: Text('모둠원',
-                              style: TextStyle(fontWeight: FontWeight.bold)),
+  Widget _buildIOSStyleProgressTable(List<StudentProgress> students,
+      List<TaskModel> tasks, QualificationStatus qualification) {
+    return Container(
+      margin: const EdgeInsets.symmetric(vertical: 8),
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: ConstrainedBox(
+          constraints: BoxConstraints(
+            minWidth: MediaQuery.of(context).size.width - 32,
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // 헤더 행
+              Padding(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                child: Row(
+                  children: [
+                    SizedBox(
+                      width: 80,
+                      child: Text(
+                        '모둠원',
+                        style: TextStyle(
+                          fontWeight: FontWeight.w600,
+                          fontSize: 14,
+                          color: Colors.grey.shade800,
                         ),
-                        const DataColumn(
-                          label: Center(
-                            child: Text('출석',
-                                style: TextStyle(fontWeight: FontWeight.bold)),
+                      ),
+                    ),
+                    SizedBox(
+                      width: 40,
+                      child: Center(
+                        child: Text(
+                          '출석',
+                          style: TextStyle(
+                            fontWeight: FontWeight.w600,
+                            fontSize: 14,
+                            color: Colors.grey.shade800,
                           ),
                         ),
-                        ...tasks.map((task) => DataColumn(
-                              label: Padding(
-                                padding: const EdgeInsets.all(4.0),
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.center,
-                                  children: [
-                                    Text(
-                                      task.name,
-                                      style: const TextStyle(
-                                          fontWeight: FontWeight.bold,
-                                          fontSize: 12),
-                                      textAlign: TextAlign.center,
-                                      overflow: TextOverflow.ellipsis,
-                                    ),
-                                    Text(
-                                      task.count,
-                                      style: const TextStyle(fontSize: 11),
-                                      textAlign: TextAlign.center,
-                                    ),
-                                  ],
+                      ),
+                    ),
+                    ...tasks.map((task) {
+                      return SizedBox(
+                        width: 90,
+                        child: Center(
+                          child: Column(
+                            children: [
+                              Text(
+                                task.name,
+                                style: TextStyle(
+                                  fontWeight: FontWeight.w600,
+                                  fontSize: 14,
+                                  color: Colors.grey.shade800,
+                                ),
+                                textAlign: TextAlign.center,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                              const SizedBox(height: 4),
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 8,
+                                  vertical: 2,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: Colors.grey.shade100,
+                                  borderRadius: BorderRadius.circular(10),
+                                ),
+                                child: Text(
+                                  task.count,
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    color: Colors.grey.shade700,
+                                  ),
                                 ),
                               ),
-                            )),
-                      ],
-                      rows: groupStudents.map((student) {
-                        return DataRow(
-                          cells: [
-                            DataCell(
-                              Row(
-                                children: [
-                                  Container(
-                                    padding: const EdgeInsets.all(8),
-                                    decoration: BoxDecoration(
-                                      color: Colors.grey.shade100,
-                                      shape: BoxShape.circle,
-                                    ),
+                            ],
+                          ),
+                        ),
+                      );
+                    }).toList(),
+                  ],
+                ),
+              ),
+
+              // 구분선
+              Divider(color: Colors.grey.shade200, height: 1),
+
+              // 학생 행
+              ...students.map((student) {
+                return Column(
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.symmetric(
+                          vertical: 8, horizontal: 16),
+                      child: Row(
+                        children: [
+                          // 학생 정보
+                          SizedBox(
+                            width: 80,
+                            child: Row(
+                              children: [
+                                Container(
+                                  width: 26,
+                                  height: 26,
+                                  decoration: BoxDecoration(
+                                    color: _viewMode == 'individual'
+                                        ? CupertinoColors.systemBlue
+                                            .withOpacity(0.1)
+                                        : CupertinoColors.systemGreen
+                                            .withOpacity(0.1),
+                                    shape: BoxShape.circle,
+                                  ),
+                                  child: Center(
                                     child: Text(
                                       '${student.number}',
-                                      style: const TextStyle(
-                                          fontWeight: FontWeight.bold),
-                                    ),
-                                  ),
-                                  const SizedBox(width: 8),
-                                  Text(
-                                    student.name,
-                                    style: const TextStyle(
-                                        fontWeight: FontWeight.bold),
-                                  ),
-                                ],
-                              ),
-                            ),
-                            DataCell(
-                              Center(
-                                child: student.attendance
-                                    ? Icon(Icons.check_circle,
-                                        color: Colors.green.shade600)
-                                    : Icon(Icons.cancel,
-                                        color: Colors.red.shade400),
-                              ),
-                            ),
-                            ...tasks.map((task) {
-                              final isIndividual = _viewMode == 'individual';
-                              final progress = isIndividual
-                                  ? student.individualProgress[task.name]
-                                  : student.groupProgress[task.name];
-                              final isCompleted =
-                                  progress?.isCompleted ?? false;
-                              final completionDate = progress?.completedDate;
-
-                              return DataCell(
-                                Material(
-                                  color: Colors.transparent,
-                                  child: InkWell(
-                                    onTap: () {
-                                      // 단체줄넘기는 자격 있을 때만 체크 가능
-                                      bool canToggle = true;
-                                      if (!isIndividual && !isCompleted) {
-                                        // 단체줄넘기는 자격 조건 확인
-                                        canToggle = qualification.qualified;
-                                      }
-
-                                      if (student.attendance && canToggle) {
-                                        // 도장 부여/취소 로직 호출
-                                        _toggleTaskCompletion(
-                                            student.id,
-                                            task.name,
-                                            !isCompleted,
-                                            !isIndividual);
-
-                                        // 디버깅용
-                                        print(
-                                            '도장 상태 변경 시도: 학생=${student.id}, 과제=${task.name}, 완료=${!isCompleted}');
-                                      } else if (!canToggle &&
-                                          !isIndividual &&
-                                          !isCompleted) {
-                                        // 단체줄넘기 자격이 없는 경우 안내
-                                        ScaffoldMessenger.of(context)
-                                            .showSnackBar(
-                                          SnackBar(
-                                            content: Text(
-                                                '단체줄넘기는 개인줄넘기 성공 도장 ${qualification.needed}개 이상 획득 시 시작할 수 있습니다.'),
-                                            backgroundColor: Colors.orange,
-                                          ),
-                                        );
-                                      }
-                                    },
-                                    child: Ink(
-                                      width: double.infinity,
-                                      height: double.infinity,
-                                      color: isCompleted
-                                          ? (isIndividual
-                                              ? Colors.blue.shade50
-                                              : Colors.green.shade50)
-                                          : null,
-                                      child: Center(
-                                        child: isCompleted
-                                            ? Column(
-                                                mainAxisAlignment:
-                                                    MainAxisAlignment.center,
-                                                children: [
-                                                  Icon(
-                                                    Icons.check_circle,
-                                                    color: isIndividual
-                                                        ? Colors.blue
-                                                        : Colors.green,
-                                                    size: 24,
-                                                  ),
-                                                  if (completionDate != null)
-                                                    Container(
-                                                      margin:
-                                                          const EdgeInsets.only(
-                                                              top: 4),
-                                                      padding: const EdgeInsets
-                                                          .symmetric(
-                                                          horizontal: 4,
-                                                          vertical: 2),
-                                                      decoration: BoxDecoration(
-                                                        color: isIndividual
-                                                            ? Colors
-                                                                .blue.shade100
-                                                                .withOpacity(
-                                                                    0.7)
-                                                            : Colors
-                                                                .green.shade100
-                                                                .withOpacity(
-                                                                    0.7),
-                                                        borderRadius:
-                                                            BorderRadius
-                                                                .circular(4),
-                                                      ),
-                                                      child: Text(
-                                                        _formatDate(
-                                                            completionDate),
-                                                        style: TextStyle(
-                                                          fontSize: 9,
-                                                          fontWeight:
-                                                              FontWeight.bold,
-                                                          color: isIndividual
-                                                              ? Colors
-                                                                  .blue.shade800
-                                                              : Colors.green
-                                                                  .shade800,
-                                                        ),
-                                                      ),
-                                                    ),
-                                                ],
-                                              )
-                                            : Column(
-                                                mainAxisAlignment:
-                                                    MainAxisAlignment.center,
-                                                children: [
-                                                  Icon(
-                                                    Icons.add_circle_outline,
-                                                    color: Colors.grey.shade400,
-                                                    size: 20,
-                                                  ),
-                                                  Text(
-                                                    "클릭하여 도장 부여",
-                                                    style: TextStyle(
-                                                      fontSize: 8,
-                                                      color:
-                                                          Colors.grey.shade500,
-                                                    ),
-                                                  ),
-                                                ],
-                                              ),
+                                      style: TextStyle(
+                                        fontWeight: FontWeight.w600,
+                                        fontSize: 13,
+                                        color: _viewMode == 'individual'
+                                            ? CupertinoColors.systemBlue
+                                            : CupertinoColors.systemGreen,
                                       ),
                                     ),
                                   ),
                                 ),
-                              );
-                            }),
-                          ],
-                        );
-                      }).toList(),
-                    ),
-                  ),
-                ),
-
-                // 단체줄넘기 자격 알림 (개인줄넘기 탭에서만 표시)
-                if (_viewMode == 'individual' && !qualification.qualified)
-                  Container(
-                    width: double.infinity,
-                    margin: const EdgeInsets.all(12),
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: Colors.blue.shade50,
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Row(
-                      children: [
-                        const Icon(Icons.info_outline, color: Colors.blue),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: RichText(
-                            text: TextSpan(
-                              style: TextStyle(
-                                  color: Colors.blue.shade700, fontSize: 14),
-                              children: [
-                                const TextSpan(
-                                  text: '개인줄넘기 목표: ',
-                                  style: TextStyle(fontWeight: FontWeight.bold),
-                                ),
-                                TextSpan(
-                                  text:
-                                      '${qualification.count}/${qualification.needed} 완료',
-                                ),
-                                TextSpan(
-                                  text:
-                                      ' - 단체줄넘기 시작을 위해 ${qualification.needed - qualification.count}개가 더 필요합니다',
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: Text(
+                                    student.name,
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.w500,
+                                      fontSize: 14,
+                                    ),
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
                                 ),
                               ],
                             ),
                           ),
-                        ),
-                      ],
+
+                          // 출석 상태
+                          SizedBox(
+                            width: 40,
+                            child: Center(
+                              child: student.attendance
+                                  ? const Icon(
+                                      CupertinoIcons.check_mark_circled_solid,
+                                      color: CupertinoColors.activeGreen,
+                                      size: 22,
+                                    )
+                                  : const Icon(
+                                      CupertinoIcons.xmark_circle_fill,
+                                      color: CupertinoColors.systemRed,
+                                      size: 22,
+                                    ),
+                            ),
+                          ),
+
+                          // 과제 완료 상태
+                          ...tasks.map((task) {
+                            final isIndividual = _viewMode == 'individual';
+                            final progress = isIndividual
+                                ? student.individualProgress[task.name]
+                                : student.groupProgress[task.name];
+                            final isCompleted = progress?.isCompleted ?? false;
+                            final completionDate = progress?.completedDate;
+
+                            return SizedBox(
+                              width: 90,
+                              height: 60,
+                              child: Material(
+                                color: Colors.transparent,
+                                child: InkWell(
+                                  borderRadius: BorderRadius.circular(12),
+                                  onTap: () {
+                                    // 단체줄넘기는 자격 있을 때만 체크 가능
+                                    bool canToggle = true;
+                                    if (!isIndividual && !isCompleted) {
+                                      // 단체줄넘기는 자격 조건 확인
+                                      canToggle = qualification.qualified;
+                                    }
+
+                                    if (student.attendance && canToggle) {
+                                      // 도장 부여/취소 로직 호출
+                                      _toggleTaskCompletion(
+                                          student.id,
+                                          task.name,
+                                          !isCompleted,
+                                          !isIndividual);
+                                    } else if (!canToggle &&
+                                        !isIndividual &&
+                                        !isCompleted) {
+                                      // 단체줄넘기 자격이 없는 경우 안내
+                                      ScaffoldMessenger.of(context)
+                                          .showSnackBar(
+                                        SnackBar(
+                                          content: Text(
+                                              '단체줄넘기는 개인줄넘기 성공 도장 ${qualification.needed}개 이상 획득 시 시작할 수 있습니다.'),
+                                          backgroundColor:
+                                              CupertinoColors.systemOrange,
+                                          behavior: SnackBarBehavior.floating,
+                                        ),
+                                      );
+                                    }
+                                  },
+                                  child: Container(
+                                    margin: const EdgeInsets.all(4),
+                                    decoration: BoxDecoration(
+                                      color: isCompleted
+                                          ? (isIndividual
+                                              ? const Color(
+                                                  0xFFE5F1FC) // 옅은 파란색
+                                              : const Color(
+                                                  0xFFE6F7EC)) // 옅은 녹색
+                                          : Colors.grey.shade50,
+                                      borderRadius: BorderRadius.circular(12),
+                                      border: Border.all(
+                                        color: isCompleted
+                                            ? (isIndividual
+                                                ? CupertinoColors.systemBlue
+                                                    .withOpacity(0.3)
+                                                : CupertinoColors.systemGreen
+                                                    .withOpacity(0.3))
+                                            : Colors.grey.shade200,
+                                        width: 1,
+                                      ),
+                                    ),
+                                    child: Center(
+                                      child: isCompleted
+                                          ? Column(
+                                              mainAxisAlignment:
+                                                  MainAxisAlignment.center,
+                                              children: [
+                                                Icon(
+                                                  CupertinoIcons
+                                                      .checkmark_seal_fill,
+                                                  color: isIndividual
+                                                      ? CupertinoColors
+                                                          .systemBlue
+                                                      : CupertinoColors
+                                                          .systemGreen,
+                                                  size: 22,
+                                                ),
+                                                if (completionDate != null)
+                                                  Container(
+                                                    margin:
+                                                        const EdgeInsets.only(
+                                                            top: 4),
+                                                    padding: const EdgeInsets
+                                                        .symmetric(
+                                                        horizontal: 6,
+                                                        vertical: 2),
+                                                    decoration: BoxDecoration(
+                                                      color: isIndividual
+                                                          ? CupertinoColors
+                                                              .systemBlue
+                                                              .withOpacity(0.1)
+                                                          : CupertinoColors
+                                                              .systemGreen
+                                                              .withOpacity(0.1),
+                                                      borderRadius:
+                                                          BorderRadius.circular(
+                                                              6),
+                                                    ),
+                                                    child: Text(
+                                                      _formatDate(
+                                                          completionDate),
+                                                      style: TextStyle(
+                                                        fontSize: 10,
+                                                        fontWeight:
+                                                            FontWeight.w500,
+                                                        color: isIndividual
+                                                            ? CupertinoColors
+                                                                .systemBlue
+                                                            : CupertinoColors
+                                                                .systemGreen,
+                                                      ),
+                                                    ),
+                                                  ),
+                                              ],
+                                            )
+                                          : Column(
+                                              mainAxisAlignment:
+                                                  MainAxisAlignment.center,
+                                              children: [
+                                                Icon(
+                                                  CupertinoIcons.plus_circle,
+                                                  color: Colors.grey.shade400,
+                                                  size: 20,
+                                                ),
+                                                Text(
+                                                  "도장 부여",
+                                                  style: TextStyle(
+                                                    fontSize: 10,
+                                                    color: Colors.grey.shade500,
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            );
+                          }).toList(),
+                        ],
+                      ),
                     ),
-                  ),
-              ],
-            ),
-          );
-        }).toList(),
+                    Divider(
+                        color: Colors.grey.shade200,
+                        height: 1,
+                        indent: 16,
+                        endIndent: 16),
+                  ],
+                );
+              }).toList(),
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -629,7 +853,7 @@ class _ProgressManagementState extends State<ProgressManagement> {
       final m = dateTime.month.toString().padLeft(2, '0');
       final d = dateTime.day.toString().padLeft(2, '0');
 
-      return '$y/$m/$d';
+      return '$m.$d';
     } catch (e) {
       // 날짜 형식이 아닌 경우 원본 그대로 반환 (최대 10자)
       return dateString.length > 10 ? dateString.substring(0, 10) : dateString;
@@ -692,25 +916,22 @@ class _ProgressManagementState extends State<ProgressManagement> {
         }
       }
 
-      // 건너뛴 과제가 있으면 경고 대화상자 표시
+      // iOS 스타일 경고 대화상자 - 건너뛴 과제가 있는 경우
       if (hasSkippedTasks) {
-        showDialog(
+        showCupertinoDialog(
           context: context,
-          builder: (context) => AlertDialog(
-            title:
-                const Text('단계 순서 확인', style: TextStyle(color: Colors.orange)),
+          builder: (context) => CupertinoAlertDialog(
+            title: const Text('단계 순서 확인'),
             content: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                const SizedBox(height: 8),
                 Text('${student.name} 학생은 이전 단계를 아직 완료하지 않았습니다:'),
                 const SizedBox(height: 12),
                 Container(
                   padding: const EdgeInsets.all(8),
                   decoration: BoxDecoration(
-                    color: Colors.orange.shade50,
+                    color: const Color(0xFFFFF3E0),
                     borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: Colors.orange.shade200),
                   ),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -719,12 +940,17 @@ class _ProgressManagementState extends State<ProgressManagement> {
                               padding: const EdgeInsets.symmetric(vertical: 4),
                               child: Row(
                                 children: [
-                                  Icon(Icons.warning,
-                                      color: Colors.orange.shade700, size: 16),
+                                  const Icon(
+                                      CupertinoIcons
+                                          .exclamationmark_triangle_fill,
+                                      color: CupertinoColors.systemOrange,
+                                      size: 16),
                                   const SizedBox(width: 8),
-                                  Text(name,
-                                      style: const TextStyle(
-                                          fontWeight: FontWeight.bold)),
+                                  Flexible(
+                                    child: Text(name,
+                                        style: const TextStyle(
+                                            fontWeight: FontWeight.bold)),
+                                  ),
                                 ],
                               ),
                             ))
@@ -736,12 +962,13 @@ class _ProgressManagementState extends State<ProgressManagement> {
               ],
             ),
             actions: [
-              TextButton(
+              CupertinoDialogAction(
                 child: const Text('취소'),
                 onPressed: () => Navigator.of(context).pop(),
               ),
-              TextButton(
-                child: const Text('진행', style: TextStyle(color: Colors.orange)),
+              CupertinoDialogAction(
+                child: const Text('진행',
+                    style: TextStyle(color: CupertinoColors.systemOrange)),
                 onPressed: () {
                   Navigator.of(context).pop();
                   _processTaskCompletion(
@@ -768,86 +995,221 @@ class _ProgressManagementState extends State<ProgressManagement> {
     final taskProvider = Provider.of<TaskProvider>(context, listen: false);
     final isOffline = taskProvider.isOffline;
 
-    // 알림 대화상자 표시
-    showDialog(
+    // iOS 스타일 알림 대화상자 표시
+    showCupertinoDialog(
       context: context,
-      builder: (context) => AlertDialog(
+      builder: (context) => CupertinoAlertDialog(
         title: Text(completed ? '과제 성공 도장 부여' : '과제 성공 도장 취소'),
         content: Text(completed
             ? '$taskName 과제에 성공 도장을 부여하시겠습니까?'
             : '$taskName 과제의 성공 도장을 취소하시겠습니까?'),
         actions: [
-          TextButton(
-            child: const Text('취소'),
+          CupertinoDialogAction(
             onPressed: () => Navigator.of(context).pop(),
+            isDefaultAction: true,
+            child: const Text('취소'),
           ),
-          TextButton(
-            child: Text(completed ? '도장 부여' : '도장 취소'),
+          CupertinoDialogAction(
+            child: Text(
+              completed ? '도장 부여' : '도장 취소',
+              style: TextStyle(
+                color: completed
+                    ? CupertinoColors.activeBlue
+                    : CupertinoColors.systemRed,
+              ),
+            ),
             onPressed: () async {
               Navigator.of(context).pop();
 
-              // 로딩 표시 - 타임아웃 설정
-              final snackBar = SnackBar(
-                content: Row(
-                  children: [
-                    const SizedBox(
-                      width: 20,
-                      height: 20,
-                      child: CircularProgressIndicator(strokeWidth: 2),
+              // iOS 스타일 로딩 표시
+              showCupertinoDialog(
+                context: context,
+                barrierDismissible: false,
+                builder: (context) => Center(
+                  child: Container(
+                    width: 100,
+                    height: 100,
+                    decoration: BoxDecoration(
+                      color: CupertinoColors.systemBackground.withOpacity(0.8),
+                      borderRadius: BorderRadius.circular(14),
                     ),
-                    const SizedBox(width: 16),
-                    Text('${completed ? '도장 부여' : '도장 취소'} 중...'),
-                  ],
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        const CupertinoActivityIndicator(radius: 16),
+                        const SizedBox(height: 12),
+                        Text(
+                          completed ? '도장 부여 중' : '도장 취소 중',
+                          style: const TextStyle(
+                            fontSize: 13,
+                            color: CupertinoColors.label,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
                 ),
-                duration: const Duration(seconds: 3), // 최대 3초 표시
-                backgroundColor: Colors.blue.shade700,
               );
-
-              // 스낵바 표시
-              ScaffoldMessenger.of(context).showSnackBar(snackBar);
 
               try {
                 // TaskProvider를 통해 상태 업데이트
                 await taskProvider.updateTaskStatus(
                     studentId, taskName, completed, isGroupTask);
 
-                // 성공 시 기존 스낵바 제거 후 성공 메시지 표시
-                ScaffoldMessenger.of(context).hideCurrentSnackBar();
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text(completed
-                        ? '$taskName 과제에 성공 도장을 부여했습니다.'
-                        : '$taskName 과제의 성공 도장을 취소했습니다.'),
-                    backgroundColor: completed ? Colors.green : Colors.orange,
-                    behavior: SnackBarBehavior.floating,
-                    duration: const Duration(seconds: 2),
+                // 성공 시 로딩 닫기
+                Navigator.of(context).pop();
+
+                // 성공 메시지 표시 - iOS 스타일 배너
+                showCupertinoDialog(
+                  context: context,
+                  barrierDismissible: true,
+                  builder: (context) => Align(
+                    alignment: Alignment.topCenter,
+                    child: Padding(
+                      padding: const EdgeInsets.only(top: 80),
+                      child: Container(
+                        width: MediaQuery.of(context).size.width - 40,
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 16, vertical: 12),
+                        decoration: BoxDecoration(
+                          color: completed
+                              ? CupertinoColors.systemGreen.withOpacity(0.9)
+                              : CupertinoColors.systemOrange.withOpacity(0.9),
+                          borderRadius: BorderRadius.circular(10),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withOpacity(0.1),
+                              blurRadius: 10,
+                              offset: const Offset(0, 5),
+                            ),
+                          ],
+                        ),
+                        child: Row(
+                          children: [
+                            Icon(
+                              completed
+                                  ? CupertinoIcons.checkmark_circle_fill
+                                  : CupertinoIcons.exclamationmark_circle_fill,
+                              color: Colors.white,
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Text(
+                                completed
+                                    ? '$taskName 과제에 성공 도장을 부여했습니다.'
+                                    : '$taskName 과제의 성공 도장을 취소했습니다.',
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
                   ),
                 );
+
+                // 1.5초 후에 배너 자동 닫기
+                Future.delayed(const Duration(milliseconds: 1500), () {
+                  Navigator.of(context, rootNavigator: true).pop();
+                });
 
                 // 매우 중요: UI 강제 갱신
                 setState(() {});
               } catch (e) {
-                // 오류 발생 시 기존 스낵바 제거 후 오류 메시지 표시
-                ScaffoldMessenger.of(context).hideCurrentSnackBar();
+                // 로딩 닫기
+                Navigator.of(context).pop();
 
-                // 오프라인 상태면 다른 메시지 표시
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text(isOffline
-                        ? '오프라인 모드: 변경 사항은 로컬에 저장되었으며 네트워크 연결 시 동기화됩니다.'
-                        : '오류 발생: $e'),
-                    backgroundColor: isOffline ? Colors.orange : Colors.red,
-                    behavior: SnackBarBehavior.floating,
-                    action: isOffline
-                        ? SnackBarAction(
-                            label: '동기화 시도',
-                            onPressed: () {
-                              taskProvider.syncData();
-                            },
-                          )
-                        : null,
+                // 오류 발생 시 iOS 스타일 오류 배너 표시
+                showCupertinoDialog(
+                  context: context,
+                  barrierDismissible: true,
+                  builder: (context) => Align(
+                    alignment: Alignment.topCenter,
+                    child: Padding(
+                      padding: const EdgeInsets.only(top: 80),
+                      child: Container(
+                        width: MediaQuery.of(context).size.width - 40,
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 16, vertical: 12),
+                        decoration: BoxDecoration(
+                          color: isOffline
+                              ? CupertinoColors.systemOrange.withOpacity(0.9)
+                              : CupertinoColors.systemRed.withOpacity(0.9),
+                          borderRadius: BorderRadius.circular(10),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withOpacity(0.1),
+                              blurRadius: 10,
+                              offset: const Offset(0, 5),
+                            ),
+                          ],
+                        ),
+                        child: Row(
+                          children: [
+                            Icon(
+                              isOffline
+                                  ? CupertinoIcons.wifi_slash
+                                  : CupertinoIcons.exclamationmark_circle_fill,
+                              color: Colors.white,
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Text(
+                                    isOffline ? '오프라인 모드' : '오류 발생',
+                                    style: const TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 15,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    isOffline
+                                        ? '변경 사항은 로컬에 저장되었으며 네트워크 연결 시 동기화됩니다.'
+                                        : '오류: $e',
+                                    style: TextStyle(
+                                      color: Colors.white.withOpacity(0.9),
+                                      fontSize: 13,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            if (isOffline)
+                              CupertinoButton(
+                                padding: EdgeInsets.zero,
+                                child: const Text(
+                                  '동기화',
+                                  style: TextStyle(
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 14,
+                                  ),
+                                ),
+                                onPressed: () {
+                                  Navigator.of(context).pop();
+                                  taskProvider.syncData();
+                                },
+                              ),
+                          ],
+                        ),
+                      ),
+                    ),
                   ),
                 );
+
+                // 3초 후에 배너 자동 닫기 (오류는 더 오래 표시)
+                Future.delayed(const Duration(milliseconds: 3000), () {
+                  Navigator.of(context, rootNavigator: true).pop();
+                });
 
                 // 오류가 발생해도 UI 갱신 (로컬 상태는 업데이트되었을 수 있음)
                 setState(() {});
