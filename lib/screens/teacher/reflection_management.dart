@@ -58,6 +58,29 @@ class _ReflectionManagementState extends State<ReflectionManagement>
   }
 
   @override
+  void didUpdateWidget(ReflectionManagement oldWidget) {
+    super.didUpdateWidget(oldWidget);
+
+    // 학급이 변경되었을 때 데이터 새로고침
+    if (oldWidget.selectedClassId != widget.selectedClassId &&
+        widget.selectedClassId > 0) {
+      print('ReflectionManagement - 학급 변경 감지: ${widget.selectedClassId}');
+
+      // 선택된 학급에 대한 성찰 데이터 로드
+      final reflectionProvider =
+          Provider.of<ReflectionProvider>(context, listen: false);
+      reflectionProvider.selectClassAndReflectionType(
+          widget.selectedClassId.toString(), _selectedReflectionType);
+
+      // 마감일 정보 다시 로드
+      _loadDeadlines();
+
+      // 현재 선택된 탭의 통계 로드
+      _loadReflectionStats(_selectedReflectionType);
+    }
+  }
+
+  @override
   void dispose() {
     _tabController.removeListener(_handleTabChange);
     _tabController.dispose();

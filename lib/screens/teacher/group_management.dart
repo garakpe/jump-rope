@@ -42,6 +42,21 @@ class _GroupManagementState extends State<GroupManagement> {
   }
 
   @override
+  void didUpdateWidget(GroupManagement oldWidget) {
+    super.didUpdateWidget(oldWidget);
+
+    // 학급이 변경되었을 때 데이터 새로고침
+    if (oldWidget.selectedClassId != widget.selectedClassId &&
+        widget.selectedClassId > 0) {
+      final studentProvider =
+          Provider.of<StudentProvider>(context, listen: false);
+      final selectedClass = widget.selectedClassId.toString();
+      print('GroupManagement - 학급 변경 감지: $selectedClass');
+      studentProvider.setSelectedClass(selectedClass);
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
     final studentProvider = Provider.of<StudentProvider>(context);
     final students = studentProvider.students;

@@ -37,6 +37,19 @@ class _ProgressManagementState extends State<ProgressManagement> {
   }
 
   @override
+  void didUpdateWidget(ProgressManagement oldWidget) {
+    super.didUpdateWidget(oldWidget);
+
+    // 학급이 변경되었을 때 데이터 새로고침
+    if (oldWidget.selectedClassId != widget.selectedClassId &&
+        widget.selectedClassId > 0) {
+      final taskProvider = Provider.of<TaskProvider>(context, listen: false);
+      print('ProgressManagement - 학급 변경 감지: ${widget.selectedClassId}');
+      taskProvider.selectClass(widget.selectedClassId.toString());
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
     final taskProvider = Provider.of<TaskProvider>(context);
     final students = taskProvider.students;
