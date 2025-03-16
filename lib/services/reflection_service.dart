@@ -721,10 +721,11 @@ class ReflectionService {
       // 엑셀 파일 저장
       final fileBytes = excel.encode();
       if (fileBytes == null) throw Exception("엑셀 파일 생성 실패");
-
+      // 사람이 읽기 쉬운 날짜 형식 생성 (예: 2024-03-16)
+      final now = DateTime.now();
+      final formattedDate = DateFormat('yyyy-MM-dd').format(now);
       // Web 플랫폼인 경우 FileSaver를 사용
-      final fileName =
-          '$classId반_성찰보고서_${DateTime.now().millisecondsSinceEpoch}.xlsx';
+      final fileName = '$classId반_성찰보고서_$formattedDate';
 
       try {
         await FileSaver.instance.saveFile(
@@ -732,7 +733,7 @@ class ReflectionService {
             bytes: Uint8List.fromList(fileBytes),
             ext: 'xlsx',
             mimeType: MimeType.microsoftExcel);
-        return fileName;
+        return '$fileName.xlsx';
       } catch (e) {
         print('파일 저장 오류: $e');
         throw Exception("파일 저장 중 오류가 발생했습니다: $e");
