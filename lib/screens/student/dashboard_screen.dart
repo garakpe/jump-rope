@@ -129,7 +129,7 @@ class _StudentDashboardState extends State<StudentDashboard>
             child: Row(
               children: [
                 Text(
-                  '${user?.className}학년 ${user?.classNum}반 ${user?.group}모둠 ${user?.name}',
+                  '${user?.grade}학년 ${user?.classNum}반 ${user?.group}모둠 ${user?.name}',
                   style: const TextStyle(
                     fontSize: 14,
                     color: Colors.black54,

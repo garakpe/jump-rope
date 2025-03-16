@@ -144,10 +144,10 @@ class AuthProvider extends ChangeNotifier {
       _currentUser = UserModel(
         name: _firebaseStudent!.name,
         studentId: _firebaseStudent!.studentId,
-        className: _firebaseStudent!.className,
+        grade: _firebaseStudent!.grade,
         classNum: _firebaseStudent!.classNum.isNotEmpty
             ? _firebaseStudent!.classNum
-            : _firebaseStudent!.className, // classNum 우선, 없으면 className 사용
+            : _firebaseStudent!.grade, // classNum 우선, 없으면 grade 사용
         group: _firebaseStudent!.group.toString(),
         isTeacher: false,
       );
@@ -208,7 +208,7 @@ class AuthProvider extends ChangeNotifier {
       await prefs.setString('userType', 'student');
       await prefs.setString('studentId', user.studentId ?? '');
       await prefs.setString('name', user.name ?? '');
-      await prefs.setString('className', user.className ?? '');
+      await prefs.setString('grade', user.grade ?? '');
       await prefs.setString('group', user.group ?? '');
     }
   }

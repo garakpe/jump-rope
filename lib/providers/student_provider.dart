@@ -17,20 +17,20 @@ class StudentProvider extends ChangeNotifier {
   String get error => _error;
 
   // 현재 선택된 학급 설정
-  void setSelectedClass(String className) {
-    _selectedClass = className;
+  void setSelectedClass(String grade) {
+    _selectedClass = grade;
     _isLoading = true;
     _error = '';
     _students = [];
     notifyListeners();
 
-    if (className.isNotEmpty) {
-      subscribeToClass(className);
+    if (grade.isNotEmpty) {
+      subscribeToClass(grade);
     }
   }
 
   // 학급별 학생 목록 구독
-  void subscribeToClass(String className) {
+  void subscribeToClass(String grade) {
     _isLoading = true;
     notifyListeners();
 
@@ -38,7 +38,7 @@ class StudentProvider extends ChangeNotifier {
       // 'classNum' 필드로 학생 구독
       _firestore
           .collection('students')
-          .where('classNum', isEqualTo: className)
+          .where('classNum', isEqualTo: grade)
           .orderBy('studentId')
           .snapshots()
           .listen(
@@ -47,9 +47,9 @@ class StudentProvider extends ChangeNotifier {
               .map((doc) => FirebaseStudentModel.fromFirestore(doc))
               .toList();
 
-          // classNum으로 학생을 찾지 못하면 className으로 시도
+          // classNum으로 학생을 찾지 못하면 grade으로 시도
           if (_students.isEmpty) {
-            _tryClassNameQuery(className);
+            _trygradeQuery(grade);
           } else {
             _isLoading = false;
             notifyListeners();
@@ -62,11 +62,11 @@ class StudentProvider extends ChangeNotifier {
     }
   }
 
-  // 'className' 필드로 학생 조회 시도
-  void _tryClassNameQuery(String className) {
+  // 'grade' 필드로 학생 조회 시도
+  void _trygradeQuery(String grade) {
     _firestore
         .collection('students')
-        .where('className', isEqualTo: className)
+        .where('grade', isEqualTo: grade)
         .orderBy('studentId')
         .get()
         .then(

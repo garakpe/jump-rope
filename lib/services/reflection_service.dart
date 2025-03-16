@@ -225,7 +225,7 @@ class ReflectionService {
   Future<String> submitReflection({
     required String studentId,
     required String studentName,
-    required String className,
+    required String grade,
     required String classNum, // classNum 파라미터 추가
     required String studentNum, // studentNum 파라미터 추가
     required int group,
@@ -239,7 +239,7 @@ class ReflectionService {
     final reflectionData = {
       'studentId': studentId,
       'studentName': studentName,
-      'className': className,
+      'grade': grade,
       'classNum': classNum, // classNum 필드 추가
       'studentNum': studentNum,
       'group': group,
@@ -286,7 +286,7 @@ class ReflectionService {
         docId,
         studentId,
         studentName,
-        className,
+        grade,
         classNum, // classNum 전달
         "",
         group,
@@ -311,7 +311,7 @@ class ReflectionService {
         localId,
         studentId,
         studentName,
-        className,
+        grade,
         classNum, // classNum 전달
         "",
         group,
@@ -485,12 +485,12 @@ class ReflectionService {
 
   // 학급의 성찰 유형별 보고서 가져오기
   Stream<List<FirebaseReflectionModel>> getClassReflections(
-      String className, int reflectionType) {
+      String grade, int reflectionType) {
     try {
       // 파이어베이스 연동 코드
       return _firestore
           .collection('reflections')
-          .where('className', isEqualTo: className)
+          .where('grade', isEqualTo: grade)
           .where('reflectionId', isEqualTo: reflectionType)
           .snapshots()
           .map((snapshot) => snapshot.docs
@@ -500,7 +500,7 @@ class ReflectionService {
       print('성찰 보고서 목록 조회 오류: $e');
 
       // 로컬 구현
-      final classReflections = _reflectionsByClass[className] ?? [];
+      final classReflections = _reflectionsByClass[grade] ?? [];
       final typeReflections = classReflections
           .where((r) => r.reflectionId == reflectionType)
           .toList();
@@ -567,7 +567,7 @@ class ReflectionService {
 
   // 성찰 보고서 엑셀 다운로드 URL 생성
   Future<String> generateReflectionExcel(
-      String className, int reflectionType) async {
+      String grade, int reflectionType) async {
     try {
       // 실제 구현은 Cloud Functions를 통해 진행
       // 현재는 임시 구현으로 가짜 URL 반환
@@ -575,7 +575,7 @@ class ReflectionService {
       // 모든 제출 데이터 가져오기
       QuerySnapshot snapshot = await _firestore
           .collection('reflections')
-          .where('className', isEqualTo: className)
+          .where('grade', isEqualTo: grade)
           .where('reflectionId', isEqualTo: reflectionType)
           .get();
 
@@ -598,7 +598,7 @@ class ReflectionService {
       }
 
       // 임시 URL 반환
-      return 'https://example.com/download/reflection_${className}_${reflectionTypeName}_${DateTime.now().millisecondsSinceEpoch}.xlsx';
+      return 'https://example.com/download/reflection_${grade}_${reflectionTypeName}_${DateTime.now().millisecondsSinceEpoch}.xlsx';
     } catch (e) {
       print('엑셀 생성 오류: $e');
       throw Exception('엑셀 파일 생성 중 오류가 발생했습니다: $e');
@@ -610,7 +610,7 @@ class ReflectionService {
       String id,
       String studentId,
       String studentName,
-      String className,
+      String grade,
       String classNum, // classNum 파라미터 추가
       String studentNum, // studentNum 파라미터 추가
       int group,
@@ -623,7 +623,7 @@ class ReflectionService {
       id: id,
       studentId: studentId,
       studentName: studentName,
-      className: className,
+      grade: grade,
       classNum: classNum, // classNum 필드 할당
       studentNum: studentNum, // studentNum 필드 할당
       group: group,
@@ -635,20 +635,20 @@ class ReflectionService {
     );
 
     // 클래스 목록에서 기존 항목이 있는지 확인
-    if (_reflectionsByClass.containsKey(className)) {
-      final index = _reflectionsByClass[className]!.indexWhere(
+    if (_reflectionsByClass.containsKey(grade)) {
+      final index = _reflectionsByClass[grade]!.indexWhere(
           (r) => r.studentId == studentId && r.reflectionId == reflectionId);
 
       if (index >= 0) {
         // 기존 항목 업데이트
-        _reflectionsByClass[className]![index] = reflection;
+        _reflectionsByClass[grade]![index] = reflection;
       } else {
         // 새 항목 추가
-        _reflectionsByClass[className]!.add(reflection);
+        _reflectionsByClass[grade]!.add(reflection);
       }
     } else {
       // 새 클래스 목록 생성
-      _reflectionsByClass[className] = [reflection];
+      _reflectionsByClass[grade] = [reflection];
     }
 
     // 학생별 목록 업데이트
@@ -682,7 +682,7 @@ class ReflectionService {
       id: 'sample1',
       studentId: '12345',
       studentName: '김철수',
-      className: '1',
+      grade: '1',
       classNum: '1-1', // classNum 필드 추가
       group: 1,
       week: 0, // 사용하지 않음
@@ -706,7 +706,7 @@ class ReflectionService {
       id: 'sample2',
       studentId: '67890',
       studentName: '홍길동',
-      className: '1',
+      grade: '1',
       classNum: '1-2', // classNum 필드 추가
       group: 2,
       week: 0, // 사용하지 않음
@@ -727,7 +727,7 @@ class ReflectionService {
       id: 'sample3',
       studentId: '54321',
       studentName: '이영희',
-      className: '1',
+      grade: '1',
       classNum: '1-3', // classNum 필드 추가
       group: 3,
       week: 0, // 사용하지 않음

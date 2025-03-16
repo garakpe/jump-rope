@@ -57,7 +57,7 @@ class FirebaseStudentModel {
   final String id;
   final String name;
   final String studentId;
-  final String className;
+  final String grade;
   final String classNum;
   final int group;
   final Map<String, dynamic> individualTasks;
@@ -68,7 +68,7 @@ class FirebaseStudentModel {
     required this.id,
     required this.name,
     required this.studentId,
-    required this.className,
+    required this.grade,
     this.classNum = '',
     required this.group,
     this.individualTasks = const {},
@@ -127,7 +127,7 @@ class FirebaseStudentModel {
       id: doc.id,
       name: data['name'] ?? '',
       studentId: data['studentId'] ?? '',
-      className: data['className'] ?? '',
+      grade: data['grade'] ?? '',
       classNum: data['classNum'] ?? '',
       group: data['group'] ?? 1,
       individualTasks: processedIndividualTasks,
@@ -141,7 +141,7 @@ class FirebaseStudentModel {
       id: id,
       name: data['name'] ?? '',
       studentId: data['studentId'] ?? '',
-      className: data['className'] ?? '',
+      grade: data['grade'] ?? '',
       classNum: data['classNum'] ?? '',
       group: data['group'] ?? 1,
       individualTasks: data['individualTasks'] ?? {},
@@ -154,7 +154,7 @@ class FirebaseStudentModel {
     String? id,
     String? name,
     String? studentId,
-    String? className,
+    String? grade,
     String? classNum,
     int? group,
     Map<String, dynamic>? individualTasks,
@@ -165,7 +165,7 @@ class FirebaseStudentModel {
       id: id ?? this.id,
       name: name ?? this.name,
       studentId: studentId ?? this.studentId,
-      className: className ?? this.className,
+      grade: grade ?? this.grade,
       classNum: classNum ?? this.classNum,
       group: group ?? this.group,
       individualTasks: individualTasks ?? this.individualTasks,
@@ -177,7 +177,7 @@ class FirebaseStudentModel {
   Map<String, dynamic> toMap() => {
         'name': name,
         'studentId': studentId,
-        'className': className,
+        'grade': grade,
         'classNum': classNum,
         'group': group,
         'individualTasks': individualTasks,
@@ -191,7 +191,7 @@ class FirebaseReflectionModel {
   final String id;
   final String studentId;
   final String studentName;
-  final String className;
+  final String grade;
   final String classNum; // 추가된 필드
   final String studentNum; // 추가한 필드
   final int group;
@@ -210,7 +210,7 @@ class FirebaseReflectionModel {
     required this.id,
     required this.studentId,
     required this.studentName,
-    required this.className,
+    required this.grade,
     this.classNum = '', // 기본값 설정
     this.studentNum = '', // 기본값 설정
     required this.group,
@@ -284,7 +284,7 @@ class FirebaseReflectionModel {
       id: doc.id,
       studentId: data['studentId'] ?? '',
       studentName: data['studentName'] ?? '',
-      className: data['className'] ?? '',
+      grade: data['grade'] ?? '',
       classNum: data['classNum'] ?? '', // classNum 필드 추가
       studentNum: data['studentNum'] ?? '', // studentNum 필드 추가
       group: data['group'] ?? 0,
@@ -347,7 +347,7 @@ class FirebaseReflectionModel {
       id: id,
       studentId: data['studentId'] ?? '',
       studentName: data['studentName'] ?? '',
-      className: data['className'] ?? '',
+      grade: data['grade'] ?? '',
       classNum: data['classNum'] ?? '', // classNum 필드 추가
       studentNum: data['studentNum'] ?? '',
       group: data['group'] ?? 0,
@@ -387,7 +387,7 @@ class FirebaseReflectionModel {
     return {
       'studentId': studentId,
       'studentName': studentName,
-      'className': className,
+      'grade': grade,
       'classNum': classNum, // classNum 필드 추가
       'studentNum': studentNum, // studentNum 필드 추가
       'group': group,
@@ -410,7 +410,7 @@ class FirebaseReflectionModel {
     String? id,
     String? studentId,
     String? studentName,
-    String? className,
+    String? grade,
     String? classNum, // classNum 파라미터 추가
     String? studentNum, // studentNum 파라미터 추가
     int? group,
@@ -429,7 +429,7 @@ class FirebaseReflectionModel {
       id: id ?? this.id,
       studentId: studentId ?? this.studentId,
       studentName: studentName ?? this.studentName,
-      className: className ?? this.className,
+      grade: grade ?? this.grade,
       classNum: classNum ?? this.classNum, // classNum 필드 복사
       studentNum: studentNum ?? this.studentNum, // studentNum 필드 복사
       group: group ?? this.group,
@@ -456,7 +456,7 @@ class ReflectionSubmission {
   final Map<String, String> answers;
   final DateTime submittedDate;
   final String studentName;
-  final String className;
+  final String grade;
   final String classNum; // 추가된 필드
   final String studentNum; // 추가한 필드
   final int group;
@@ -471,7 +471,7 @@ class ReflectionSubmission {
     required this.answers,
     required this.submittedDate,
     this.studentName = '',
-    this.className = '',
+    this.grade = '',
     this.classNum = '', // 기본값 설정
     this.studentNum = '', // 기본값 설정
     this.group = 0,
@@ -488,7 +488,7 @@ class ReflectionSubmission {
     Map<String, String>? answers,
     DateTime? submittedDate,
     String? studentName,
-    String? className,
+    String? grade,
     String? classNum, // classNum 파라미터 추가
     String? studentNum, // studentNum 파라미터 추가
     int? group,
@@ -503,7 +503,7 @@ class ReflectionSubmission {
       answers: answers ?? this.answers,
       submittedDate: submittedDate ?? this.submittedDate,
       studentName: studentName ?? this.studentName,
-      className: className ?? this.className,
+      grade: grade ?? this.grade,
       classNum: classNum ?? this.classNum, // classNum 필드 복사
       studentNum: studentNum ?? this.studentNum, // studentNum 필드 복사
       group: group ?? this.group,

@@ -385,7 +385,6 @@ class _StudentUploadScreenState extends State<StudentUploadScreen> {
 
         // 학년 + 반 + 번호로 학번 생성 (5자리)
         final studentId = '$grade$formattedClassNum$studentNum';
-        final className = grade; // 학년을 className으로 사용
 
         if (grade.isEmpty || name.isEmpty) {
           continue; // 필수 데이터 없는 행 건너뛰기
@@ -410,7 +409,6 @@ class _StudentUploadScreenState extends State<StudentUploadScreen> {
           'grade': grade,
           'classNum': classNum, // 엑셀에서 가져온 반 정보 사용
           'studentNum': studentNum,
-          'className': className,
           'group': 1, // 기본 모둠 번호 1로 설정
           'individualTasks': {}, // 초기 개인 과제 진행 상황 (빈 맵)
           'groupTasks': {}, // 초기 단체 과제 진행 상황 (빈 맵)

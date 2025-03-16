@@ -53,9 +53,9 @@ class TaskService {
         return model1.classNum == model2.classNum;
       }
 
-      // className이 있으면 그것을 비교
-      if (model1.className.isNotEmpty && model2.className.isNotEmpty) {
-        return model1.className == model2.className;
+      // grade이 있으면 그것을 비교
+      if (model1.grade.isNotEmpty && model2.grade.isNotEmpty) {
+        return model1.grade == model2.grade;
       }
     }
 
@@ -175,7 +175,7 @@ class TaskService {
 
   // 모둠원 데이터 가져오기
   Future<List<FirebaseStudentModel>> getGroupMembers(
-      int groupId, String className) async {
+      int groupId, String grade) async {
     if (groupId <= 0) {
       return [];
     }
@@ -201,10 +201,10 @@ class TaskService {
               _students[student.id] = student;
 
               // 같은 학년/반인 경우만 결과에 포함 (클라이언트 측 필터링)
-              if (className.isEmpty ||
+              if (grade.isEmpty ||
                   (student.studentId.isNotEmpty &&
                       student.studentId.length >= 3 &&
-                      student.studentId.substring(0, 1) == className)) {
+                      student.studentId.substring(0, 1) == grade)) {
                 result.add(student);
               }
             } catch (e) {
@@ -328,7 +328,7 @@ class TaskService {
       id: student.id,
       name: student.name,
       studentId: student.studentId,
-      className: student.className,
+      grade: student.grade,
       classNum: student.classNum,
       group: student.group,
       individualTasks: updatedIndividualTasks,
@@ -340,11 +340,11 @@ class TaskService {
     _students[studentId] = updatedStudent;
 
     // 학급별 캐시도 업데이트
-    if (_studentsByClass.containsKey(student.className)) {
-      final index = _studentsByClass[student.className]!
-          .indexWhere((s) => s.id == studentId);
+    if (_studentsByClass.containsKey(student.grade)) {
+      final index =
+          _studentsByClass[student.grade]!.indexWhere((s) => s.id == studentId);
       if (index >= 0) {
-        _studentsByClass[student.className]![index] = updatedStudent;
+        _studentsByClass[student.grade]![index] = updatedStudent;
       }
     }
   }
@@ -394,7 +394,7 @@ class TaskService {
         id: 'dummy',
         name: 'Not Found',
         studentId: 'not_found',
-        className: '0',
+        grade: '0',
         classNum: '0',
         group: 0,
       ));
@@ -402,14 +402,14 @@ class TaskService {
   }
 
   // 학급 과제 상태 실시간 조회
-  Stream<List<FirebaseStudentModel>> getClassTasksStream(String className) {
+  Stream<List<FirebaseStudentModel>> getClassTasksStream(String grade) {
     final streamController = StreamController<List<FirebaseStudentModel>>();
 
     try {
       // classNum으로 먼저 조회
       final subscription = _firestore
           .collection('students')
-          .where('classNum', isEqualTo: className)
+          .where('classNum', isEqualTo: grade)
           .snapshots()
           .listen(
         (snapshot) {
@@ -420,32 +420,32 @@ class TaskService {
           streamController.add(students);
 
           // 로컬 캐시 업데이트
-          _studentsByClass[className] = students;
+          _studentsByClass[grade] = students;
           for (var student in students) {
             _students[student.id] = student;
           }
         },
         onError: (error) {
-          // 로컬 캐시 사용 또는 className으로 다시 시도
-          if (_studentsByClass.containsKey(className)) {
-            streamController.add(_studentsByClass[className]!);
+          // 로컬 캐시 사용 또는 grade으로 다시 시도
+          if (_studentsByClass.containsKey(grade)) {
+            streamController.add(_studentsByClass[grade]!);
           } else {
-            // className으로 다시 시도
+            // grade으로 다시 시도
             _firestore
                 .collection('students')
-                .where('className', isEqualTo: className)
+                .where('grade', isEqualTo: grade)
                 .get()
-                .then((classNameSnapshot) {
-              if (classNameSnapshot.docs.isNotEmpty) {
-                final classNameStudents = classNameSnapshot.docs
+                .then((gradeSnapshot) {
+              if (gradeSnapshot.docs.isNotEmpty) {
+                final gradeStudents = gradeSnapshot.docs
                     .map((doc) => FirebaseStudentModel.fromFirestore(doc))
                     .toList();
 
-                streamController.add(classNameStudents);
+                streamController.add(gradeStudents);
 
                 // 로컬 캐시 업데이트
-                _studentsByClass[className] = classNameStudents;
-                for (var student in classNameStudents) {
+                _studentsByClass[grade] = gradeStudents;
+                for (var student in gradeStudents) {
                   _students[student.id] = student;
                 }
               } else {
@@ -466,7 +466,7 @@ class TaskService {
       return streamController.stream;
     } catch (e) {
       // Firebase 연결 실패 시 로컬 백업 로직 사용
-      return Stream.value(_studentsByClass[className] ?? []);
+      return Stream.value(_studentsByClass[grade] ?? []);
     }
   }
 
@@ -525,12 +525,12 @@ class TaskService {
   }
 
   // 모둠의 단체줄넘기 자격 확인
-  Future<bool> canStartGroupActivities(String className, int groupId) async {
+  Future<bool> canStartGroupActivities(String grade, int groupId) async {
     try {
       // 모둠 학생들 가져오기
       QuerySnapshot students = await _firestore
           .collection('students')
-          .where('className', isEqualTo: className)
+          .where('grade', isEqualTo: grade)
           .where('group', isEqualTo: groupId)
           .get();
 
@@ -557,7 +557,7 @@ class TaskService {
       return totalSuccesses >= requiredSuccesses;
     } catch (e) {
       // Firebase 연결 실패 시 로컬 백업 로직 사용
-      final students = _studentsByClass[className] ?? [];
+      final students = _studentsByClass[grade] ?? [];
       final groupStudents = students.where((s) => s.group == groupId).toList();
 
       int totalSuccesses = 0;

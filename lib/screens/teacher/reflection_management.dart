@@ -1111,7 +1111,7 @@ class _ReflectionManagementState extends State<ReflectionManagement>
     );
   }
 
-  // 학생 목록 구현 (className, classNum으로 필터링하도록 수정됨)
+  // 학생 목록 구현 (grade, classNum으로 필터링하도록 수정됨)
   Widget _buildStudentList(int reflectionType) {
     final studentProvider =
         Provider.of<studentprovider.StudentProvider>(context);

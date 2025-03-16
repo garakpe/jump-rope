@@ -220,21 +220,21 @@ class TaskProvider extends ChangeNotifier {
   // ============ 학급 및 학생 데이터 관련 메서드 ============
 
   // 학급 선택 및 데이터 로드
-  void selectClass(String className) async {
+  void selectClass(String grade) async {
     // 기존 구독 취소
     _classSubscription?.cancel();
 
-    _selectedClass = className;
+    _selectedClass = grade;
     _setLoading(true);
 
     // 설정 저장
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setString('selectedClass', className);
+    await prefs.setString('selectedClass', grade);
 
     try {
       // 학급 데이터를 실시간으로 구독
       _classSubscription =
-          _taskService.getClassTasksStream(className).listen((studentList) {
+          _taskService.getClassTasksStream(grade).listen((studentList) {
         // 데이터 변환 및 UI 업데이트
         _convertToStudentProgress(studentList);
         _setLoading(false);
@@ -265,15 +265,14 @@ class TaskProvider extends ChangeNotifier {
   }
 
   // 모둠원 데이터 로드
-  Future<bool> loadGroupMembers(int groupId, String className) async {
-    if (groupId <= 0 || className.isEmpty) return false;
+  Future<bool> loadGroupMembers(int groupId, String grade) async {
+    if (groupId <= 0 || grade.isEmpty) return false;
 
     _setLoading(true);
 
     try {
       // 서비스를 통해 모둠원 불러오기
-      final groupMembers =
-          await _taskService.getGroupMembers(groupId, className);
+      final groupMembers = await _taskService.getGroupMembers(groupId, grade);
 
       if (groupMembers.isEmpty) {
         _setLoading(false);
@@ -291,7 +290,7 @@ class TaskProvider extends ChangeNotifier {
         String studentId = memberData.studentId;
         if (studentId.isEmpty) {
           // 임시 학번 생성
-          studentId = '${className}01${memberData.id.substring(0, 2)}';
+          studentId = '${grade}01${memberData.id.substring(0, 2)}';
         }
 
         // 학생 진도 정보 생성
@@ -369,10 +368,10 @@ class TaskProvider extends ChangeNotifier {
         // 모둠원 정보 로드
         final groupId = studentData.group;
         if (groupId > 0) {
-          // 학급 정보 결정 (classNum 우선, 없으면 className)
+          // 학급 정보 결정 (classNum 우선, 없으면 grade)
           final classInfo = studentData.classNum.isNotEmpty
               ? studentData.classNum
-              : studentData.className;
+              : studentData.grade;
 
           // 모둠원 로드
           loadGroupMembers(groupId, classInfo);

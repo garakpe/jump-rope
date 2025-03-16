@@ -233,13 +233,13 @@ class ReflectionProvider extends ChangeNotifier {
   }
 
   // 학급과 성찰 유형 선택 및 성찰 데이터 구독
-  void selectClassAndReflectionType(String className, int reflectionType) {
-    _selectedClass = className;
+  void selectClassAndReflectionType(String grade, int reflectionType) {
+    _selectedClass = grade;
     _selectedReflectionType = reflectionType;
     _setLoading(true, notify: true);
     _clearError();
 
-    _reflectionService.getClassReflections(className, reflectionType).listen(
+    _reflectionService.getClassReflections(grade, reflectionType).listen(
         (submissionsList) {
       _submissions = submissionsList;
       _setLoading(false);
@@ -295,17 +295,17 @@ class ReflectionProvider extends ChangeNotifier {
       final reflectionCard = _findReflectionCard(submission);
 
       // submission 객체에서 직접 classNum 값을 사용
-      // classNum 값이 null이거나 비어있으면 className을 사용
+      // classNum 값이 null이거나 비어있으면 grade을 사용
       String classNumToUse = submission.classNum;
-      if (classNumToUse.isEmpty && submission.className.isNotEmpty) {
-        classNumToUse = submission.className;
+      if (classNumToUse.isEmpty && submission.grade.isNotEmpty) {
+        classNumToUse = submission.grade;
       }
 
       // 서버에 저장하고 문서 ID 받기
       String docId = await _reflectionService.submitReflection(
         studentId: submission.studentId,
         studentName: submission.studentName,
-        className: submission.className,
+        grade: submission.grade,
         classNum: classNumToUse, // 여기에 처리된 classNum 추가
         studentNum: submission.studentNum, // studentNum 추가
         group: submission.group,
@@ -368,7 +368,7 @@ class ReflectionProvider extends ChangeNotifier {
         id: documentId,
         studentId: submission.studentId,
         studentName: submission.studentName,
-        className: submission.className,
+        grade: submission.grade,
         classNum: submission.classNum, // classNum 필드 추가
         group: submission.group,
         week: 0, // 필요없는 필드지만 모델에 있으므로 기본값 설정
@@ -549,7 +549,7 @@ class ReflectionProvider extends ChangeNotifier {
       answers: reflection.answers,
       submittedDate: reflection.submittedDate,
       studentName: reflection.studentName,
-      className: reflection.className,
+      grade: reflection.grade,
       classNum: reflection.classNum, // classNum 필드 추가
       group: reflection.group,
       status: reflection.status,
@@ -591,7 +591,7 @@ class ReflectionProvider extends ChangeNotifier {
       answers: reflection.answers,
       submittedDate: reflection.submittedDate,
       studentName: reflection.studentName,
-      className: reflection.className,
+      grade: reflection.grade,
       classNum: reflection.classNum, // classNum 필드 추가
       group: reflection.group,
       status: reflection.status,
@@ -600,12 +600,12 @@ class ReflectionProvider extends ChangeNotifier {
   }
 
   Future<Map<String, int>> getSubmissionStatsByClass(
-      String className, int reflectionType) async {
+      String grade, int reflectionType) async {
     _setLoading(true);
 
     try {
       final stats = await _reflectionService.getSubmissionStatsByClass(
-          className, reflectionType);
+          grade, reflectionType);
       _setLoading(false);
       return stats;
     } catch (e) {

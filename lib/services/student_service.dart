@@ -14,7 +14,7 @@ class StudentService {
         id: '101',
         name: '김철수',
         studentId: '12345',
-        className: '1',
+        grade: '1',
         group: 1,
         individualTasks: {
           '양발모아 뛰기': {
@@ -29,7 +29,7 @@ class StudentService {
         id: '102',
         name: '홍길동',
         studentId: '67890',
-        className: '1',
+        grade: '1',
         group: 2,
         individualTasks: {
           '양발모아 뛰기': {
@@ -43,7 +43,7 @@ class StudentService {
         id: '103',
         name: '이영희',
         studentId: '54321',
-        className: '1',
+        grade: '1',
         group: 3,
         individualTasks: {},
         groupTasks: {},
@@ -54,7 +54,7 @@ class StudentService {
         id: '201',
         name: '박지민',
         studentId: '12346',
-        className: '2',
+        grade: '2',
         group: 1,
         individualTasks: {},
         groupTasks: {},
@@ -63,7 +63,7 @@ class StudentService {
         id: '202',
         name: '최유리',
         studentId: '67891',
-        className: '2',
+        grade: '2',
         group: 2,
         individualTasks: {},
         groupTasks: {},
@@ -72,19 +72,19 @@ class StudentService {
   };
 
   // 학급별 학생 목록 가져오기
-  Stream<List<FirebaseStudentModel>> getStudentsByClass(String className) {
+  Stream<List<FirebaseStudentModel>> getStudentsByClass(String grade) {
     try {
       // 파이어베이스 연동 코드 (주석 처리)
       // return _firestore
       //     .collection('students')
-      //     .where('className', isEqualTo: className)
+      //     .where('grade', isEqualTo: grade)
       //     .snapshots()
       //     .map((snapshot) => snapshot.docs
       //         .map((doc) => FirebaseStudentModel.fromFirestore(doc))
       //         .toList());
 
       // 로컬 구현
-      return Stream.value(_studentsByClass[className] ?? []);
+      return Stream.value(_studentsByClass[grade] ?? []);
     } catch (e) {
       print('학생 목록 조회 오류: $e');
       // 오류 발생 시 빈 목록 반환
@@ -125,7 +125,7 @@ class StudentService {
       //     .update(student.toMap());
 
       // 로컬 구현
-      final classStudents = _studentsByClass[student.className] ?? [];
+      final classStudents = _studentsByClass[student.grade] ?? [];
       final index = classStudents.indexWhere((s) => s.id == student.id);
 
       if (index >= 0) {
@@ -134,21 +134,21 @@ class StudentService {
         classStudents.add(student);
       }
 
-      _studentsByClass[student.className] = classStudents;
+      _studentsByClass[student.grade] = classStudents;
     } catch (e) {
       print('학생 정보 업데이트 오류: $e');
     }
   }
 
   // 개발용: 샘플 학생 데이터 생성
-  Future<void> createSampleStudents(String className, int count) async {
+  Future<void> createSampleStudents(String grade, int count) async {
     try {
       // 파이어베이스 연동 코드 (주석 처리)
       // WriteBatch batch = _firestore.batch();
       //
       // for (int i = 1; i <= count; i++) {
       //   final studentId =
-      //       '${className}${i.toString().padLeft(2, '0')}'; // 예: 101, 102, ...
+      //       '${grade}${i.toString().padLeft(2, '0')}'; // 예: 101, 102, ...
       //   final groupNum = ((i - 1) % 4) + 1; // 1, 2, 3, 4 모둠 반복
       //
       //   DocumentReference docRef =
@@ -156,7 +156,7 @@ class StudentService {
       //   batch.set(docRef, {
       //     'name': '학생$i',
       //     'studentId': studentId,
-      //     'className': className,
+      //     'grade': grade,
       //     'group': groupNum,
       //     'number': i,
       //     'individualTasks': {},
@@ -172,14 +172,14 @@ class StudentService {
 
       for (int i = 1; i <= count; i++) {
         final studentId =
-            '$className${i.toString().padLeft(2, '0')}'; // 예: 101, 102, ...
+            '$grade${i.toString().padLeft(2, '0')}'; // 예: 101, 102, ...
         final groupNum = ((i - 1) % 4) + 1; // 1, 2, 3, 4 모둠 반복
 
         students.add(FirebaseStudentModel(
           id: studentId,
           name: '학생$i',
           studentId: studentId,
-          className: className,
+          grade: grade,
           group: groupNum,
           individualTasks: {},
           groupTasks: {},
@@ -187,7 +187,7 @@ class StudentService {
         ));
       }
 
-      _studentsByClass[className] = students;
+      _studentsByClass[grade] = students;
     } catch (e) {
       print('샘플 학생 데이터 생성 오류: $e');
     }

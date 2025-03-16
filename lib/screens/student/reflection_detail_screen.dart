@@ -166,8 +166,8 @@ class _ReflectionDetailScreenState extends State<ReflectionDetailScreen> {
     }
 // 여기서 user.classNum이 설정되어 있는지 확인
     String classNumToUse = user.classNum ?? '';
-    if (classNumToUse.isEmpty && (user.className ?? '').isNotEmpty) {
-      classNumToUse = user.className!;
+    if (classNumToUse.isEmpty && (user.grade ?? '').isNotEmpty) {
+      classNumToUse = user.grade!;
     }
     // 학번 가져오기
     String studentNumToUse = ''; // 기본값
@@ -220,7 +220,7 @@ class _ReflectionDetailScreenState extends State<ReflectionDetailScreen> {
           answers: answers,
           submittedDate: DateTime.now(),
           studentName: user.name ?? '',
-          className: user.className ?? '',
+          grade: user.grade ?? '',
           classNum: classNumToUse, // 여기서 처리된 classNum 값 사용
           studentNum: studentNumToUse, // studentNum 필드 추가
           group: int.tryParse(user.group ?? '0') ?? 0,
