@@ -66,17 +66,24 @@ class ReflectionProvider extends ChangeNotifier {
     }
   }
 
-  // 추가: 설정 변경 구독
+  // 설정 변경 구독 메서드 수정
   void _subscribeToSettingsChanges() {
+    // 이전 구독 취소
+    _settingsSubscription?.cancel();
+
+    // 클래스가 선택되지 않았으면 리턴
+    if (_selectedClass.isEmpty) return;
+
+    // 학급별 설정 스트림 구독
     _settingsSubscription =
-        _reflectionService.getSettingsStream().listen((data) {
+        _reflectionService.getSettingsStream(_selectedClass).listen((data) {
       if (data.containsKey('activeReflectionMask')) {
         final newMask = data['activeReflectionMask'] as int;
         if (newMask != _activeReflectionMask) {
           _activeReflectionMask = newMask;
           _activeReflectionTypes = _countActiveBits(newMask);
           notifyListeners(); // UI 갱신 트리거
-          print('성찰 활성화 마스크 업데이트: $_activeReflectionMask');
+          print('성찰 활성화 마스크 업데이트: $_activeReflectionMask, 학급: $_selectedClass');
         }
       }
     });
@@ -106,27 +113,39 @@ class ReflectionProvider extends ChangeNotifier {
 // 게터 추가
   int get activeReflectionMask => _activeReflectionMask;
 
-  // 특정 성찰 유형이 활성화되었는지 확인하는 메서드
+  // 특정 성찰 유형이 활성화되었는지 확인하는 메서드 수정
   bool isReflectionTypeActive(int reflectionType) {
     if (reflectionType < 1 || reflectionType > 3) return false;
-    int mask = 1 << (reflectionType - 1); // 비트마스크로 변환
-    return (_activeReflectionMask & mask) != 0;
+
+    // 선택된 학급이 없는 경우 기본값
+    if (_selectedClass.isEmpty) {
+      return reflectionType == 1; // 초기 성찰만 활성화
+    }
+
+    int mask = _activeReflectionMask;
+    return (mask & (1 << (reflectionType - 1))) != 0;
   }
 
-// 성찰 유형 활성화/비활성화 메서드
+  // 성찰 유형 활성화/비활성화 메서드 수정
   Future<void> toggleReflectionType(int reflectionType, bool isActive) async {
     if (reflectionType < 1 || reflectionType > 3) return;
 
-    int mask = 1 << (reflectionType - 1); // 비트마스크로 변환
+    // 선택된 학급이 없는 경우 작업 취소
+    if (_selectedClass.isEmpty) {
+      throw Exception('학급이 선택되지 않았습니다.');
+    }
+
+    int mask = _activeReflectionMask;
 
     if (isActive) {
-      _activeReflectionMask |= mask; // 활성화
+      mask |= (1 << (reflectionType - 1)); // 활성화
     } else {
-      _activeReflectionMask &= ~mask; // 비활성화
+      mask &= ~(1 << (reflectionType - 1)); // 비활성화
     }
 
     try {
-      await _reflectionService.setActiveReflectionMask(_activeReflectionMask);
+      // 학급별 설정으로 변경
+      await _reflectionService.setActiveReflectionMask(_selectedClass, mask);
 
       // 호환성을 위해 _activeReflectionTypes도 업데이트
       _activeReflectionTypes = _countActiveBits(_activeReflectionMask);
@@ -149,11 +168,20 @@ class ReflectionProvider extends ChangeNotifier {
     return count;
   }
 
-// 기존 _loadActiveReflectionTypes 메서드 수정
+  // 기존 _loadActiveReflectionTypes 메서드 수정
   Future<void> _loadActiveReflectionTypes() async {
     try {
-      // 마스크 먼저 로드 시도
-      int mask = await _reflectionService.getActiveReflectionMask();
+      // 선택된 학급이 없는 경우 기본값 설정
+      if (_selectedClass.isEmpty) {
+        _activeReflectionMask = 1; // 초기 성찰만 활성화
+        _activeReflectionTypes = 1;
+        notifyListeners();
+        return;
+      }
+
+      // 학급별 마스크 로드
+      int mask =
+          await _reflectionService.getActiveReflectionMask(_selectedClass);
       if (mask > 0) {
         _activeReflectionMask = mask;
         _activeReflectionTypes = _countActiveBits(mask);
@@ -162,6 +190,7 @@ class ReflectionProvider extends ChangeNotifier {
       }
 
       // 기존 방식으로 로드 (하위 호환성)
+      // 이 부분은 선택적으로 삭제 가능
       int types = await _reflectionService.getActiveReflectionTypes();
       if (types > 0) {
         _activeReflectionTypes = types;
@@ -179,10 +208,17 @@ class ReflectionProvider extends ChangeNotifier {
     }
   }
 
-  // 성찰 유형별 마감일 정보 로드
+  // 성찰 유형별 마감일 정보 로드 수정
   Future<void> _loadDeadlines() async {
     try {
-      final deadlines = await _reflectionService.getDeadlines();
+      // 선택된 학급이 없는 경우 빈 맵 반환
+      if (_selectedClass.isEmpty) {
+        _deadlines = {};
+        notifyListeners();
+        return;
+      }
+
+      final deadlines = await _reflectionService.getDeadlines(_selectedClass);
       _deadlines = deadlines;
       notifyListeners();
     } catch (e) {
@@ -217,14 +253,21 @@ class ReflectionProvider extends ChangeNotifier {
     return deadline != null && deadline.isBefore(DateTime.now());
   }
 
-  // 성찰 유형별 마감일 설정
+  // 성찰 유형별 마감일 설정 수정
   Future<void> setDeadline(int reflectionType, DateTime? deadline) async {
     if (reflectionType < 1 || reflectionType > 3) return;
+
+    // 선택된 학급이 없는 경우 작업 취소
+    if (_selectedClass.isEmpty) {
+      throw Exception('학급이 선택되지 않았습니다.');
+    }
 
     _setLoading(true);
 
     try {
-      await _reflectionService.setDeadline(reflectionType, deadline);
+      // 학급별 마감일 설정
+      await _reflectionService.setDeadline(
+          _selectedClass, reflectionType, deadline);
       _deadlines[reflectionType] = deadline;
       _setLoading(false);
     } catch (e) {
@@ -232,13 +275,24 @@ class ReflectionProvider extends ChangeNotifier {
     }
   }
 
-  // 학급과 성찰 유형 선택 및 성찰 데이터 구독
+  // 학급과 성찰 유형 선택 및 성찰 데이터 구독 메서드 수정
   void selectClassAndReflectionType(String grade, int reflectionType) {
+    // 학급 변경 시 설정 구독도 변경
+    bool classChanged = _selectedClass != grade;
+
     _selectedClass = grade;
     _selectedReflectionType = reflectionType;
     _setLoading(true, notify: true);
     _clearError();
 
+    // 학급이 변경되었으면 활성화 타입과 마감일 정보 새로 로드
+    if (classChanged) {
+      _loadActiveReflectionTypes();
+      _loadDeadlines();
+      _subscribeToSettingsChanges(); // 설정 변경 구독 재설정
+    }
+
+    // 성찰 데이터 구독
     _reflectionService.getClassReflections(grade, reflectionType).listen(
         (submissionsList) {
       _submissions = submissionsList;

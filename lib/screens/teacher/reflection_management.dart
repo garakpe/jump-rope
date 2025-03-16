@@ -137,10 +137,11 @@ class _ReflectionManagementState extends State<ReflectionManagement>
     }
   }
 
-  // 성찰 유형별 통계 로드
+  // 성찰 유형별 통계 로드 메서드 수정
   Future<void> _loadReflectionStats(int reflectionType) async {
-    if (_statsCache.containsKey(reflectionType)) {
-      // 이미 캐시된 통계가 있으면 재사용
+    // 학급이 선택되지 않은 경우 로드하지 않음
+    if (widget.selectedClassId <= 0) {
+      _statsCache[reflectionType] = {};
       return;
     }
 
@@ -151,12 +152,16 @@ class _ReflectionManagementState extends State<ReflectionManagement>
       final stats = await reflectionProvider.getSubmissionStatsByClass(
           widget.selectedClassId.toString(), reflectionType);
 
-      // 캐시에 저장
+      // 결과가 null인 경우 빈 객체 사용
       setState(() {
-        _statsCache[reflectionType] = stats;
+        _statsCache[reflectionType] = stats ?? {};
       });
     } catch (e) {
       print('통계 로드 실패: $e');
+      // 오류 시 빈 통계 설정
+      setState(() {
+        _statsCache[reflectionType] = {};
+      });
     }
   }
 
@@ -280,8 +285,16 @@ class _ReflectionManagementState extends State<ReflectionManagement>
     );
   }
 
-  // 성찰 활성화 설정 다이얼로그 표시
+// 성찰 활성화 설정 다이얼로그 표시
   void _showActivationSettingsDialog() {
+    // 학급이 선택되지 않은 경우
+    if (widget.selectedClassId <= 0) {
+      setState(() {
+        _statusMessage = '학급을 먼저 선택해주세요.';
+      });
+      return;
+    }
+
     showDialog(
       context: context,
       builder: (context) => Dialog(
@@ -289,7 +302,7 @@ class _ReflectionManagementState extends State<ReflectionManagement>
           borderRadius: BorderRadius.circular(20),
         ),
         child: Container(
-          width: 600, // 다이얼로그 최대 너비 설정
+          width: 600,
           constraints: const BoxConstraints(maxWidth: 600),
           child: SingleChildScrollView(
             child: Column(
@@ -317,9 +330,9 @@ class _ReflectionManagementState extends State<ReflectionManagement>
                         size: 24,
                       ),
                       const SizedBox(width: 12),
-                      const Text(
-                        '성찰 보고서 활성화 설정',
-                        style: TextStyle(
+                      Text(
+                        '${widget.selectedClassId}반 성찰 보고서 활성화 설정',
+                        style: const TextStyle(
                           fontSize: 18,
                           fontWeight: FontWeight.bold,
                           color: Colors.white,
@@ -370,9 +383,11 @@ class _ReflectionManagementState extends State<ReflectionManagement>
     final reflectionProvider = Provider.of<ReflectionProvider>(context);
     final isActive = reflectionProvider.isReflectionTypeActive(reflectionType);
 
-    // 통계 데이터 가져오기
+    // 통계 데이터 가져오기 - 수정
     final stats = _statsCache[reflectionType];
-    final submittedCount = stats?['submitted'] ?? 0;
+    final submittedCount = stats != null && stats.containsKey('submitted')
+        ? stats['submitted']
+        : 0;
 
     return Tab(
       child: Column(
@@ -386,7 +401,7 @@ class _ReflectionManagementState extends State<ReflectionManagement>
               Text(label),
             ],
           ),
-          if (stats != null && submittedCount > 0)
+          if (stats != null && (submittedCount ?? 0) > 0)
             Container(
               margin: const EdgeInsets.only(top: 4),
               padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
@@ -409,7 +424,7 @@ class _ReflectionManagementState extends State<ReflectionManagement>
     );
   }
 
-  // 성찰 통계 위젯 - 개선된 버전
+  // 성찰 통계 위젯 수정
   Widget _buildReflectionStatsWidget() {
     // 현재 선택된 성찰 유형의 통계
     final stats = _statsCache[_selectedReflectionType];
@@ -418,10 +433,10 @@ class _ReflectionManagementState extends State<ReflectionManagement>
       return Container(); // 통계가 없으면 빈 컨테이너 반환
     }
 
-    final total = stats['total'] ?? 0;
-    final submitted = stats['submitted'] ?? 0;
-    final accepted = stats['accepted'] ?? 0;
-    final rejected = stats['rejected'] ?? 0;
+    final total = stats.containsKey('total') ? stats['total'] : 0;
+    final submitted = stats.containsKey('submitted') ? stats['submitted'] : 0;
+    final accepted = stats.containsKey('accepted') ? stats['accepted'] : 0;
+    final rejected = stats.containsKey('rejected') ? stats['rejected'] : 0;
 
     return Row(
       children: [
@@ -464,13 +479,12 @@ class _ReflectionManagementState extends State<ReflectionManagement>
     );
   }
 
-  // 성찰 보고서 활성화 설정 영역 (다이얼로그용으로 수정)
   Widget _buildReflectionActivationSettings() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          '학생들이 접근할 수 있는 성찰 보고서를 선택하세요.',
+          '${widget.selectedClassId}반 학생들이 접근할 수 있는 성찰 보고서를 선택하세요.',
           style: TextStyle(
             fontSize: 14,
             color: Colors.grey.shade700,
@@ -484,7 +498,7 @@ class _ReflectionManagementState extends State<ReflectionManagement>
         // 안내 메시지
         const SizedBox(height: 8),
         Text(
-          '* 비활성화된 성찰은 학생들에게 표시되지 않으며 접근할 수 없습니다.',
+          '* 비활성화된 성찰은 ${widget.selectedClassId}반 학생들에게 표시되지 않으며 접근할 수 없습니다.',
           style: TextStyle(
             fontSize: 12,
             fontStyle: FontStyle.italic,
@@ -524,19 +538,22 @@ class _ReflectionManagementState extends State<ReflectionManagement>
     );
   }
 
-  // 성찰 유형 활성화/비활성화 토글 위젯 추가
   Widget _buildReflectionTypeToggle(
       int type, String label, String description, IconData icon) {
     final reflectionProvider = Provider.of<ReflectionProvider>(context);
     final isActive = reflectionProvider.isReflectionTypeActive(type);
-
     // 마감일 정보
     final deadline = _deadlines[type];
     final isDeadlinePassed =
         deadline != null && deadline.isBefore(DateTime.now());
+
+    // 통계 데이터 가져오기 - 수정
     final stats = _statsCache[type];
-    final submittedCount = stats?['submitted'] ?? 0;
-    final totalCount = stats?['total'] ?? 0;
+    final submittedCount = stats != null && stats.containsKey('submitted')
+        ? stats['submitted']
+        : 0;
+    final totalCount =
+        stats != null && stats.containsKey('total') ? stats['total'] : 0;
 
     return InkWell(
       onTap: () {}, // 전체 영역 터치 허용 (UI 피드백용)
@@ -567,7 +584,7 @@ class _ReflectionManagementState extends State<ReflectionManagement>
                   Row(
                     children: [
                       Text(
-                        label,
+                        '${widget.selectedClassId}반 $label',
                         style: TextStyle(
                           fontSize: 16,
                           fontWeight: FontWeight.w600,
@@ -576,7 +593,7 @@ class _ReflectionManagementState extends State<ReflectionManagement>
                               : Colors.grey.shade600,
                         ),
                       ),
-                      if (submittedCount > 0)
+                      if ((submittedCount ?? 0) > 0)
                         Container(
                           margin: const EdgeInsets.only(left: 8),
                           padding: const EdgeInsets.symmetric(
@@ -657,7 +674,8 @@ class _ReflectionManagementState extends State<ReflectionManagement>
                       : (newValue) async {
                           setState(() {
                             _isLoading = true;
-                            _statusMessage = '성찰 유형 상태 변경 중...';
+                            _statusMessage =
+                                '${widget.selectedClassId}반 성찰 유형 상태 변경 중...';
                           });
 
                           try {
@@ -667,8 +685,8 @@ class _ReflectionManagementState extends State<ReflectionManagement>
                             setState(() {
                               _isLoading = false;
                               _statusMessage = newValue
-                                  ? '$label 보고서가 활성화되었습니다. 학생들이 이제 접근할 수 있습니다.'
-                                  : '$label 보고서가 비활성화되었습니다. 학생들이 더 이상 접근할 수 없습니다.';
+                                  ? '${widget.selectedClassId}반 $label 보고서가 활성화되었습니다.'
+                                  : '${widget.selectedClassId}반 $label 보고서가 비활성화되었습니다.';
                             });
 
                             // 다이얼로그 닫기
@@ -742,7 +760,7 @@ class _ReflectionManagementState extends State<ReflectionManagement>
     );
   }
 
-  // 성찰 그리드 - 질문 미리보기 부분 삭제
+  // 성찰 그리드 수정
   Widget _buildReflectionGrid() {
     // 현재 선택된 성찰 유형에 대한 정보 가져오기
     final reflectionCard = reflectionCards.firstWhere(
@@ -751,7 +769,11 @@ class _ReflectionManagementState extends State<ReflectionManagement>
     );
 
     final reflectionTitle = reflectionCard.title;
-    final DateTime? deadline = _deadlines[_selectedReflectionType];
+
+    // 마감일 관련 변수 수정
+    final DateTime? deadline = _deadlines.containsKey(_selectedReflectionType)
+        ? _deadlines[_selectedReflectionType]
+        : null;
     final bool isDeadlinePassed =
         deadline != null && deadline.isBefore(DateTime.now());
 
@@ -919,7 +941,7 @@ class _ReflectionManagementState extends State<ReflectionManagement>
     );
   }
 
-  // 마감일 배지 위젯
+  // 마감일 배지 위젯 수정
   Widget _buildDeadlineBadge(DateTime deadline, bool isDeadlinePassed) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
@@ -970,8 +992,16 @@ class _ReflectionManagementState extends State<ReflectionManagement>
     }
   }
 
-  // 접수마감 설정 함수
+// 접수마감 설정 함수
   void _setDeadline(int reflectionType) {
+    // 학급이 선택되지 않은 경우
+    if (widget.selectedClassId <= 0) {
+      setState(() {
+        _statusMessage = '학급을 먼저 선택해주세요.';
+      });
+      return;
+    }
+
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
@@ -987,12 +1017,12 @@ class _ReflectionManagementState extends State<ReflectionManagement>
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              '${_getReflectionTypeName(reflectionType)} 보고서 접수를 마감하시겠습니까?',
+              '${widget.selectedClassId}반 ${_getReflectionTypeName(reflectionType)} 보고서 접수를 마감하시겠습니까?',
               style: const TextStyle(fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 12),
             Text(
-              '마감 시 학생들은 더 이상 ${_getReflectionTypeName(reflectionType)} 보고서를 제출할 수 없습니다.',
+              '마감 시 ${widget.selectedClassId}반 학생들은 더 이상 ${_getReflectionTypeName(reflectionType)} 보고서를 제출할 수 없습니다.',
               style: TextStyle(color: Colors.grey.shade700),
             ),
             const SizedBox(height: 12),
@@ -1049,12 +1079,28 @@ class _ReflectionManagementState extends State<ReflectionManagement>
     }
   }
 
-  // 마감 처리 함수
+  // 추가: 마감 여부 확인 함수
+  bool isDeadlinePassed(int reflectionType) {
+    if (!_deadlines.containsKey(reflectionType)) return false;
+
+    final deadline = _deadlines[reflectionType];
+    return deadline != null && deadline.isBefore(DateTime.now());
+  }
+
+// 마감 처리 함수
   Future<void> _processDeadline(int reflectionType) async {
+    // 학급이 선택되지 않은 경우
+    if (widget.selectedClassId <= 0) {
+      setState(() {
+        _statusMessage = '학급을 먼저 선택해주세요.';
+      });
+      return;
+    }
+
     setState(() {
       _isLoading = true;
       _statusMessage =
-          '${_getReflectionTypeName(reflectionType)} 보고서 마감 처리 중...';
+          '${widget.selectedClassId}반 ${_getReflectionTypeName(reflectionType)} 보고서 마감 처리 중...';
     });
 
     try {
@@ -1069,7 +1115,7 @@ class _ReflectionManagementState extends State<ReflectionManagement>
 
       setState(() {
         _statusMessage =
-            '${_getReflectionTypeName(reflectionType)} 보고서가 마감되었습니다.';
+            '${widget.selectedClassId}반 ${_getReflectionTypeName(reflectionType)} 보고서가 마감되었습니다.';
       });
     } catch (e) {
       setState(() {
@@ -1511,19 +1557,27 @@ class _ReflectionManagementState extends State<ReflectionManagement>
     }
   }
 
-// 마감 해제 처리 함수
+// 마감 재오픈 처리 함수
   Future<void> processReopenDeadline(int reflectionType) async {
+    // 학급이 선택되지 않은 경우
+    if (widget.selectedClassId <= 0) {
+      setState(() {
+        _statusMessage = '학급을 먼저 선택해주세요.';
+      });
+      return;
+    }
+
     setState(() {
       _isLoading = true;
       _statusMessage =
-          '${_getReflectionTypeName(reflectionType)} 보고서 마감 해제 중...';
+          '${widget.selectedClassId}반 ${_getReflectionTypeName(reflectionType)} 보고서 마감 해제 중...';
     });
 
     try {
       final reflectionProvider =
           Provider.of<ReflectionProvider>(context, listen: false);
 
-      // 마감일을 한 달 후로 설정 (사실상 마감 해제)
+      // 한 달 후로 설정하여 사실상 마감 해제
       await reflectionProvider.setDeadline(
           reflectionType, DateTime.now().add(const Duration(days: 30)));
 
@@ -1532,7 +1586,7 @@ class _ReflectionManagementState extends State<ReflectionManagement>
 
       setState(() {
         _statusMessage =
-            '${_getReflectionTypeName(reflectionType)} 보고서 마감이 해제되었습니다.';
+            '${widget.selectedClassId}반 ${_getReflectionTypeName(reflectionType)} 보고서 마감이 해제되었습니다.';
       });
     } catch (e) {
       setState(() {

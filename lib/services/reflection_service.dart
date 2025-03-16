@@ -26,13 +26,13 @@ class ReflectionService {
     }
   }
 
-  // 비트마스크 메서드 추가
-  Future<int> getActiveReflectionMask() async {
+// 학급별 활성화된 성찰 유형 마스크 가져오기
+  Future<int> getActiveReflectionMask(String classId) async {
     try {
-      // 파이어베이스 연동 코드
+      // 파이어베이스 연동 코드 - 학급 정보 포함
       DocumentSnapshot doc = await _firestore
           .collection('app_settings')
-          .doc('reflection_settings')
+          .doc('reflection_settings_$classId') // 학급별 문서 ID
           .get();
 
       if (doc.exists) {
@@ -67,22 +67,23 @@ class ReflectionService {
         .snapshots();
   }
 
-  // 추가: 설정 변경 스트림 제공
-  Stream<Map<String, dynamic>> getSettingsStream() {
+// 학급별 설정 변경 스트림 제공
+  Stream<Map<String, dynamic>> getSettingsStream(String classId) {
     return _firestore
         .collection('app_settings')
-        .doc('reflection_settings')
+        .doc('reflection_settings_$classId') // 학급별 문서 ID
         .snapshots()
         .map((snapshot) =>
             snapshot.exists ? (snapshot.data() as Map<String, dynamic>) : {});
   }
 
-  Future<void> setActiveReflectionMask(int mask) async {
+// 학급별 성찰 유형 마스크 설정
+  Future<void> setActiveReflectionMask(String classId, int mask) async {
     try {
-      // 파이어베이스 연동 코드
+      // 파이어베이스 연동 코드 - 학급 정보 포함
       await _firestore
           .collection('app_settings')
-          .doc('reflection_settings')
+          .doc('reflection_settings_$classId') // 학급별 문서 ID
           .set({
         'activeReflectionMask': mask,
         // 하위 호환성을 위해 activeReflectionTypes도 저장
@@ -153,13 +154,13 @@ class ReflectionService {
     }
   }
 
-  // 마감일 정보 가져오기
-  Future<Map<int, DateTime?>> getDeadlines() async {
+// 학급별 마감일 정보 가져오기
+  Future<Map<int, DateTime?>> getDeadlines(String classId) async {
     try {
-      // 파이어베이스 연동 코드
+      // 파이어베이스 연동 코드 - 학급 정보 포함
       DocumentSnapshot doc = await _firestore
           .collection('app_settings')
-          .doc('reflection_settings')
+          .doc('reflection_settings_$classId') // 학급별 문서 ID
           .get();
 
       if (doc.exists) {
@@ -185,25 +186,25 @@ class ReflectionService {
         return result;
       }
 
-      return _deadlines;
+      return {};
     } catch (e) {
       print('마감일 정보 가져오기 오류: $e');
-      // 오류 발생 시 로컬 값 반환
-      return _deadlines;
+      return {};
     }
   }
 
-  // 마감일 설정 (교사 전용)
-  Future<void> setDeadline(int reflectionType, DateTime? deadline) async {
+// 학급별 마감일 설정
+  Future<void> setDeadline(
+      String classId, int reflectionType, DateTime? deadline) async {
     if (reflectionType < 1 || reflectionType > 3) {
       throw Exception('성찰 유형은 1~3 사이여야 합니다');
     }
 
     try {
-      // 파이어베이스 연동 코드
+      // 파이어베이스 연동 코드 - 학급 정보 포함
       await _firestore
           .collection('app_settings')
-          .doc('reflection_settings')
+          .doc('reflection_settings_$classId') // 학급별 문서 ID
           .set({
         'deadlines': {
           reflectionType.toString():
@@ -211,12 +212,8 @@ class ReflectionService {
         },
         'updatedAt': FieldValue.serverTimestamp(),
       }, SetOptions(merge: true));
-
-      _deadlines[reflectionType] = deadline;
     } catch (e) {
       print('마감일 설정 오류: $e');
-      // 로컬 구현
-      _deadlines[reflectionType] = deadline;
       throw Exception('마감일 설정 중 오류가 발생했습니다: $e');
     }
   }
@@ -508,8 +505,10 @@ class ReflectionService {
     }
   }
 
+// lib/services/reflection_service.dart 수정
+
   Future<Map<String, int>> getSubmissionStatsByClass(
-      String classNum, int reflectionType) async {
+      String classId, int reflectionType) async {
     Map<String, int> stats = {
       'total': 0, // 전체 학생 수
       'submitted': 0, // 제출한 학생 수
@@ -518,10 +517,15 @@ class ReflectionService {
     };
 
     try {
+      // 클래스 ID가 없거나 비어있는 경우 빈 통계 반환
+      if (classId.isEmpty) {
+        return stats;
+      }
+
       // 학급의 전체 학생 수 조회 - classNum으로 필터링
       QuerySnapshot studentsSnapshot = await _firestore
           .collection('students')
-          .where('classNum', isEqualTo: classNum)
+          .where('classNum', isEqualTo: classId)
           .get();
 
       stats['total'] = studentsSnapshot.docs.length;
@@ -529,8 +533,8 @@ class ReflectionService {
       // 제출 현황 조회 - classNum과 reflectionType으로 필터링
       QuerySnapshot reflectionsSnapshot = await _firestore
           .collection('reflections')
-          .where('classNum', isEqualTo: classNum)
-          .where('reflectionId', isEqualTo: reflectionType) // 성찰 유형으로 필터링 추가
+          .where('classNum', isEqualTo: classId)
+          .where('reflectionId', isEqualTo: reflectionType)
           .get();
 
       // 상태별 카운트
@@ -554,14 +558,7 @@ class ReflectionService {
       return stats;
     } catch (e) {
       print('제출 현황 통계 조회 오류: $e');
-
-      // 오류 시 기본값 반환 (개발/디버깅용)
-      stats['total'] = 0;
-      stats['submitted'] = 0;
-      stats['rejected'] = 0;
-      stats['accepted'] = 0;
-
-      return stats;
+      return stats; // 오류 시 기본값 반환
     }
   }
 
