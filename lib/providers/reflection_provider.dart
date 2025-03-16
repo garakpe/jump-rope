@@ -856,4 +856,42 @@ class ReflectionProvider extends ChangeNotifier {
     _error = '';
     notifyListeners();
   }
+
+  // 모든 성찰 유형 통합 엑셀 다운로드 URL 생성
+  Future<String> generateAllReflectionTypesExcelUrl() async {
+    if (_selectedClass.isEmpty) {
+      throw Exception("학급이 선택되지 않았습니다");
+    }
+
+    _setLoading(true);
+
+    try {
+      _downloadUrl = await _reflectionService
+          .generateAllReflectionTypesExcel(_selectedClass);
+      _setLoading(false);
+      return _downloadUrl!;
+    } catch (e) {
+      _handleError('통합 엑셀 파일 생성 중 오류가 발생했습니다', e);
+      rethrow;
+    }
+  }
+
+  // 모든 성찰 유형 통합 엑셀 다운로드 메서드
+  Future<String> generateAllReflectionTypesExcel() async {
+    if (_selectedClass.isEmpty) {
+      throw Exception("학급이 선택되지 않았습니다");
+    }
+
+    _setLoading(true);
+
+    try {
+      final fileName = await _reflectionService
+          .generateAllReflectionTypesExcel(_selectedClass);
+      _setLoading(false);
+      return fileName;
+    } catch (e) {
+      _handleError('통합 엑셀 파일 생성 중 오류가 발생했습니다', e);
+      rethrow;
+    }
+  }
 }

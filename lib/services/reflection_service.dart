@@ -1,8 +1,15 @@
 // lib/services/reflection_service.dart
+import 'dart:typed_data';
+import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:intl/intl.dart';
 import 'dart:async';
 import '../models/firebase_models.dart';
 import '../models/reflection_model.dart';
+import 'dart:io';
+import 'package:file_saver/file_saver.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:excel/excel.dart';
 
 class ReflectionService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
@@ -451,6 +458,287 @@ class ReflectionService {
       return 'https://example.com/download/reflection_${grade}_${reflectionTypeName}_${DateTime.now().millisecondsSinceEpoch}.xlsx';
     } catch (e) {
       print('엑셀 생성 오류: $e');
+      throw Exception('엑셀 파일 생성 중 오류가 발생했습니다: $e');
+    }
+  }
+
+// 추가: 모든 성찰 유형 데이터를 포함한 엑셀 파일 생성
+  Future<String> generateAllReflectionTypesExcel(String classId) async {
+    try {
+      // 1. 모든 성찰 유형의 데이터 수집
+      List<FirebaseReflectionModel> allReflections = [];
+
+      // 각 성찰 유형(1-3)에 대해 데이터 가져오기
+      for (int reflectionType = 1; reflectionType <= 3; reflectionType++) {
+        try {
+          QuerySnapshot querySnapshot = await _reflectionsRef
+              .where('classNum', isEqualTo: classId)
+              .where('reflectionId', isEqualTo: reflectionType)
+              .get();
+
+          // 각 문서를 FirebaseReflectionModel로 변환
+          for (var doc in querySnapshot.docs) {
+            FirebaseReflectionModel reflection =
+                FirebaseReflectionModel.fromFirestore(doc);
+            allReflections.add(reflection);
+          }
+        } catch (e) {
+          print('성찰 유형 $reflectionType 데이터 가져오기 오류: $e');
+          // 오류가 발생해도 계속 진행
+        }
+      }
+
+      print('통합 엑셀 생성: $classId 반의 전체 성찰 보고서 ${allReflections.length}개');
+
+      // 2. 엑셀 파일 생성
+      final excel = Excel.createExcel();
+
+      // 기본 시트 이름 변경
+      final sheet = excel['학급 전체 성찰'];
+
+      // 헤더 행 스타일 설정
+      final headerStyle = CellStyle(
+        backgroundColorHex: ExcelColor.fromHexString('#4472C4'),
+        fontColorHex: ExcelColor.fromHexString('#FFFFFF'),
+        bold: true,
+        horizontalAlign: HorizontalAlign.Center,
+      );
+
+      // 헤더 행 추가
+      final headers = [
+        '학번',
+        '이름',
+        '모둠',
+        '성찰 유형',
+        '제출일',
+        '상태',
+        '질문 1',
+        '답변 1',
+        '질문 2',
+        '답변 2',
+        '질문 3',
+        '답변 3',
+        '질문 4',
+        '답변 4'
+      ];
+
+      for (int i = 0; i < headers.length; i++) {
+        final cell =
+            sheet.cell(CellIndex.indexByColumnRow(columnIndex: i, rowIndex: 0));
+        cell.value = TextCellValue(headers[i]);
+        cell.cellStyle = headerStyle;
+      }
+
+      // 데이터 행 추가
+      int rowIndex = 1;
+
+      for (final reflection in allReflections) {
+        // 성찰 유형 이름 가져오기
+        String reflectionTypeName =
+            _getReflectionTypeName(reflection.reflectionId);
+
+        // 상태 텍스트
+        String statusText = '';
+        switch (reflection.status) {
+          case ReflectionStatus.notSubmitted:
+            statusText = '미제출';
+            break;
+          case ReflectionStatus.submitted:
+            statusText = '제출완료';
+            break;
+          case ReflectionStatus.rejected:
+            statusText = '반려됨';
+            break;
+          case ReflectionStatus.accepted:
+            statusText = '승인됨';
+            break;
+        }
+
+        // 기본 정보 입력
+        sheet
+            .cell(
+                CellIndex.indexByColumnRow(columnIndex: 0, rowIndex: rowIndex))
+            .value = TextCellValue(reflection.studentId);
+        sheet
+            .cell(
+                CellIndex.indexByColumnRow(columnIndex: 1, rowIndex: rowIndex))
+            .value = TextCellValue(reflection.studentName);
+        sheet
+            .cell(
+                CellIndex.indexByColumnRow(columnIndex: 2, rowIndex: rowIndex))
+            .value = TextCellValue('${reflection.group}모둠');
+        sheet
+            .cell(
+                CellIndex.indexByColumnRow(columnIndex: 3, rowIndex: rowIndex))
+            .value = TextCellValue(reflectionTypeName);
+        sheet
+            .cell(
+                CellIndex.indexByColumnRow(columnIndex: 4, rowIndex: rowIndex))
+            .value = TextCellValue(DateFormat(
+                'yyyy-MM-dd HH:mm')
+            .format(reflection.submittedDate));
+        sheet
+            .cell(
+                CellIndex.indexByColumnRow(columnIndex: 5, rowIndex: rowIndex))
+            .value = TextCellValue(statusText);
+
+        // 질문과 답변 입력
+        for (int i = 0; i < reflection.questions.length && i < 4; i++) {
+          // 질문 입력
+          sheet
+              .cell(CellIndex.indexByColumnRow(
+                  columnIndex: 6 + i * 2, rowIndex: rowIndex))
+              .value = TextCellValue(reflection.questions[i]);
+
+          // 답변 입력
+          String answer = reflection.answers[reflection.questions[i]] ?? '';
+          sheet
+              .cell(CellIndex.indexByColumnRow(
+                  columnIndex: 7 + i * 2, rowIndex: rowIndex))
+              .value = TextCellValue(answer);
+        }
+
+        rowIndex++;
+      }
+
+      // 열 너비 자동 조정
+      for (int i = 0; i < headers.length; i++) {
+        if (i == 0 || i == 1 || i == 2 || i == 3) {
+          // 학번, 이름, 모둠, 성찰유형
+          sheet.setColumnWidth(i, 15);
+        } else if (i == 4 || i == 5) {
+          // 제출일, 상태
+          sheet.setColumnWidth(i, 20);
+        } else if (i % 2 == 0) {
+          // 질문
+          sheet.setColumnWidth(i, 35);
+        } else {
+          // 답변
+          sheet.setColumnWidth(i, 50);
+        }
+      }
+
+      // 성찰 유형별 시트 생성
+      for (int reflectionType = 1; reflectionType <= 3; reflectionType++) {
+        final typeSheet = excel[_getReflectionTypeName(reflectionType)];
+
+        // 헤더 행 추가
+        for (int i = 0; i < headers.length; i++) {
+          final cell = typeSheet
+              .cell(CellIndex.indexByColumnRow(columnIndex: i, rowIndex: 0));
+          cell.value = TextCellValue(headers[i]);
+          cell.cellStyle = headerStyle;
+        }
+
+        // 필터링된 데이터 행 추가
+        int typeRowIndex = 1;
+        final filteredReflections = allReflections
+            .where((r) => r.reflectionId == reflectionType)
+            .toList();
+
+        for (final reflection in filteredReflections) {
+          String statusText = '';
+          switch (reflection.status) {
+            case ReflectionStatus.notSubmitted:
+              statusText = '미제출';
+              break;
+            case ReflectionStatus.submitted:
+              statusText = '제출완료';
+              break;
+            case ReflectionStatus.rejected:
+              statusText = '반려됨';
+              break;
+            case ReflectionStatus.accepted:
+              statusText = '승인됨';
+              break;
+          }
+
+          // 기본 정보 입력
+          typeSheet
+              .cell(CellIndex.indexByColumnRow(
+                  columnIndex: 0, rowIndex: typeRowIndex))
+              .value = TextCellValue(reflection.studentId);
+          typeSheet
+              .cell(CellIndex.indexByColumnRow(
+                  columnIndex: 1, rowIndex: typeRowIndex))
+              .value = TextCellValue(reflection.studentName);
+          typeSheet
+              .cell(CellIndex.indexByColumnRow(
+                  columnIndex: 2, rowIndex: typeRowIndex))
+              .value = TextCellValue('${reflection.group}모둠');
+          typeSheet
+              .cell(CellIndex.indexByColumnRow(
+                  columnIndex: 3, rowIndex: typeRowIndex))
+              .value = TextCellValue(_getReflectionTypeName(reflectionType));
+          typeSheet
+                  .cell(CellIndex.indexByColumnRow(
+                      columnIndex: 4, rowIndex: typeRowIndex))
+                  .value =
+              TextCellValue(DateFormat('yyyy-MM-dd HH:mm')
+                  .format(reflection.submittedDate));
+          typeSheet
+              .cell(CellIndex.indexByColumnRow(
+                  columnIndex: 5, rowIndex: typeRowIndex))
+              .value = TextCellValue(statusText);
+
+          // 질문과 답변 입력
+          for (int i = 0; i < reflection.questions.length && i < 4; i++) {
+            // 질문 입력
+            typeSheet
+                .cell(CellIndex.indexByColumnRow(
+                    columnIndex: 6 + i * 2, rowIndex: typeRowIndex))
+                .value = TextCellValue(reflection.questions[i]);
+
+            // 답변 입력
+            String answer = reflection.answers[reflection.questions[i]] ?? '';
+            typeSheet
+                .cell(CellIndex.indexByColumnRow(
+                    columnIndex: 7 + i * 2, rowIndex: typeRowIndex))
+                .value = TextCellValue(answer);
+          }
+
+          typeRowIndex++;
+        }
+
+        // 열 너비 자동 조정
+        for (int i = 0; i < headers.length; i++) {
+          if (i == 0 || i == 1 || i == 2 || i == 3) {
+            // 학번, 이름, 모둠, 성찰유형
+            typeSheet.setColumnWidth(i, 15);
+          } else if (i == 4 || i == 5) {
+            // 제출일, 상태
+            typeSheet.setColumnWidth(i, 20);
+          } else if (i % 2 == 0) {
+            // 질문
+            typeSheet.setColumnWidth(i, 35);
+          } else {
+            // 답변
+            typeSheet.setColumnWidth(i, 50);
+          }
+        }
+      }
+
+      // 엑셀 파일 저장
+      final fileBytes = excel.encode();
+      if (fileBytes == null) throw Exception("엑셀 파일 생성 실패");
+
+      // Web 플랫폼인 경우 FileSaver를 사용
+      final fileName =
+          '$classId반_성찰보고서_${DateTime.now().millisecondsSinceEpoch}.xlsx';
+
+      try {
+        await FileSaver.instance.saveFile(
+            name: fileName,
+            bytes: Uint8List.fromList(fileBytes),
+            ext: 'xlsx',
+            mimeType: MimeType.microsoftExcel);
+        return fileName;
+      } catch (e) {
+        print('파일 저장 오류: $e');
+        throw Exception("파일 저장 중 오류가 발생했습니다: $e");
+      }
+    } catch (e) {
+      print('모든 성찰 유형 엑셀 생성 오류: $e');
       throw Exception('엑셀 파일 생성 중 오류가 발생했습니다: $e');
     }
   }

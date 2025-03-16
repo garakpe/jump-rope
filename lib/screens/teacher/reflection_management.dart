@@ -942,7 +942,7 @@ class _ReflectionManagementState extends State<ReflectionManagement>
     );
   }
 
-  // 엑셀 다운로드 버튼
+// 엑셀 다운로드 버튼 영역
   Widget _buildExcelDownloadButton() {
     return Container(
       width: double.infinity,
@@ -957,20 +957,89 @@ class _ReflectionManagementState extends State<ReflectionManagement>
           top: BorderSide(color: Colors.grey.shade200),
         ),
       ),
-      child: ElevatedButton.icon(
-        icon: const Icon(Icons.download, size: 18),
-        label: const Text('엑셀로 내보내기'),
-        onPressed: () => generateExcelDownload(),
-        style: ElevatedButton.styleFrom(
-          backgroundColor: Colors.green.shade500,
-          foregroundColor: Colors.white,
-          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(8),
+      child: Column(
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: ElevatedButton.icon(
+                  icon: const Icon(Icons.download, size: 18),
+                  label: const Text('현재 성찰 유형 내보내기'),
+                  onPressed: _isLoading ? null : () => generateExcelDownload(),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.green.shade500,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 16, vertical: 12),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: ElevatedButton.icon(
+                  icon: const Icon(Icons.file_download, size: 18),
+                  label: const Text('모든 성찰 유형 통합 내보내기'),
+                  onPressed: _isLoading
+                      ? null
+                      : () => generateAllReflectionTypesExcelDownload(),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.indigo.shade500,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 16, vertical: 12),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                  ),
+                ),
+              ),
+            ],
           ),
-        ),
+          const SizedBox(height: 8),
+          const Text(
+            '* 엑셀 파일에는 학생 정보와 성찰 답변이 포함되며, 다운로드 폴더에 저장됩니다.',
+            style: TextStyle(fontSize: 12, color: Colors.grey),
+          ),
+        ],
       ),
     );
+  }
+
+// 모든 성찰 유형 통합 엑셀 다운로드 메서드
+  Future<void> generateAllReflectionTypesExcelDownload() async {
+    if (widget.selectedClassId <= 0) {
+      _setStatusMessage('학급이 선택되지 않았습니다. 상단에서 학급을 선택해주세요.');
+      return;
+    }
+
+    _setStatusMessage('모든 성찰 유형 통합 엑셀 파일 생성 중...', isLoading: true);
+
+    try {
+      final reflectionProvider =
+          Provider.of<ReflectionProvider>(context, listen: false);
+      final fileName =
+          await reflectionProvider.generateAllReflectionTypesExcel();
+
+      _setStatusMessage('통합 엑셀 파일이 생성되었습니다: $fileName', isLoading: false);
+
+      // 성공 메시지 표시
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('엑셀 파일이 다운로드 폴더에 저장되었습니다: $fileName'),
+          backgroundColor: Colors.green,
+          duration: const Duration(seconds: 5),
+          action: SnackBarAction(
+            label: '확인',
+            onPressed: () {},
+          ),
+        ),
+      );
+    } catch (e) {
+      _setStatusMessage('통합 엑셀 파일 생성 중 오류가 발생했습니다: $e', isLoading: false);
+    }
   }
 
   // 마감일 배지 위젯
