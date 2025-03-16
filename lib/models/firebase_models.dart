@@ -129,7 +129,7 @@ class FirebaseStudentModel {
       studentId: data['studentId'] ?? '',
       grade: data['grade'] ?? '',
       classNum: data['classNum'] ?? '',
-      group: (data['group'] ?? '1').toString(),
+      group: data['group'] ?? 1,
       individualTasks: processedIndividualTasks,
       groupTasks: processedGroupTasks,
       attendance: data['attendance'] ?? true,
@@ -143,7 +143,7 @@ class FirebaseStudentModel {
       studentId: data['studentId'] ?? '',
       grade: data['grade'] ?? '',
       classNum: data['classNum'] ?? '',
-      group: (data['group'] ?? '1').toString(),
+      group: data['group'] ?? 1,
       individualTasks: data['individualTasks'] ?? {},
       groupTasks: data['groupTasks'] ?? {},
       attendance: data['attendance'] ?? true,
@@ -287,7 +287,7 @@ class FirebaseReflectionModel {
       grade: data['grade'] ?? '',
       classNum: data['classNum'] ?? '', // classNum 필드 추가
       studentNum: data['studentNum'] ?? '', // studentNum 필드 추가
-      group: (data['group'] ?? '0').toString(),
+      group: data['group'] ?? 0,
       week: data['week'] ?? 0, // 하위 호환성
       reflectionId: reflectionId, // reflectionId 필드 추가
       questions: List<String>.from(data['questions'] ?? []),
@@ -350,7 +350,7 @@ class FirebaseReflectionModel {
       grade: data['grade'] ?? '',
       classNum: data['classNum'] ?? '', // classNum 필드 추가
       studentNum: data['studentNum'] ?? '',
-      group: (data['group'] ?? '0').toString(),
+      group: data['group'] ?? 0,
       week: data['week'] ?? 0, // 하위 호환성
       reflectionId: reflectionId, // reflectionId 필드 추가
       questions: List<String>.from(data['questions'] ?? []),
@@ -474,7 +474,7 @@ class ReflectionSubmission {
     this.grade = '',
     this.classNum = '', // 기본값 설정
     this.studentNum = '', // 기본값 설정
-    this.group = '0',
+    this.group = '',
     this.status = ReflectionStatus.submitted,
     this.rejectionReason,
   });
