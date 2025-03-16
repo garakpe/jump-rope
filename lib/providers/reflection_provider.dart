@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import '../models/reflection_model.dart';
 import '../models/firebase_models.dart';
 import '../services/reflection_service.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 class ReflectionProvider extends ChangeNotifier {
   final ReflectionService _reflectionService = ReflectionService();
@@ -37,6 +38,7 @@ class ReflectionProvider extends ChangeNotifier {
   String get error => _error;
   String? get downloadUrl => _downloadUrl;
   Map<int, DateTime?> get deadlines => _deadlines;
+  String get selectedClass => _selectedClass;
 
   // 추가: 설정 변경 구독용 변수
   StreamSubscription? _settingsSubscription;
@@ -44,7 +46,6 @@ class ReflectionProvider extends ChangeNotifier {
   // 생성자: 기본 데이터 로드
   ReflectionProvider() {
     _initializeData();
-    _subscribeToSettingsChanges(); // 설정 변경 실시간 감지
   }
 
   @override
@@ -74,17 +75,68 @@ class ReflectionProvider extends ChangeNotifier {
     // 클래스가 선택되지 않았으면 리턴
     if (_selectedClass.isEmpty) return;
 
+    print('설정 변경 구독 시작: 학급 $_selectedClass');
+
     // 학급별 설정 스트림 구독
     _settingsSubscription =
         _reflectionService.getSettingsStream(_selectedClass).listen((data) {
+      bool shouldNotify = false;
+
+      // 활성화된 성찰 유형 처리
       if (data.containsKey('activeReflectionMask')) {
         final newMask = data['activeReflectionMask'] as int;
         if (newMask != _activeReflectionMask) {
           _activeReflectionMask = newMask;
           _activeReflectionTypes = _countActiveBits(newMask);
-          notifyListeners(); // UI 갱신 트리거
+          shouldNotify = true;
           print('성찰 활성화 마스크 업데이트: $_activeReflectionMask, 학급: $_selectedClass');
         }
+      }
+
+      // 마감일 정보 처리
+      if (data.containsKey('deadlines')) {
+        Map<String, dynamic> deadlinesData = data['deadlines'] ?? {};
+        Map<int, DateTime?> newDeadlines = {};
+
+        deadlinesData.forEach((key, value) {
+          int reflectionType = int.tryParse(key) ?? 0;
+          if (reflectionType > 0 && value != null) {
+            if (value is Timestamp) {
+              newDeadlines[reflectionType] = value.toDate();
+            } else if (value is String) {
+              try {
+                newDeadlines[reflectionType] = DateTime.parse(value);
+              } catch (e) {
+                print('마감일 파싱 오류: $e');
+              }
+            }
+          }
+        });
+
+        // 마감일이 변경되었는지 확인
+        bool deadlinesChanged = false;
+        if (newDeadlines.length != _deadlines.length) {
+          deadlinesChanged = true;
+        } else {
+          newDeadlines.forEach((type, date) {
+            if (!_deadlines.containsKey(type) ||
+                _deadlines[type]?.millisecondsSinceEpoch !=
+                    date?.millisecondsSinceEpoch) {
+              deadlinesChanged = true;
+            }
+          });
+        }
+
+        if (deadlinesChanged) {
+          _deadlines = newDeadlines;
+          shouldNotify = true;
+          print('마감일 정보 업데이트됨, 학급: $_selectedClass');
+        }
+      }
+
+      // 변경사항이 있으면 알림
+      if (shouldNotify) {
+        notifyListeners(); // UI 갱신 트리거
       }
     });
   }
@@ -102,15 +154,15 @@ class ReflectionProvider extends ChangeNotifier {
     }
   }
 
-// 비트마스크 상수 추가
+  // 비트마스크 상수 추가
   static const int INITIAL_REFLECTION = 1; // 2^0 = 1
   static const int MID_REFLECTION = 2; // 2^1 = 2
   static const int FINAL_REFLECTION = 4; // 2^2 = 4
 
-// 기존 _activeReflectionTypes 유지하면서 비트마스크 추가
+  // 기존 _activeReflectionTypes 유지하면서 비트마스크 추가
   int _activeReflectionMask = INITIAL_REFLECTION; // 기본값: 초기 성찰만 활성화
 
-// 게터 추가
+  // 게터 추가
   int get activeReflectionMask => _activeReflectionMask;
 
   // 특정 성찰 유형이 활성화되었는지 확인하는 메서드 수정
@@ -148,6 +200,7 @@ class ReflectionProvider extends ChangeNotifier {
       await _reflectionService.setActiveReflectionMask(_selectedClass, mask);
 
       // 호환성을 위해 _activeReflectionTypes도 업데이트
+      _activeReflectionMask = mask;
       _activeReflectionTypes = _countActiveBits(_activeReflectionMask);
 
       notifyListeners();
@@ -157,7 +210,7 @@ class ReflectionProvider extends ChangeNotifier {
     }
   }
 
-// 활성화된 비트 수 계산 도우미 메서드
+  // 활성화된 비트 수 계산 도우미 메서드
   int _countActiveBits(int mask) {
     int count = 0;
     for (int i = 0; i < 3; i++) {
@@ -337,6 +390,34 @@ class ReflectionProvider extends ChangeNotifier {
     }
   }
 
+  // 마감 여부 변경 시 UI 갱신을 위한 간단한 메서드
+  void refreshSettings() {
+    notifyListeners();
+  }
+
+  // 특정 학급의 설정 정보 강제 새로고침
+  Future<void> refreshClassSettings(String classId) async {
+    if (classId.isEmpty) return;
+
+    _setLoading(true);
+
+    try {
+      // 선택된 학급 설정
+      _selectedClass = classId;
+
+      // 활성화 타입과 마감일 정보 새로 로드
+      await _loadActiveReflectionTypes();
+      await _loadDeadlines();
+
+      // 설정 변경 구독 재설정
+      _subscribeToSettingsChanges();
+
+      _setLoading(false);
+    } catch (e) {
+      _handleError('설정 새로고침 실패', e);
+    }
+  }
+
   Future<void> submitReflection(ReflectionSubmission submission) async {
     _setLoading(true);
     _clearError();
@@ -424,6 +505,7 @@ class ReflectionProvider extends ChangeNotifier {
         studentName: submission.studentName,
         grade: submission.grade,
         classNum: submission.classNum, // classNum 필드 추가
+        studentNum: submission.studentNum,
         group: submission.group,
         week: 0, // 필요없는 필드지만 모델에 있으므로 기본값 설정
         questions: reflectionCard.questions,
@@ -605,6 +687,7 @@ class ReflectionProvider extends ChangeNotifier {
       studentName: reflection.studentName,
       grade: reflection.grade,
       classNum: reflection.classNum, // classNum 필드 추가
+      studentNum: reflection.studentNum,
       group: reflection.group,
       status: reflection.status,
       rejectionReason: reflection.rejectionReason,
@@ -631,6 +714,7 @@ class ReflectionProvider extends ChangeNotifier {
       answers: {},
       submittedDate: DateTime.now(),
       classNum: '', // classNum 필드 추가 (빈 값으로)
+      studentNum: '',
     );
   }
 
@@ -647,6 +731,7 @@ class ReflectionProvider extends ChangeNotifier {
       studentName: reflection.studentName,
       grade: reflection.grade,
       classNum: reflection.classNum, // classNum 필드 추가
+      studentNum: reflection.studentNum,
       group: reflection.group,
       status: reflection.status,
       rejectionReason: reflection.rejectionReason,

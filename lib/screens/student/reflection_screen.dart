@@ -22,12 +22,35 @@ class _ReflectionScreenState extends State<ReflectionScreen> {
 
   // 성찰 유형 활성화 상태 관리
   List<bool> _reflectionTypeEnabled = [true, false, false]; // 기본값: 초기 성찰만 활성화
-  final int _lastMask = 0; // 마지막으로 처리한 마스크 값
 
   @override
   void initState() {
     super.initState();
-    _loadActiveReflectionTypes();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _initializeReflectionSettings();
+    });
+  }
+
+  // 초기화 메서드 추가
+  void _initializeReflectionSettings() {
+    final authProvider = Provider.of<AuthProvider>(context, listen: false);
+    final reflectionProvider =
+        Provider.of<ReflectionProvider>(context, listen: false);
+
+    // 사용자 정보 가져오기
+    final user = authProvider.userInfo;
+    if (user != null) {
+      // 사용자의 학급 정보로 reflection provider 초기화
+      String classId = user.classNum ?? user.grade ?? '';
+      if (classId.isNotEmpty) {
+        print('학생 학급 설정: $classId');
+        // 학급 선택 (이렇게 하면 설정 변경 구독이 시작됨)
+        reflectionProvider.selectClassAndReflectionType(classId, 1);
+
+        // 활성화 상태 로드
+        _loadActiveReflectionTypes();
+      }
+    }
   }
 
   @override
@@ -37,7 +60,7 @@ class _ReflectionScreenState extends State<ReflectionScreen> {
     _loadActiveReflectionTypes();
   }
 
-// 활성화된 성찰 유형 로드 메서드 수정
+  // 활성화된 성찰 유형 로드 메서드 수정
   void _loadActiveReflectionTypes() {
     final reflectionProvider =
         Provider.of<ReflectionProvider>(context, listen: false);
@@ -181,6 +204,18 @@ class _ReflectionScreenState extends State<ReflectionScreen> {
       return const Center(
         child: Text('사용자 정보를 로드할 수 없습니다.'),
       );
+    }
+
+    // 현재 선택된 학급 정보 확인
+    String classId = reflectionProvider.selectedClass;
+    if (classId.isEmpty) {
+      // 로그인한 사용자 학급 정보 가져오기
+      classId = user.classNum ?? user.grade ?? '';
+      if (classId.isNotEmpty) {
+        // 나중에 상태 초기화를 위해 여기서 호출 (이미 초기화되었다면 무시됨)
+        Future.microtask(
+            () => reflectionProvider.selectClassAndReflectionType(classId, 1));
+      }
     }
 
     return ListView.builder(
@@ -488,7 +523,7 @@ class _ReflectionScreenState extends State<ReflectionScreen> {
     }
   }
 
-// 버튼 텍스트 반환 함수 수정 - 마감 상태 고려
+  // 버튼 텍스트 반환 함수 수정 - 마감 상태 고려
   String _getButtonText(
       ReflectionStatus status, bool isEnabled, bool isDeadlinePassed) {
     if (!isEnabled) return '현재 비활성화됨';
@@ -555,6 +590,9 @@ class _ReflectionScreenState extends State<ReflectionScreen> {
         setState(() {
           _statusMessage = '성찰 보고서가 성공적으로 저장되었습니다!';
         });
+
+        // 상태가 변경되었을 수 있으므로 설정 업데이트
+        _loadActiveReflectionTypes();
       }
     } catch (e) {
       setState(() {
