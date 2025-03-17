@@ -720,9 +720,32 @@ class _ProgressScreenState extends State<ProgressScreen>
     );
   }
 
-  // 필터링된 학생 목록 업데이트
+  // 필터링된 학생 목록 업데이트 (개선됨)
   void _updateFilteredStudents(List<StudentProgress> students, String myId,
       String myGroup, String myStudentId) {
+    final taskProvider = Provider.of<TaskProvider>(context, listen: false);
+
+    // 내 학생 정보 찾기 - 항상 non-nullable StudentProgress 객체 생성
+    StudentProgress myStudent;
+    try {
+      myStudent = students.firstWhere(
+        (s) => s.id == myId || s.studentId == myId,
+        orElse: () => StudentProgress(
+            id: myId,
+            name: '',
+            number: 0,
+            group: myGroup,
+            studentId: myStudentId),
+      );
+    } catch (e) {
+      myStudent = StudentProgress(
+          id: myId,
+          name: '',
+          number: 0,
+          group: myGroup,
+          studentId: myStudentId);
+    }
+
     // 같은 모둠, 같은 반 학생 필터링
     _filteredStudents = students.where((s) {
       // 1. 자기 자신은 항상 포함
@@ -732,18 +755,8 @@ class _ProgressScreenState extends State<ProgressScreen>
       final sameGroup = s.group == myGroup;
       if (!sameGroup) return false;
 
-      // 3. 같은 반 여부 확인
-      final otherStudentId = s.studentId;
-
-      if (myStudentId.isNotEmpty && otherStudentId.isNotEmpty) {
-        if (myStudentId.length >= 3 && otherStudentId.length >= 3) {
-          final myPrefix = myStudentId.substring(0, 3);
-          final otherPrefix = otherStudentId.substring(0, 3);
-          return myPrefix == otherPrefix;
-        }
-      }
-
-      return false;
+      // 3. TaskProvider의 isInSameClass 메서드 활용하여 같은 반 여부 확인
+      return taskProvider.isInSameClass(myStudent, s);
     }).toList();
 
     // 이름순 정렬
