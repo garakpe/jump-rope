@@ -52,7 +52,7 @@ class _ReflectionManagementState extends State<ReflectionManagement>
       final reflectionProvider =
           Provider.of<ReflectionProvider>(context, listen: false);
       reflectionProvider.selectClassAndReflectionType(
-          widget.selectedClassId.toString(), 1); // 초기 성찰부터 시작
+          widget.selectedClassId.toString().padLeft(2, '0'), 1); // 초기 성찰부터 시작
 
       _loadDeadlines();
       _loadReflectionStats(1);
@@ -73,7 +73,8 @@ class _ReflectionManagementState extends State<ReflectionManagement>
       final reflectionProvider =
           Provider.of<ReflectionProvider>(context, listen: false);
       reflectionProvider.selectClassAndReflectionType(
-          widget.selectedClassId.toString(), _selectedReflectionType);
+          widget.selectedClassId.toString().padLeft(2, '0'),
+          _selectedReflectionType);
 
       _loadDeadlines();
       _loadReflectionStats(_selectedReflectionType);
@@ -105,7 +106,7 @@ class _ReflectionManagementState extends State<ReflectionManagement>
       final reflectionProvider =
           Provider.of<ReflectionProvider>(context, listen: false);
       reflectionProvider.selectClassAndReflectionType(
-          widget.selectedClassId.toString(), newReflectionType);
+          widget.selectedClassId.toString().padLeft(2, '0'), newReflectionType);
 
       // 해당 탭의 통계 로드
       _loadReflectionStats(newReflectionType);
@@ -145,7 +146,7 @@ class _ReflectionManagementState extends State<ReflectionManagement>
           Provider.of<ReflectionProvider>(context, listen: false);
 
       final stats = await reflectionProvider.getSubmissionStatsByClass(
-          widget.selectedClassId.toString(), reflectionType);
+          widget.selectedClassId.toString().padLeft(2, '0'), reflectionType);
 
       // 결과가 null인 경우 빈 객체 사용
       setState(() {
@@ -1797,7 +1798,7 @@ class _ReflectionManagementState extends State<ReflectionManagement>
 
       // 목록 새로고침
       reflectionProvider.selectClassAndReflectionType(
-          widget.selectedClassId.toString(), reflectionId);
+          widget.selectedClassId.toString().padLeft(2, '0'), reflectionId);
     } catch (e) {
       _setStatusMessage('승인 중 오류가 발생했습니다: $e');
     }
@@ -1904,7 +1905,8 @@ class _ReflectionManagementState extends State<ReflectionManagement>
 
       // 목록 새로고침
       reflectionProvider.selectClassAndReflectionType(
-          widget.selectedClassId.toString(), _selectedReflectionType);
+          widget.selectedClassId.toString().padLeft(2, '0'),
+          _selectedReflectionType);
     } catch (e) {
       _setStatusMessage('반려 중 오류가 발생했습니다: $e');
     }
@@ -1945,7 +1947,8 @@ class _ReflectionManagementState extends State<ReflectionManagement>
         // 결과가 true이면 상태 업데이트
         if (result == true) {
           reflectionProvider.selectClassAndReflectionType(
-              widget.selectedClassId.toString(), _selectedReflectionType);
+              widget.selectedClassId.toString().padLeft(2, '0'),
+              _selectedReflectionType);
           setState(() {
             _statusMessage = '${student.name}의 성찰 보고서를 확인했습니다.';
           });
@@ -2173,7 +2176,8 @@ class _ReflectionManagementState extends State<ReflectionManagement>
 
       // 목록 새로고침
       reflectionProvider.selectClassAndReflectionType(
-          widget.selectedClassId.toString(), _selectedReflectionType);
+          widget.selectedClassId.toString().padLeft(2, '0'),
+          _selectedReflectionType);
     } catch (e) {
       _setStatusMessage('승인 중 오류가 발생했습니다: $e');
     }
@@ -2282,7 +2286,8 @@ class _ReflectionManagementState extends State<ReflectionManagement>
 
       // 목록 새로고침
       reflectionProvider.selectClassAndReflectionType(
-          widget.selectedClassId.toString(), _selectedReflectionType);
+          widget.selectedClassId.toString().padLeft(2, '0'),
+          _selectedReflectionType);
     } catch (e) {
       _setStatusMessage('반려 중 오류가 발생했습니다: $e');
     }

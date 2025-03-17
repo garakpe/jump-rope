@@ -338,15 +338,15 @@ class _TeacherDashboardState extends State<TeacherDashboard>
 
     // 데이터 로드
     Provider.of<StudentProvider>(context, listen: false)
-        .setSelectedClass(classNumString);
+        .setSelectedClass(classId.toString().padLeft(2, '0')); // 두 자리 문자열로 변환
     Provider.of<TaskProvider>(context, listen: false)
-        .selectClass(classNumString);
+        .selectClass(classId.toString().padLeft(2, '0')); // 두 자리 문자열로 변환
 
     // 첫 번째 탭(모둠관리)으로 이동
     _tabController.animateTo(0);
 
     // 디버깅용 로그
-    print('학급 데이터 리프레시: $classNumString반');
+    print('학급 데이터 리프레시: ${classId.toString().padLeft(2, '0')}반');
   }
 
   // 학급 선택 드롭다운
@@ -386,7 +386,7 @@ class _TeacherDashboardState extends State<TeacherDashboard>
       print('교사 대시보드 - 학급 선택: $_selectedClassId');
 
       // 학급 정보 업데이트
-      final classNumString = value.toString();
+      final classNumString = value.toString().padLeft(2, '0'); // 두 자리 문자열로 변환
       Provider.of<studentprovider.StudentProvider>(context, listen: false)
           .setSelectedClass(classNumString);
       Provider.of<TaskProvider>(context, listen: false)

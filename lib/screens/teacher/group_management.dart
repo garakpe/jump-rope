@@ -34,7 +34,8 @@ class _GroupManagementState extends State<GroupManagement> {
       if (widget.selectedClassId > 0) {
         final studentProvider =
             Provider.of<StudentProvider>(context, listen: false);
-        final selectedClass = widget.selectedClassId.toString();
+        final selectedClass =
+            widget.selectedClassId.toString().padLeft(2, '0'); // 수정됨
         print('GroupManagement - 학급 $selectedClass 선택됨');
         studentProvider.setSelectedClass(selectedClass);
       }
@@ -50,7 +51,8 @@ class _GroupManagementState extends State<GroupManagement> {
         widget.selectedClassId > 0) {
       final studentProvider =
           Provider.of<StudentProvider>(context, listen: false);
-      final selectedClass = widget.selectedClassId.toString();
+      final selectedClass =
+          widget.selectedClassId.toString().padLeft(2, '0'); // 수정됨
       print('GroupManagement - 학급 변경 감지: $selectedClass');
       studentProvider.setSelectedClass(selectedClass);
     }

@@ -31,7 +31,8 @@ class _ProgressManagementState extends State<ProgressManagement> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (widget.selectedClassId > 0) {
         final taskProvider = Provider.of<TaskProvider>(context, listen: false);
-        taskProvider.selectClass(widget.selectedClassId.toString());
+        taskProvider
+            .selectClass(widget.selectedClassId.toString().padLeft(2, '0'));
         print('ProgressManagement - 선택된 학급: ${widget.selectedClassId}');
       }
     });
@@ -46,7 +47,8 @@ class _ProgressManagementState extends State<ProgressManagement> {
         widget.selectedClassId > 0) {
       final taskProvider = Provider.of<TaskProvider>(context, listen: false);
       print('ProgressManagement - 학급 변경 감지: ${widget.selectedClassId}');
-      taskProvider.selectClass(widget.selectedClassId.toString());
+      taskProvider
+          .selectClass(widget.selectedClassId.toString().padLeft(2, '0'));
     }
   }
 
