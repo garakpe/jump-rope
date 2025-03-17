@@ -20,7 +20,7 @@ StudentProgress getCurrentStudent(TaskProvider taskProvider, String studentId) {
   }
 
   return taskProvider.students.firstWhere(
-      (s) => s.id == studentId || s.id == studentId,
+      (s) => s.id == studentId || s.studentId == studentId,
       orElse: () => StudentProgress(
           id: studentId, name: '', number: 0, group: '', studentId: studentId));
 }
@@ -41,12 +41,43 @@ class _StudentDashboardState extends State<StudentDashboard>
   void initState() {
     super.initState();
     _tabController = TabController(length: 2, vsync: this);
+
+    // 탭 변경 리스너 등록
+    _tabController.addListener(_handleTabChange);
+
     // 기본 탭을 홈으로 설정
     _currentTab = NavigationTab.home;
     // 화면이 처음 로드될 때 데이터 강제 새로고침
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _loadInitialData();
     });
+  }
+
+  // 탭 변경 핸들러 - 디버깅 로그 추가
+  void _handleTabChange() {
+    if (_tabController.indexIsChanging) {
+      if (_tabController.index == 1) {
+        // 단체줄넘기 탭으로 전환
+        final authProvider = Provider.of<AuthProvider>(context, listen: false);
+        final taskProvider = Provider.of<TaskProvider>(context, listen: false);
+        final user = authProvider.userInfo;
+        final groupId = user?.group ?? '';
+        final classNum = user?.classNum ?? '';
+        final grade = user?.grade ?? '';
+
+        // 디버그 로그 출력
+        print('단체줄넘기 탭으로 전환: 학년=$grade, 학급=$classNum, 모둠=$groupId');
+
+        // 모둠원 수와 모둠 도장 갯수 확인
+        final memberCount = taskProvider.getGroupMemberCount(groupId);
+        final stampCount = taskProvider.getGroupStampCount(groupId);
+        final requiredStamps = memberCount * 5;
+        final canStartGroup = taskProvider.canStartGroupActivities(groupId);
+
+        print(
+            '모둠원 수: $memberCount, 모둠 도장: $stampCount, 필요 도장: $requiredStamps, 단체줄넘기 활성화: $canStartGroup');
+      }
+    }
   }
 
   // 초기 데이터 로드 메서드 - 간결화
@@ -62,6 +93,7 @@ class _StudentDashboardState extends State<StudentDashboard>
 
   @override
   void dispose() {
+    _tabController.removeListener(_handleTabChange);
     _tabController.dispose();
     super.dispose();
   }
@@ -465,8 +497,8 @@ class _StudentDashboardState extends State<StudentDashboard>
           child: TabBarView(
             controller: _tabController,
             children: [
-              _buildTaskGrid(TaskModel.getIndividualTasks(), true), // 개인줄넘기
-              _buildTaskGrid(TaskModel.getGroupTasks(), false), // 단체줄넘기
+              _buildTaskGrid(true), // 개인줄넘기
+              _buildTaskGrid(false), // 단체줄넘기
             ],
           ),
         ),
@@ -474,20 +506,25 @@ class _StudentDashboardState extends State<StudentDashboard>
     );
   }
 
-  Widget _buildTaskGrid(List<TaskModel> tasks, bool isIndividual) {
+  // 과제 그리드 위젯 (리팩토링)
+  Widget _buildTaskGrid(bool isIndividual) {
     final taskProvider = Provider.of<TaskProvider>(context);
     final authProvider = Provider.of<AuthProvider>(context);
     final user = authProvider.userInfo;
     final studentId = user?.studentId ?? '';
+    final groupId = user?.group ?? '';
 
-    // 현재 학생의 진도 정보 찾기 - 간결화
+    // 현재 학생의 진도 정보 찾기
     final currentStudent = getCurrentStudent(taskProvider, studentId);
 
-    // 그룹 정보 가져오기
-    final group = user?.group ?? '1'; // String 타입으로 직접 사용
+    // 과제 목록 가져오기
+    final tasks =
+        isIndividual ? taskProvider.individualTasks : taskProvider.groupTasks;
 
-    // 단체줄넘기 허용 여부 확인
-    final canDoGroupTasks = taskProvider.canStartGroupActivities(group);
+    // 단체줄넘기 허용 여부 확인 - 단순화된 로직 적용
+    final canDoGroupTasks = taskProvider.canStartGroupActivities(groupId);
+
+    // 단체줄넘기 화면으로 전환 시 디버그 로그 출력 (탭 전환 리스너에서 처리)
 
     // 로딩 상태 표시
     if (taskProvider.isLoading) {
@@ -504,74 +541,69 @@ class _StudentDashboardState extends State<StudentDashboard>
     }
 
     return GridView.builder(
-      padding: const EdgeInsets.all(16),
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 2,
-        childAspectRatio: 0.9,
-        crossAxisSpacing: 16,
-        mainAxisSpacing: 16,
-      ),
-      itemCount: tasks.length,
-      itemBuilder: (context, index) {
-        final task = tasks[index];
+        padding: const EdgeInsets.all(16),
+        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+          crossAxisCount: 2,
+          childAspectRatio: 0.9,
+          crossAxisSpacing: 16,
+          mainAxisSpacing: 16,
+        ),
+        itemCount: tasks.length,
+        itemBuilder: (context, index) {
+          final task = tasks[index];
 
-        // 과제 완료 여부 확인
-        bool isCompleted = false;
-        if (isIndividual) {
-          final progress = currentStudent.individualProgress[task.name];
-          isCompleted = progress?.isCompleted ?? false;
-        } else {
-          final progress = currentStudent.groupProgress[task.name];
-          isCompleted = progress?.isCompleted ?? false;
+          // 과제 완료 여부 확인
+          final progress = isIndividual
+              ? currentStudent.individualProgress[task.name]
+              : currentStudent.groupProgress[task.name];
+          final isCompleted = progress?.isCompleted ?? false;
+
+          // 과제 활성화 결정 (리팩토링된 로직)
+          bool isActive = _determineTaskAvailability(
+              task, isIndividual, isCompleted, currentStudent, canDoGroupTasks);
+
+          return TaskCard(
+            task: task,
+            isActive: isActive,
+            isCompleted: isCompleted,
+            currentLevel: task.level,
+            onTap: (isActive || isCompleted)
+                ? () => _showTaskModal(task, isCompleted)
+                : null,
+          );
+        });
+  }
+
+  // 과제 활성화 여부 결정 메서드 (리팩토링)
+  bool _determineTaskAvailability(TaskModel task, bool isIndividual,
+      bool isCompleted, StudentProgress student, bool canDoGroupActivities) {
+    // 이미 완료된 과제는 항상 활성화 상태
+    if (isCompleted) return true;
+
+    // 개인 줄넘기 과제인 경우
+    if (isIndividual) {
+      // 1단계는 항상 활성화
+      if (task.level == 1) return true;
+
+      // 현재 완료한 최고 레벨 찾기
+      int highestCompletedLevel = 0;
+
+      for (var task in TaskModel.getIndividualTasks()) {
+        final progress = student.individualProgress[task.name];
+        if (progress?.isCompleted == true &&
+            task.level > highestCompletedLevel) {
+          highestCompletedLevel = task.level;
         }
+      }
 
-        // 과제 활성화 결정
-        bool isActive;
-
-        if (isIndividual) {
-          // 개인 과제 활성화 로직
-          if (isCompleted || task.level == 1) {
-            isActive = true;
-          } else {
-            // 완료된 과제 리스트를 레벨 순으로 추출
-            final completedTasks = currentStudent.individualProgress.entries
-                .where((entry) => entry.value.isCompleted)
-                .map((entry) {
-              final taskModel = TaskModel.getIndividualTasks().firstWhere(
-                (t) => t.name == entry.key,
-                orElse: () =>
-                    TaskModel(id: 0, name: entry.key, count: '', level: 99),
-              );
-              return taskModel;
-            }).toList();
-
-            // 완료된 최고 레벨 계산
-            int maxCompletedLevel = 0;
-            if (completedTasks.isNotEmpty) {
-              completedTasks.sort((a, b) => b.level - a.level);
-              maxCompletedLevel = completedTasks.first.level;
-            }
-
-            // 활성화 레벨 결정
-            int activationLevel = maxCompletedLevel + 1;
-            isActive = task.level <= activationLevel;
-          }
-        } else {
-          // 단체 과제는 조건 충족 시 활성화
-          isActive = canDoGroupTasks || isCompleted;
-        }
-
-        return TaskCard(
-          task: task,
-          isActive: isActive,
-          isCompleted: isCompleted,
-          currentLevel: task.level,
-          onTap: (isActive || isCompleted)
-              ? () => _showTaskModal(task, isCompleted)
-              : null,
-        );
-      },
-    );
+      // 완료한 레벨의 바로 다음 레벨만 활성화
+      return task.level <= highestCompletedLevel + 1;
+    }
+    // 단체 줄넘기 과제인 경우
+    else {
+      // 모둠 도장 개수가 충분한지 확인 (모둠원×5 이상)
+      return canDoGroupActivities;
+    }
   }
 
   // 서버에서 학생 데이터 로드 - 간결화

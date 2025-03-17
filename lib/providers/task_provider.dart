@@ -25,7 +25,7 @@ class TaskProvider extends ChangeNotifier {
   bool _disposed = false;
   String _error = '';
   final Map<String, StudentProgress> _studentCache = {};
-  final Map<int, int> _groupStampCounts = {};
+  final Map<String, int> _groupStampCounts = {}; // 타입을 Map<String, int>로 변경
   StreamSubscription? _classSubscription;
 
   // Getters
@@ -560,45 +560,119 @@ class TaskProvider extends ChangeNotifier {
     // 도장 개수 재계산
     _calculateStampCount();
     _calculateGroupStampCounts();
+
+    notifyListeners();
   }
 
-  // 단체줄넘기 시작 가능 여부 확인
+  // 단체줄넘기 시작 가능 여부 확인 (리팩토링)
   bool canStartGroupActivities(String groupId) {
     if (groupId.isEmpty) return false;
 
-    // 같은 그룹의 모든 학생 찾기
-    List<StudentProgress> groupStudents =
-        _students.where((s) => s.group == groupId).toList();
+    // 같은 학년, 학급, 모둠에 속한 학생만 필터링
+    final currentUser = _students.isNotEmpty ? _students.first : null;
+    if (currentUser == null) return false;
 
-    // 학생이 없는 경우 캐시에서 검색
-    if (groupStudents.isEmpty) {
-      _studentCache.forEach((id, student) {
-        if (student.group == groupId &&
-            !groupStudents.any((s) => s.id == student.id)) {
-          groupStudents.add(student);
+    String grade = currentUser.classNum.isNotEmpty
+        ? currentUser.classNum.substring(0, 1)
+        : '';
+    String classNum = currentUser.classNum;
+
+    // 현재 모둠의 실제 모둠원 수 계산 (같은 학년, 학급, 모둠에 속한 학생)
+    int studentCount = 0;
+    for (var student in _students) {
+      if (student.group == groupId && student.classNum == classNum) {
+        studentCount++;
+      }
+    }
+
+    // 캐시에서도 확인
+    if (studentCount == 0) {
+      for (var student in _studentCache.values) {
+        if (student.group == groupId && student.classNum == classNum) {
+          studentCount++;
         }
-      });
+      }
     }
 
-    if (groupStudents.isEmpty) return false;
+    // 학생 수가 없으면 그룹 활동 불가
+    if (studentCount == 0) return false;
 
-    // 그룹의 모든 학생의 개인줄넘기 성공 수 합계
-    int totalSuccesses = 0;
-    for (var student in groupStudents) {
-      totalSuccesses +=
-          student.individualProgress.values.where((p) => p.isCompleted).length;
+    // 해당 모둠의 도장 개수 계산 (같은 학년, 학급, 모둠에 속한 학생들의 도장 합계)
+    int groupStamps = 0;
+    for (var student in _students) {
+      if (student.group == groupId && student.classNum == classNum) {
+        // 개인 과제 성공 개수
+        groupStamps += student.individualProgress.values
+            .where((p) => p.isCompleted)
+            .length;
+
+        // 단체 과제 성공 개수
+        groupStamps +=
+            student.groupProgress.values.where((p) => p.isCompleted).length;
+      }
     }
 
-    // 필요한 성공 개수: 학생 수 × 5
-    int neededSuccesses = groupStudents.length * 5;
-    return totalSuccesses >= neededSuccesses;
+    // 필요한 도장 수: 모둠원 수 × 5
+    int requiredStamps = studentCount * 5;
+
+    print(
+        '단체줄넘기 활성화 확인: 모둠=$groupId, 학년=$grade, 학급=$classNum, 모둠원=$studentCount, 모둠도장=$groupStamps, 필요도장=$requiredStamps');
+
+    return groupStamps >= requiredStamps;
   }
 
-  // 모둠별 도장 개수 가져오기
-  int getGroupStampCount(String groupNum) {
-    // String을 int로 변환하여 Map에서 직접 조회
-    int groupNumInt = int.tryParse(groupNum) ?? 0;
-    return _groupStampCounts[groupNumInt] ?? 0;
+  // 모둠별 도장 개수 가져오기 (같은 학년, 학급, 모둠에 속한 학생들만)
+  int getGroupStampCount(String groupId) {
+    // 현재 사용자 정보 찾기
+    final currentUser = _students.isNotEmpty ? _students.first : null;
+    if (currentUser == null) return 0;
+
+    String classNum = currentUser.classNum;
+
+    // 해당 모둠의 도장 개수 계산 (같은 학년, 학급, 모둠에 속한 학생들의 도장 합계)
+    int groupStamps = 0;
+    for (var student in _students) {
+      if (student.group == groupId && student.classNum == classNum) {
+        // 개인 과제 성공 개수
+        groupStamps += student.individualProgress.values
+            .where((p) => p.isCompleted)
+            .length;
+
+        // 단체 과제 성공 개수
+        groupStamps +=
+            student.groupProgress.values.where((p) => p.isCompleted).length;
+      }
+    }
+
+    return groupStamps;
+  }
+
+  // 모둠원 수 가져오기 (같은 학년, 학급, 모둠에 속한 학생들만)
+  int getGroupMemberCount(String groupId) {
+    // 현재 사용자 정보 찾기
+    final currentUser = _students.isNotEmpty ? _students.first : null;
+    if (currentUser == null) return 0;
+
+    String classNum = currentUser.classNum;
+
+    // 같은 학년, 학급, 모둠에 속한 학생 수 계산
+    int count = 0;
+    for (var student in _students) {
+      if (student.group == groupId && student.classNum == classNum) {
+        count++;
+      }
+    }
+
+    // 캐시에서도 확인
+    if (count == 0) {
+      for (var student in _studentCache.values) {
+        if (student.group == groupId && student.classNum == classNum) {
+          count++;
+        }
+      }
+    }
+
+    return count;
   }
 
   // ============ 데이터 변환 및 계산 메서드 ============
@@ -679,44 +753,41 @@ class TaskProvider extends ChangeNotifier {
     _calculateGroupStampCounts();
   }
 
-  // 도장 개수 계산
+  // 전체 도장 개수 계산 (간소화)
   void _calculateStampCount() {
-    int count = 0;
+    _stampCount = 0;
     for (var student in _students) {
       // 개인 과제 성공 개수
-      count +=
+      _stampCount +=
           student.individualProgress.values.where((p) => p.isCompleted).length;
       // 단체 과제 성공 개수
-      count += student.groupProgress.values.where((p) => p.isCompleted).length;
+      _stampCount +=
+          student.groupProgress.values.where((p) => p.isCompleted).length;
     }
-
-    _stampCount = count;
   }
 
-  // 모둠별 도장 개수 계산
+  // 모둠별 도장 개수 계산 (간소화)
   void _calculateGroupStampCounts() {
+    // 기존 카운트 초기화
     _groupStampCounts.clear();
 
-    // Map<String, int> 타입의 임시 맵 생성
-    final Map<String, int> tempCounts = {};
-
+    // 각 학생별로 완료한 과제 수를 모둠별로 집계
     for (var student in _students) {
       String groupId = student.group;
+      if (groupId.isEmpty) continue;
 
-      int individualCompleted =
+      // 개인 과제 성공 개수
+      int individualCount =
           student.individualProgress.values.where((p) => p.isCompleted).length;
-      int groupCompleted =
+
+      // 단체 과제 성공 개수
+      int groupCount =
           student.groupProgress.values.where((p) => p.isCompleted).length;
 
-      tempCounts[groupId] =
-          (tempCounts[groupId] ?? 0) + individualCompleted + groupCompleted;
+      // 해당 모둠의 기존 카운트에 추가
+      _groupStampCounts[groupId] =
+          (_groupStampCounts[groupId] ?? 0) + individualCount + groupCount;
     }
-
-    // 문자열 키를 int 키로 변환하여 _groupStampCounts에 저장
-    tempCounts.forEach((stringKey, value) {
-      int intKey = int.tryParse(stringKey) ?? 0;
-      _groupStampCounts[intKey] = value;
-    });
   }
 
   // ============ 유틸리티 메서드 ============
