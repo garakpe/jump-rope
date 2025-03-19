@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter_web_plugins/flutter_web_plugins.dart';
+import 'package:youtube_player_iframe/youtube_player_iframe.dart'; // 추가
 import './app.dart';
 import './providers/auth_provider.dart';
 import './providers/student_provider.dart';

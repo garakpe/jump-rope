@@ -11,7 +11,7 @@ import './progress_screen.dart';
 import './reflection_screen.dart';
 import '../../models/ui_models.dart';
 import 'package:flutter/cupertino.dart';
-import 'package:youtube_player_flutter/youtube_player_flutter.dart';
+import 'package:youtube_player_iframe/youtube_player_iframe.dart';
 
 // 현재 학생의 진도 정보 찾기 (간결화된 버전)
 StudentProgress getCurrentStudent(TaskProvider taskProvider, String studentId) {
@@ -624,8 +624,7 @@ class _StudentDashboardState extends State<StudentDashboard>
     }
   }
 
-// lib/screens/student/dashboard_screen.dart 내의 _showTaskModal 메서드 수정
-
+// dashboard_screen.dart의 _showTaskModal 메서드 수정 부분
   void _showTaskModal(TaskModel task, bool isCompleted) {
     showModalBottomSheet(
       context: context,
@@ -644,7 +643,7 @@ class _StudentDashboardState extends State<StudentDashboard>
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              // 헤더 영역 (기존 코드와 동일)
+              // 헤더 영역 (변경 없음)
               Padding(
                 padding: const EdgeInsets.all(20),
                 child: Row(
@@ -761,10 +760,13 @@ class _StudentDashboardState extends State<StudentDashboard>
                       ),
                       const SizedBox(height: 12),
 
-                      // 유튜브 플레이어 위젯
+                      // 유튜브 플레이어 위젯 - TaskModel의 isShorts 플래그 전달
                       YoutubePlayerWidget(
                         videoId: task.videoId,
-                        height: 200,
+                        // 쇼츠인 경우 더 높게 설정
+                        height: task.isShorts ? 400 : 220,
+                        // 쇼츠 여부를 직접 전달
+                        isShorts: task.isShorts,
                         placeholderBuilder: () => Column(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [

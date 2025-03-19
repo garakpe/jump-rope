@@ -1,114 +1,137 @@
 <!DOCTYPE html>
 <html>
-<head>
-  <base href="$FLUTTER_BASE_HREF">
-  <meta charset="UTF-8">
-  <meta content="IE=Edge" http-equiv="X-UA-Compatible">
-  <meta name="description" content="줄넘기 학습 관리 웹앱">
+  <head>
+    <base href="$FLUTTER_BASE_HREF" />
+    <meta charset="UTF-8" />
+    <meta content="IE=Edge" http-equiv="X-UA-Compatible" />
+    <meta name="description" content="줄넘기 학습 관리 웹앱" />
 
-  <!-- iOS meta tags & icons -->
-  <meta name="apple-mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-status-bar-style" content="black">
-  <meta name="apple-mobile-web-app-title" content="줄넘기 학습 관리">
-  <meta name="mobile-web-app-capable" content="yes">
-  <link rel="apple-touch-icon" href="icons/Icon-192.png">
+    <!-- iOS meta tags & icons -->
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black" />
+    <meta name="apple-mobile-web-app-title" content="줄넘기 학습 관리" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <link rel="apple-touch-icon" href="icons/Icon-192.png" />
 
-  <!-- Favicon -->
-  <link rel="icon" type="image/png" href="favicon.png"/>
+    <!-- Favicon -->
+    <link rel="icon" type="image/png" href="favicon.png" />
 
-  <title>줄넘기 학습 관리</title>
-  <link rel="manifest" href="manifest.json">
+    <title>줄넘기 학습 관리</title>
+    <link rel="manifest" href="manifest.json" />
+    <!-- 보안 정책 설정 -->
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="
+    default-src * 'self' blob: data:;
+    script-src * 'self' 'unsafe-inline' 'unsafe-eval' https://www.youtube.com https://s.ytimg.com;
+    style-src * 'self' 'unsafe-inline';
+    connect-src * 'self';
+    frame-src * 'self' https://www.youtube.com;
+    media-src * 'self';
+    img-src * 'self' data: https:;
+  "
+    />
+    <script>
+      // The value below is injected by flutter build, do not touch.
+      var serviceWorkerVersion = null;
+    </script>
 
-  <script>
-    // The value below is injected by flutter build, do not touch.
-    var serviceWorkerVersion = null;
-  </script>
-  
-  <!-- This script adds the flutter initialization JS code -->
-  <script src="flutter.js" defer></script>
-  
-  <style>
-    body {
-      background-color: #F5F5F5;
-    }
-    
-    .loading {
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      margin: 0;
-      position: absolute;
-      top: 0;
-      left: 0;
-      height: 100%;
-      width: 100%;
-      flex-direction: column;
-      font-family: 'Roboto', sans-serif;
-    }
-    
-    .loader {
-      border: 8px solid #f3f3f3;
-      border-radius: 50%;
-      border-top: 8px solid #3498db;
-      width: 60px;
-      height: 60px;
-      -webkit-animation: spin 2s linear infinite;
-      animation: spin 2s linear infinite;
-      margin-bottom: 20px;
-    }
-    
-    .loading-text {
-      color: #3498db;
-      font-size: 20px;
-      font-weight: 600;
-    }
+    <!-- This script adds the flutter initialization JS code -->
+    <script src="flutter.js" defer></script>
 
-    @-webkit-keyframes spin {
-      0% { -webkit-transform: rotate(0deg); }
-      100% { -webkit-transform: rotate(360deg); }
-    }
+    <style>
+      body {
+        background-color: #f5f5f5;
+      }
 
-    @keyframes spin {
-      0% { transform: rotate(0deg); }
-      100% { transform: rotate(360deg); }
-    }
-  </style>
-</head>
-<body>
-  <div id="loading" class="loading">
-    <div class="loader"></div>
-    <div class="loading-text">줄넘기 학습 관리 앱 로딩 중...</div>
-  </div>
-  
-  <script>
-    window.addEventListener('load', function(ev) {
-      // 로딩 인디케이터 표시
-      var loading = document.querySelector('#loading');
-      
-      // Flutter 초기화
-      _flutter.loader.loadEntrypoint({
-        serviceWorker: {
-          serviceWorkerVersion: serviceWorkerVersion,
-        },
-        onEntrypointLoaded: function(engineInitializer) {
-          engineInitializer.initializeEngine().then(function(appRunner) {
-            loading.style.display = 'none';
-            appRunner.runApp();
-          }).catch(function(error) {
-            console.error('Flutter 초기화 오류:', error);
-            loading.innerHTML = `
+      .loading {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        margin: 0;
+        position: absolute;
+        top: 0;
+        left: 0;
+        height: 100%;
+        width: 100%;
+        flex-direction: column;
+        font-family: "Roboto", sans-serif;
+      }
+
+      .loader {
+        border: 8px solid #f3f3f3;
+        border-radius: 50%;
+        border-top: 8px solid #3498db;
+        width: 60px;
+        height: 60px;
+        -webkit-animation: spin 2s linear infinite;
+        animation: spin 2s linear infinite;
+        margin-bottom: 20px;
+      }
+
+      .loading-text {
+        color: #3498db;
+        font-size: 20px;
+        font-weight: 600;
+      }
+
+      @-webkit-keyframes spin {
+        0% {
+          -webkit-transform: rotate(0deg);
+        }
+        100% {
+          -webkit-transform: rotate(360deg);
+        }
+      }
+
+      @keyframes spin {
+        0% {
+          transform: rotate(0deg);
+        }
+        100% {
+          transform: rotate(360deg);
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div id="loading" class="loading">
+      <div class="loader"></div>
+      <div class="loading-text">줄넘기 학습 관리 앱 로딩 중...</div>
+    </div>
+
+    <script>
+      window.addEventListener("load", function (ev) {
+        // 로딩 인디케이터 표시
+        var loading = document.querySelector("#loading");
+
+        // Flutter 초기화
+        _flutter.loader.loadEntrypoint({
+          serviceWorker: {
+            serviceWorkerVersion: serviceWorkerVersion,
+          },
+          onEntrypointLoaded: function (engineInitializer) {
+            engineInitializer
+              .initializeEngine()
+              .then(function (appRunner) {
+                loading.style.display = "none";
+                appRunner.runApp();
+              })
+              .catch(function (error) {
+                console.error("Flutter 초기화 오류:", error);
+                loading.innerHTML = `
               <div style="color: red; text-align: center; padding: 20px;">
                 <h3>앱 로딩 중 오류가 발생했습니다</h3>
                 <p>${error}</p>
                 <button onclick="location.reload()">다시 시도</button>
               </div>
             `;
-          });
-        }
+              });
+          },
+        });
       });
-    });
-  </script>
+    </script>
 
-  <!-- Firebase 관련 스크립트 여기서 제거 -->
-</body>
+    <!-- Firebase 관련 스크립트 여기서 제거 -->
+  </body>
 </html>
