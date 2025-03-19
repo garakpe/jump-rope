@@ -64,13 +64,22 @@ class TaskProvider extends ChangeNotifier {
     return _studentCache[studentId];
   }
 
-  // 두 학생이 같은 학급인지 확인
   bool isInSameClass(StudentProgress student1, StudentProgress student2) {
     // 1. 같은 학생이면 당연히 같은 반
     if (student1.id == student2.id) return true;
 
-    // 2. 학번 체계 기반 비교 (학번 앞 3자리로 비교)
-    if (student1.studentId.length >= 5 && student2.studentId.length >= 5) {
+    // 학번 체계 기반 비교 대신 필드 직접 비교
+    if (student1.classNum.isNotEmpty && student2.classNum.isNotEmpty) {
+      return student1.classNum == student2.classNum;
+    }
+
+    // classNum이 없으면 grade로 비교
+    if (student1.grade.isNotEmpty && student2.grade.isNotEmpty) {
+      return student1.grade == student2.grade;
+    }
+
+    // 위 방법으로 비교할 수 없는 경우 (이전 버전 호환성)
+    if (student1.studentId.length >= 3 && student2.studentId.length >= 3) {
       try {
         final classInfo1 = student1.studentId.substring(0, 3);
         final classInfo2 = student2.studentId.substring(0, 3);
@@ -80,7 +89,6 @@ class TaskProvider extends ChangeNotifier {
       }
     }
 
-    // 학번으로 비교할 수 없는 경우
     return false;
   }
 
@@ -159,8 +167,9 @@ class TaskProvider extends ChangeNotifier {
 
   // ============ 사용자 변경 및 설정 관련 메서드 ============
 
-  // 사용자 변경 처리 메서드 수정
-  void handleUserChanged(String? newStudentId, String? groupId) {
+// 사용자 변경 처리 메서드 수정
+  void handleUserChanged(String? newStudentId, String? groupId, String grade,
+      String classNum, String studentNum) {
     // 데이터 초기화
     _students = [];
     _studentCache.clear();
@@ -174,7 +183,8 @@ class TaskProvider extends ChangeNotifier {
 
       // 2. 학생의 모둠원 데이터 로드 (그룹 ID가 있는 경우)
       if (groupId != null && groupId.isNotEmpty && groupId != '0') {
-        loadGroupMembers(groupId, '1'); // 1학년으로 가정 (필요시 동적으로 변경)
+        // 학급(classNum) 정보 사용
+        loadGroupMembers(groupId, classNum.isNotEmpty ? classNum : grade);
       }
     }
 
@@ -265,14 +275,18 @@ class TaskProvider extends ChangeNotifier {
   }
 
   // 모둠원 데이터 로드
-  Future<bool> loadGroupMembers(String groupId, String grade) async {
-    if (groupId.isEmpty || grade.isEmpty) return false;
+  Future<bool> loadGroupMembers(String groupId, String classNum) async {
+    if (groupId.isEmpty || classNum.isEmpty) return false;
+    // 학급 번호 형식 통일 (한자리 -> 두자리 패딩)
+    String formattedClassNum =
+        classNum.length == 1 ? classNum.padLeft(2, '0') : classNum;
 
     _setLoading(true);
 
     try {
       // 서비스를 통해 모둠원 불러오기
-      final groupMembers = await _taskService.getGroupMembers(groupId, grade);
+      final groupMembers =
+          await _taskService.getGroupMembers(groupId, formattedClassNum);
 
       if (groupMembers.isEmpty) {
         _setLoading(false);
@@ -290,7 +304,7 @@ class TaskProvider extends ChangeNotifier {
         String studentId = memberData.studentId;
         if (studentId.isEmpty) {
           // 임시 학번 생성
-          studentId = '${grade}01${memberData.id.substring(0, 2)}';
+          studentId = '${classNum}01${memberData.id.substring(0, 2)}';
         }
 
         // 학생 진도 정보 생성
@@ -572,10 +586,8 @@ class TaskProvider extends ChangeNotifier {
     final currentUser = _students.isNotEmpty ? _students.first : null;
     if (currentUser == null) return false;
 
-    String grade = currentUser.classNum.isNotEmpty
-        ? currentUser.classNum.substring(0, 1)
-        : '';
     String classNum = currentUser.classNum;
+    String grade = currentUser.grade;
 
     // 현재 모둠의 실제 모둠원 수 계산 (같은 학년, 학급, 모둠에 속한 학생)
     int studentCount = 0;
@@ -699,27 +711,34 @@ class TaskProvider extends ChangeNotifier {
     return progress;
   }
 
-  // StudentProgress 객체 생성
   StudentProgress _createStudentProgress(
       FirebaseStudentModel data,
       Map<String, TaskProgress> individualProgress,
       Map<String, TaskProgress> groupProgress,
       String studentId) {
-    int studentNumber = 0;
-    if (studentId.length >= 2) {
-      studentNumber =
-          int.tryParse(studentId.substring(studentId.length - 2)) ?? 0;
+    // 학번에서 정보 추출하는 대신 필드 사용
+    String grade = data.grade;
+    String classNum = data.classNum.isNotEmpty ? data.classNum : data.grade;
+
+    // studentNum은 학번의 마지막 두 자리 또는 데이터에서 가져옴
+    String studentNum = '';
+    if (data.studentId.length >= 2) {
+      // 기존에 studentNum 필드가 없는 경우를 위한 폴백
+      studentNum = data.studentId.substring(data.studentId.length - 2);
     }
 
     return StudentProgress(
       id: data.id,
       name: data.name,
-      number: studentNumber,
+      number: int.tryParse(studentNum) ?? 0,
       group: data.group,
       individualProgress: individualProgress,
       groupProgress: groupProgress,
       attendance: data.attendance,
       studentId: studentId,
+      classNum: classNum, // 추가된 필드
+      studentNum: studentNum, // 추가된 필드
+      grade: grade, // 추가된 필드
     );
   }
 

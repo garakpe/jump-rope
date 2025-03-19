@@ -22,7 +22,8 @@ class UserModel {
       'name': name,
       'studentId': studentId,
       'grade': grade,
-      'classNum': classNum, // map에 추가
+      'classNum': classNum,
+      'studentNum': studentNum, // map에 추가
       'group': group,
       'isTeacher': isTeacher,
     };
@@ -35,6 +36,7 @@ class UserModel {
       grade: map['grade'] as String?,
       classNum: map['classNum'] as String?, // 파싱 추가
       group: map['group'] as String?,
+      studentNum: map['studentNum'] as String?,
       isTeacher: map['isTeacher'] as bool? ?? false,
     );
   }

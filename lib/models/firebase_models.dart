@@ -59,6 +59,7 @@ class FirebaseStudentModel {
   final String studentId;
   final String grade;
   final String classNum;
+  final String studentNum;
   final String group;
   final Map<String, dynamic> individualTasks;
   final Map<String, dynamic> groupTasks;
@@ -69,6 +70,7 @@ class FirebaseStudentModel {
     required this.name,
     required this.studentId,
     required this.grade,
+    required this.studentNum,
     this.classNum = '',
     required this.group,
     this.individualTasks = const {},
@@ -129,6 +131,7 @@ class FirebaseStudentModel {
       studentId: data['studentId'] ?? '',
       grade: data['grade'] ?? '',
       classNum: data['classNum'] ?? '',
+      studentNum: data['studentNum'] ?? '',
       group: data['group'] ?? 1,
       individualTasks: processedIndividualTasks,
       groupTasks: processedGroupTasks,
@@ -143,6 +146,7 @@ class FirebaseStudentModel {
       studentId: data['studentId'] ?? '',
       grade: data['grade'] ?? '',
       classNum: data['classNum'] ?? '',
+      studentNum: data['studentNum'] ?? '',
       group: data['group'] ?? 1,
       individualTasks: data['individualTasks'] ?? {},
       groupTasks: data['groupTasks'] ?? {},
@@ -156,6 +160,7 @@ class FirebaseStudentModel {
     String? studentId,
     String? grade,
     String? classNum,
+    String? studentNum,
     String? group,
     Map<String, dynamic>? individualTasks,
     Map<String, dynamic>? groupTasks,
@@ -167,6 +172,7 @@ class FirebaseStudentModel {
       studentId: studentId ?? this.studentId,
       grade: grade ?? this.grade,
       classNum: classNum ?? this.classNum,
+      studentNum: studentNum ?? this.studentNum,
       group: group ?? this.group,
       individualTasks: individualTasks ?? this.individualTasks,
       groupTasks: groupTasks ?? this.groupTasks,
@@ -179,6 +185,7 @@ class FirebaseStudentModel {
         'studentId': studentId,
         'grade': grade,
         'classNum': classNum,
+        'studentNum': studentNum,
         'group': group,
         'individualTasks': individualTasks,
         'groupTasks': groupTasks,

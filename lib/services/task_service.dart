@@ -27,23 +27,11 @@ class TaskService {
     return _students[studentId];
   }
 
-  // 두 학생이 같은 반인지 확인
   bool areStudentsInSameClass(String id1, String id2) {
     // 1. id가 같으면 당연히 같은 학생
     if (id1 == id2) return true;
 
-    // 2. 학번 비교 (학번의 앞 3자리를 비교)
-    if (id1.length >= 5 && id2.length >= 5) {
-      try {
-        final classCode1 = id1.substring(0, 3);
-        final classCode2 = id2.substring(0, 3);
-        return classCode1 == classCode2;
-      } catch (e) {
-        print('학번 비교 오류: $e');
-      }
-    }
-
-    // 3. 캐시된 Firebase 모델을 활용한 비교
+    // 2. 캐시된 Firebase 모델을 활용한 비교
     final model1 = _students[id1];
     final model2 = _students[id2];
 
@@ -56,6 +44,17 @@ class TaskService {
       // grade이 있으면 그것을 비교
       if (model1.grade.isNotEmpty && model2.grade.isNotEmpty) {
         return model1.grade == model2.grade;
+      }
+
+      // 이전 버전 호환성을 위한 비교 (학번 앞 3자리)
+      if (model1.studentId.length >= 3 && model2.studentId.length >= 3) {
+        try {
+          final classCode1 = model1.studentId.substring(0, 3);
+          final classCode2 = model2.studentId.substring(0, 3);
+          return classCode1 == classCode2;
+        } catch (e) {
+          print('학번 비교 오류: $e');
+        }
       }
     }
 
@@ -173,9 +172,8 @@ class TaskService {
     }
   }
 
-  // 모둠원 데이터 가져오기
   Future<List<FirebaseStudentModel>> getGroupMembers(
-      String groupId, String grade) async {
+      String groupId, String classNum) async {
     if (groupId.isEmpty) {
       return [];
     }
@@ -200,11 +198,14 @@ class TaskService {
               // 메모리에 캐시
               _students[student.id] = student;
 
-              // 같은 학년/반인 경우만 결과에 포함 (클라이언트 측 필터링)
-              if (grade.isEmpty ||
-                  (student.studentId.isNotEmpty &&
-                      student.studentId.length >= 3 &&
-                      student.studentId.substring(0, 1) == grade)) {
+              // 학급 비교 시 형식 통일
+              String studentClassNum = student.classNum.length == 1
+                  ? student.classNum.padLeft(2, '0')
+                  : student.classNum;
+
+              // 이미 grade는 호출 측에서 패딩되어 전달됨
+              // 같은 학급인 경우 또는 grade가 비어있는 경우 결과에 포함
+              if (classNum.isEmpty || studentClassNum == classNum) {
                 result.add(student);
               }
             } catch (e) {
@@ -330,6 +331,7 @@ class TaskService {
       studentId: student.studentId,
       grade: student.grade,
       classNum: student.classNum,
+      studentNum: student.studentNum,
       group: student.group,
       individualTasks: updatedIndividualTasks,
       groupTasks: updatedGroupTasks,
@@ -396,6 +398,7 @@ class TaskService {
         studentId: 'not_found',
         grade: '0',
         classNum: '0',
+        studentNum: 'not_fond',
         group: '0',
       ));
     }

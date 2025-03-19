@@ -145,9 +145,8 @@ class AuthProvider extends ChangeNotifier {
         name: _firebaseStudent!.name,
         studentId: _firebaseStudent!.studentId,
         grade: _firebaseStudent!.grade,
-        classNum: _firebaseStudent!.classNum.isNotEmpty
-            ? _firebaseStudent!.classNum
-            : _firebaseStudent!.grade, // classNum 우선, 없으면 grade 사용
+        classNum: _firebaseStudent!.classNum,
+        studentNum: _firebaseStudent!.studentNum, // classNum 우선, 없으면 grade 사용
         group: _firebaseStudent!.group, // 이미 String이므로 toString() 제거
         isTeacher: false,
       );
@@ -173,7 +172,7 @@ class AuthProvider extends ChangeNotifier {
     await prefs.setString('name', name);
   }
 
-  // TaskProvider에 사용자 변경 알림 메서드 수정 (int? -> String?)
+// TaskProvider에 사용자 변경 알림 메서드 수정
   void _notifyTaskProviderForUserChange(String? studentId, String? groupId) {
     try {
       // navigatorKey를 통해 context 가져오기
@@ -181,8 +180,16 @@ class AuthProvider extends ChangeNotifier {
       if (context != null) {
         // TaskProvider에 접근하여 사용자 변경 알림
         final taskProvider = Provider.of<TaskProvider>(context, listen: false);
-        taskProvider.handleUserChanged(studentId, groupId);
-        print('TaskProvider에 사용자 변경 알림 성공: 학생ID=$studentId, 그룹=$groupId');
+
+        // 필드 기반 접근
+        final grade = _currentUser?.grade ?? '';
+        final classNum = _currentUser?.classNum ?? '';
+        final studentNum = _currentUser?.studentNum ?? '';
+
+        taskProvider.handleUserChanged(
+            studentId, groupId, grade, classNum, studentNum);
+        print(
+            'TaskProvider에 사용자 변경 알림 성공: 학생ID=$studentId, 그룹=$groupId, 학년=$grade, 반=$classNum, 번호=$studentNum');
       }
     } catch (e) {
       print('TaskProvider 알림 실패: $e');
