@@ -6,10 +6,12 @@ import '../../providers/auth_provider.dart';
 import '../../providers/task_provider.dart';
 import '../../widgets/bottom_nav_bar.dart';
 import '../../widgets/task_card.dart';
+import '../../widgets/ui/youtube_player_widget.dart';
 import './progress_screen.dart';
 import './reflection_screen.dart';
 import '../../models/ui_models.dart';
 import 'package:flutter/cupertino.dart';
+import 'package:youtube_player_flutter/youtube_player_flutter.dart';
 
 // 현재 학생의 진도 정보 찾기 (간결화된 버전)
 StudentProgress getCurrentStudent(TaskProvider taskProvider, String studentId) {
@@ -622,6 +624,8 @@ class _StudentDashboardState extends State<StudentDashboard>
     }
   }
 
+// lib/screens/student/dashboard_screen.dart 내의 _showTaskModal 메서드 수정
+
   void _showTaskModal(TaskModel task, bool isCompleted) {
     showModalBottomSheet(
       context: context,
@@ -640,7 +644,7 @@ class _StudentDashboardState extends State<StudentDashboard>
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              // 헤더 영역
+              // 헤더 영역 (기존 코드와 동일)
               Padding(
                 padding: const EdgeInsets.all(20),
                 child: Row(
@@ -757,15 +761,11 @@ class _StudentDashboardState extends State<StudentDashboard>
                       ),
                       const SizedBox(height: 12),
 
-                      // 영상 영역 (데모 표시)
-                      Container(
+                      // 유튜브 플레이어 위젯
+                      YoutubePlayerWidget(
+                        videoId: task.videoId,
                         height: 200,
-                        width: double.infinity,
-                        decoration: BoxDecoration(
-                          color: Colors.grey.shade100,
-                          borderRadius: BorderRadius.circular(16),
-                        ),
-                        child: Column(
+                        placeholderBuilder: () => Column(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
                             const Icon(
@@ -824,7 +824,7 @@ class _StudentDashboardState extends State<StudentDashboard>
         );
       },
     ).then((_) {
-      // 모달이 닫힐 때 화면 갱신
+      // 화면 갱신
       setState(() {});
     });
   }
