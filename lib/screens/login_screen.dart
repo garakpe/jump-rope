@@ -108,125 +108,198 @@ class _LoginScreenState extends State<LoginScreen> {
     // 현재 로그인 상태 확인
     final authProvider = Provider.of<AuthProvider>(context);
     final isLoading = authProvider.isLoading || _isLoading;
+    final screenWidth = MediaQuery.of(context).size.width;
+    final isSmallScreen = screenWidth < 600;
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF5F5F5),
-      body: Center(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(16.0),
-          child: Card(
-            elevation: 4,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(24),
-            ),
-            child: Padding(
-              padding: const EdgeInsets.all(0),
+      backgroundColor: Colors.white,
+      body: SafeArea(
+        child: Center(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(16.0),
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 420),
               child: Column(
-                mainAxisSize: MainAxisSize.min,
+                mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  // 상단 헤더 영역
+                  // 로고 및 학교명
                   Container(
-                    padding: const EdgeInsets.all(20),
-                    decoration: const BoxDecoration(
-                      gradient: LinearGradient(
-                        colors: [Colors.blue, Color(0xFF3E7BFA)],
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                      ),
-                      borderRadius: BorderRadius.only(
-                        topLeft: Radius.circular(24),
-                        topRight: Radius.circular(24),
-                      ),
-                    ),
+                    margin: const EdgeInsets.only(bottom: 24),
                     child: Column(
                       children: [
+                        Container(
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            shape: BoxShape.circle,
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withOpacity(0.1),
+                                blurRadius: 10,
+                                spreadRadius: 1,
+                              ),
+                            ],
+                          ),
+                          child: Container(
+                            width: 64,
+                            height: 64,
+                            decoration: const BoxDecoration(
+                              color: Colors.blue,
+                              shape: BoxShape.circle,
+                            ),
+                            child: const Icon(
+                              Icons.groups_rounded,
+                              size: 40,
+                              color: Colors.white,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        const Text(
+                          '가락고등학교',
+                          style: TextStyle(
+                            fontSize: 24,
+                            fontWeight: FontWeight.bold,
+                            color: Color(0xFF1F2937),
+                          ),
+                        ),
+                        const SizedBox(height: 4),
                         const Text(
                           '줄넘기 학습 관리',
                           style: TextStyle(
-                            color: Colors.white,
-                            fontSize: 24,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                        const SizedBox(height: 16),
-                        // iOS 스타일 세그먼트 컨트롤
-                        Container(
-                          decoration: BoxDecoration(
-                            color: Colors.blue.shade700.withOpacity(0.3),
-                            borderRadius: BorderRadius.circular(24),
-                          ),
-                          padding: const EdgeInsets.all(4),
-                          child: Row(
-                            children: [
-                              Expanded(
-                                child: GestureDetector(
-                                  onTap: () => setState(() {
-                                    _isStudentLogin = true;
-                                    _error = '';
-                                  }),
-                                  child: Container(
-                                    padding: const EdgeInsets.symmetric(
-                                        vertical: 10),
-                                    decoration: BoxDecoration(
-                                      color: _isStudentLogin
-                                          ? Colors.white
-                                          : Colors.transparent,
-                                      borderRadius: BorderRadius.circular(20),
-                                    ),
-                                    child: Text(
-                                      '학생 로그인',
-                                      textAlign: TextAlign.center,
-                                      style: TextStyle(
-                                        color: _isStudentLogin
-                                            ? Colors.blue
-                                            : Colors.white.withOpacity(0.9),
-                                        fontWeight: FontWeight.bold,
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                              ),
-                              Expanded(
-                                child: GestureDetector(
-                                  onTap: () => setState(() {
-                                    _isStudentLogin = false;
-                                    _error = '';
-                                  }),
-                                  child: Container(
-                                    padding: const EdgeInsets.symmetric(
-                                        vertical: 10),
-                                    decoration: BoxDecoration(
-                                      color: !_isStudentLogin
-                                          ? Colors.white
-                                          : Colors.transparent,
-                                      borderRadius: BorderRadius.circular(20),
-                                    ),
-                                    child: Text(
-                                      '교사 로그인',
-                                      textAlign: TextAlign.center,
-                                      style: TextStyle(
-                                        color: !_isStudentLogin
-                                            ? Colors.blue
-                                            : Colors.white.withOpacity(0.9),
-                                        fontWeight: FontWeight.bold,
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                              ),
-                            ],
+                            fontSize: 20,
+                            fontWeight: FontWeight.w600,
+                            color: Colors.blue,
                           ),
                         ),
                       ],
                     ),
                   ),
 
-                  // 로그인 폼 영역
-                  Padding(
-                    padding: const EdgeInsets.all(20),
-                    child: _isStudentLogin
-                        ? _buildStudentForm()
-                        : _buildTeacherForm(),
+                  // 로그인 카드
+                  Container(
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(24),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.1),
+                          blurRadius: 16,
+                          spreadRadius: 0,
+                          offset: const Offset(0, 4),
+                        ),
+                      ],
+                    ),
+                    clipBehavior: Clip.antiAlias,
+                    child: Column(
+                      children: [
+                        // 상단 세그먼트 컨트롤
+                        Container(
+                          padding: const EdgeInsets.all(16),
+                          color:
+                              const Color(0xFFEFF6FF), // light blue background
+                          child: Container(
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFE5E7EB), // gray background
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            padding: const EdgeInsets.all(4),
+                            child: Row(
+                              children: [
+                                // 학생 로그인 탭
+                                Expanded(
+                                  child: GestureDetector(
+                                    onTap: () => setState(() {
+                                      _isStudentLogin = true;
+                                      _error = '';
+                                    }),
+                                    child: Container(
+                                      padding: const EdgeInsets.symmetric(
+                                          vertical: 10),
+                                      decoration: BoxDecoration(
+                                        color: _isStudentLogin
+                                            ? Colors.white
+                                            : Colors.transparent,
+                                        borderRadius: BorderRadius.circular(10),
+                                        boxShadow: _isStudentLogin
+                                            ? [
+                                                BoxShadow(
+                                                  color: Colors.black
+                                                      .withOpacity(0.05),
+                                                  blurRadius: 4,
+                                                  spreadRadius: 0,
+                                                ),
+                                              ]
+                                            : null,
+                                      ),
+                                      child: Text(
+                                        '학생 로그인',
+                                        textAlign: TextAlign.center,
+                                        style: TextStyle(
+                                          color: _isStudentLogin
+                                              ? Colors.blue
+                                              : Colors.grey[600],
+                                          fontWeight: FontWeight.w600,
+                                          fontSize: 14,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                                // 교사 로그인 탭
+                                Expanded(
+                                  child: GestureDetector(
+                                    onTap: () => setState(() {
+                                      _isStudentLogin = false;
+                                      _error = '';
+                                    }),
+                                    child: Container(
+                                      padding: const EdgeInsets.symmetric(
+                                          vertical: 10),
+                                      decoration: BoxDecoration(
+                                        color: !_isStudentLogin
+                                            ? Colors.white
+                                            : Colors.transparent,
+                                        borderRadius: BorderRadius.circular(10),
+                                        boxShadow: !_isStudentLogin
+                                            ? [
+                                                BoxShadow(
+                                                  color: Colors.black
+                                                      .withOpacity(0.05),
+                                                  blurRadius: 4,
+                                                  spreadRadius: 0,
+                                                ),
+                                              ]
+                                            : null,
+                                      ),
+                                      child: Text(
+                                        '교사 로그인',
+                                        textAlign: TextAlign.center,
+                                        style: TextStyle(
+                                          color: !_isStudentLogin
+                                              ? Colors.blue
+                                              : Colors.grey[600],
+                                          fontWeight: FontWeight.w600,
+                                          fontSize: 14,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+
+                        // 로그인 폼
+                        Padding(
+                          padding: const EdgeInsets.all(24),
+                          child: _isStudentLogin
+                              ? _buildStudentForm()
+                              : _buildTeacherForm(),
+                        ),
+                      ],
+                    ),
                   ),
                 ],
               ),
@@ -239,53 +312,103 @@ class _LoginScreenState extends State<LoginScreen> {
 
   Widget _buildStudentForm() {
     return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         // 학번 입력 필드
-        TextField(
-          controller: _studentIdController,
-          decoration: const InputDecoration(
-            labelText: '학번',
-            prefixIcon: Icon(Icons.school),
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.all(Radius.circular(12)),
+        const Text(
+          '학번',
+          style: TextStyle(
+            fontSize: 14,
+            fontWeight: FontWeight.w500,
+            color: Color(0xFF4B5563),
+          ),
+        ),
+        const SizedBox(height: 4),
+        Container(
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(12),
+            color: Colors.white,
+            border: Border.all(color: const Color(0xFFD1D5DB)),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.02),
+                blurRadius: 4,
+                spreadRadius: 0,
+              ),
+            ],
+          ),
+          child: TextField(
+            controller: _studentIdController,
+            keyboardType: TextInputType.number,
+            enabled: !_isLoading,
+            decoration: const InputDecoration(
+              hintText: '학번을 입력하세요',
+              prefixIcon: Icon(Icons.school, color: Color(0xFF9CA3AF)),
+              border: InputBorder.none,
+              contentPadding: EdgeInsets.symmetric(vertical: 14),
             ),
           ),
-          keyboardType: TextInputType.number,
-          enabled: !_isLoading,
         ),
         const SizedBox(height: 16),
 
         // 이름 입력 필드
-        TextField(
-          controller: _studentNameController,
-          decoration: const InputDecoration(
-            labelText: '이름',
-            prefixIcon: Icon(Icons.person),
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.all(Radius.circular(12)),
+        const Text(
+          '이름',
+          style: TextStyle(
+            fontSize: 14,
+            fontWeight: FontWeight.w500,
+            color: Color(0xFF4B5563),
+          ),
+        ),
+        const SizedBox(height: 4),
+        Container(
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(12),
+            color: Colors.white,
+            border: Border.all(color: const Color(0xFFD1D5DB)),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.02),
+                blurRadius: 4,
+                spreadRadius: 0,
+              ),
+            ],
+          ),
+          child: TextField(
+            controller: _studentNameController,
+            enabled: !_isLoading,
+            decoration: const InputDecoration(
+              hintText: '이름을 입력하세요',
+              prefixIcon: Icon(Icons.person, color: Color(0xFF9CA3AF)),
+              border: InputBorder.none,
+              contentPadding: EdgeInsets.symmetric(vertical: 14),
             ),
           ),
-          enabled: !_isLoading,
         ),
 
-        // 에러 메시지 영역
+        // 에러 메시지
         if (_error.isNotEmpty)
           Container(
             margin: const EdgeInsets.only(top: 16),
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
-              color: Colors.red.shade50,
+              color: const Color(0xFFFEF2F2),
               borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: Colors.red.shade200),
+              border: Border.all(color: const Color(0xFFFCA5A5)),
             ),
             child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Icon(Icons.error_outline, color: Colors.red.shade400),
+                const Icon(Icons.error_outline,
+                    color: Color(0xFFF87171), size: 20),
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
                     _error,
-                    style: TextStyle(color: Colors.red.shade700),
+                    style: const TextStyle(
+                      color: Color(0xFFB91C1C),
+                      fontSize: 13,
+                    ),
                   ),
                 ),
               ],
@@ -296,21 +419,39 @@ class _LoginScreenState extends State<LoginScreen> {
 
         // 로그인 버튼
         _isLoading
-            ? const CircularProgressIndicator()
-            : CustomButton(
-                label: '로그인',
-                onPressed: _handleStudentLogin,
+            ? const Center(child: CircularProgressIndicator())
+            : SizedBox(
                 width: double.infinity,
                 height: 50,
-                borderRadius: 16,
-                backgroundColor: Colors.blue,
+                child: ElevatedButton(
+                  onPressed: _handleStudentLogin,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.blue,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    elevation: 1,
+                  ),
+                  child: const Text(
+                    '로그인',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
               ),
 
         // 로그인 안내
         const SizedBox(height: 16),
-        const Text(
-          '학번과 이름을 입력하여 로그인하세요',
-          style: TextStyle(color: Colors.grey, fontSize: 12),
+        const Center(
+          child: Text(
+            '학번과 이름을 입력하여 로그인하세요',
+            style: TextStyle(
+              color: Color(0xFF6B7280),
+              fontSize: 12,
+            ),
+          ),
         ),
       ],
     );
@@ -318,54 +459,104 @@ class _LoginScreenState extends State<LoginScreen> {
 
   Widget _buildTeacherForm() {
     return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         // 이메일 입력 필드
-        TextField(
-          controller: _teacherEmailController,
-          decoration: const InputDecoration(
-            labelText: '이메일',
-            prefixIcon: Icon(Icons.email),
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.all(Radius.circular(12)),
+        const Text(
+          '이메일',
+          style: TextStyle(
+            fontSize: 14,
+            fontWeight: FontWeight.w500,
+            color: Color(0xFF4B5563),
+          ),
+        ),
+        const SizedBox(height: 4),
+        Container(
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(12),
+            color: Colors.white,
+            border: Border.all(color: const Color(0xFFD1D5DB)),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.02),
+                blurRadius: 4,
+                spreadRadius: 0,
+              ),
+            ],
+          ),
+          child: TextField(
+            controller: _teacherEmailController,
+            keyboardType: TextInputType.emailAddress,
+            enabled: !_isLoading,
+            decoration: const InputDecoration(
+              hintText: '이메일을 입력하세요',
+              prefixIcon: Icon(Icons.email, color: Color(0xFF9CA3AF)),
+              border: InputBorder.none,
+              contentPadding: EdgeInsets.symmetric(vertical: 14),
             ),
           ),
-          keyboardType: TextInputType.emailAddress,
-          enabled: !_isLoading,
         ),
         const SizedBox(height: 16),
 
         // 비밀번호 입력 필드
-        TextField(
-          controller: _teacherPasswordController,
-          decoration: const InputDecoration(
-            labelText: '비밀번호',
-            prefixIcon: Icon(Icons.lock),
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.all(Radius.circular(12)),
+        const Text(
+          '비밀번호',
+          style: TextStyle(
+            fontSize: 14,
+            fontWeight: FontWeight.w500,
+            color: Color(0xFF4B5563),
+          ),
+        ),
+        const SizedBox(height: 4),
+        Container(
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(12),
+            color: Colors.white,
+            border: Border.all(color: const Color(0xFFD1D5DB)),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.02),
+                blurRadius: 4,
+                spreadRadius: 0,
+              ),
+            ],
+          ),
+          child: TextField(
+            controller: _teacherPasswordController,
+            obscureText: true,
+            enabled: !_isLoading,
+            decoration: const InputDecoration(
+              hintText: '비밀번호를 입력하세요',
+              prefixIcon: Icon(Icons.lock, color: Color(0xFF9CA3AF)),
+              border: InputBorder.none,
+              contentPadding: EdgeInsets.symmetric(vertical: 14),
             ),
           ),
-          obscureText: true,
-          enabled: !_isLoading,
         ),
 
-        // 에러 메시지 영역
+        // 에러 메시지
         if (_error.isNotEmpty)
           Container(
             margin: const EdgeInsets.only(top: 16),
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
-              color: Colors.red.shade50,
+              color: const Color(0xFFFEF2F2),
               borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: Colors.red.shade200),
+              border: Border.all(color: const Color(0xFFFCA5A5)),
             ),
             child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Icon(Icons.error_outline, color: Colors.red.shade400),
+                const Icon(Icons.error_outline,
+                    color: Color(0xFFF87171), size: 20),
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
                     _error,
-                    style: TextStyle(color: Colors.red.shade700),
+                    style: const TextStyle(
+                      color: Color(0xFFB91C1C),
+                      fontSize: 13,
+                    ),
                   ),
                 ),
               ],
@@ -376,21 +567,39 @@ class _LoginScreenState extends State<LoginScreen> {
 
         // 로그인 버튼
         _isLoading
-            ? const CircularProgressIndicator()
-            : CustomButton(
-                label: '로그인',
-                onPressed: _handleTeacherLogin,
+            ? const Center(child: CircularProgressIndicator())
+            : SizedBox(
                 width: double.infinity,
                 height: 50,
-                borderRadius: 16,
-                backgroundColor: Colors.blue,
+                child: ElevatedButton(
+                  onPressed: _handleTeacherLogin,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.blue,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    elevation: 1,
+                  ),
+                  child: const Text(
+                    '로그인',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
               ),
 
-        // 테스트 계정 안내
+        // 로그인 안내
         const SizedBox(height: 16),
-        const Text(
-          '교사 로그인을 위해 등록된 이메일과 비밀번호를 입력하세요',
-          style: TextStyle(color: Colors.grey, fontSize: 12),
+        const Center(
+          child: Text(
+            '교사 로그인을 위해 등록된 이메일과 비밀번호를 입력하세요',
+            style: TextStyle(
+              color: Color(0xFF6B7280),
+              fontSize: 12,
+            ),
+          ),
         ),
       ],
     );
