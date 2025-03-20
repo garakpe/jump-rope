@@ -45,20 +45,8 @@ class TaskService {
       if (model1.grade.isNotEmpty && model2.grade.isNotEmpty) {
         return model1.grade == model2.grade;
       }
-
-      // 이전 버전 호환성을 위한 비교 (학번 앞 3자리)
-      if (model1.studentId.length >= 3 && model2.studentId.length >= 3) {
-        try {
-          final classCode1 = model1.studentId.substring(0, 3);
-          final classCode2 = model2.studentId.substring(0, 3);
-          return classCode1 == classCode2;
-        } catch (e) {
-          print('학번 비교 오류: $e');
-        }
-      }
     }
 
-    // 정보가 부족해 비교 불가능
     return false;
   }
 
@@ -172,6 +160,81 @@ class TaskService {
     }
   }
 
+  // 모둠원 데이터 스트림으로 가져오기 (실시간 구독)
+  Stream<List<FirebaseStudentModel>> getGroupMembersStream(
+      String groupId, String classNum) {
+    final streamController = StreamController<List<FirebaseStudentModel>>();
+
+    if (groupId.isEmpty) {
+      streamController.add([]);
+      return streamController.stream;
+    }
+
+    try {
+      // 그룹 ID와 classNum으로 학생들 조회
+      final subscription = _firestore
+          .collection('students')
+          .where('group', isEqualTo: groupId)
+          .snapshots()
+          .listen(
+        (snapshot) {
+          List<FirebaseStudentModel> students = [];
+
+          for (var doc in snapshot.docs) {
+            try {
+              final student = FirebaseStudentModel.fromFirestore(doc);
+
+              // 메모리에 캐시
+              _students[student.id] = student;
+
+              // classNum 기반 필터링
+              String studentClassNum =
+                  student.classNum.isEmpty ? student.grade : student.classNum;
+
+              if (classNum.isEmpty || studentClassNum == classNum) {
+                students.add(student);
+              }
+            } catch (e) {
+              print('모둠원 데이터 파싱 오류: $e');
+            }
+          }
+
+          streamController.add(students);
+        },
+        onError: (error) {
+          print('모둠원 스트림 오류: $error');
+          // 로컬 캐시에서 결과 제공
+          try {
+            final cachedStudents = _students.values
+                .where((student) =>
+                    student.group == groupId &&
+                    (student.classNum == classNum ||
+                        (student.classNum.isEmpty &&
+                            student.grade == classNum)))
+                .toList();
+            streamController.add(cachedStudents);
+          } catch (e) {
+            streamController.addError('캐시된 모둠원 데이터 조회 오류: $e');
+            streamController.add([]);
+          }
+        },
+      );
+
+      // 컨트롤러 종료 시 구독 취소
+      streamController.onCancel = () {
+        subscription.cancel();
+      };
+
+      return streamController.stream;
+    } catch (e) {
+      // 오류 발생시 빈 목록 반환
+      print('모둠원 스트림 설정 오류: $e');
+      streamController.add([]);
+      return streamController.stream;
+    }
+  }
+
+  // 기존 단일 조회 메서드 (이전 코드와의 호환성 유지)
   Future<List<FirebaseStudentModel>> getGroupMembers(
       String groupId, String classNum) async {
     if (groupId.isEmpty) {
@@ -199,12 +262,10 @@ class TaskService {
               _students[student.id] = student;
 
               // 학급 비교 시 형식 통일
-              String studentClassNum = student.classNum.length == 1
-                  ? student.classNum.padLeft(2, '0')
-                  : student.classNum;
+              String studentClassNum =
+                  student.classNum.isEmpty ? student.grade : student.classNum;
 
-              // 이미 grade는 호출 측에서 패딩되어 전달됨
-              // 같은 학급인 경우 또는 grade가 비어있는 경우 결과에 포함
+              // 같은 학급인 경우 결과에 포함
               if (classNum.isEmpty || studentClassNum == classNum) {
                 result.add(student);
               }
@@ -216,7 +277,10 @@ class TaskService {
       } catch (e) {
         // 로컬 캐시에서 조회 시도
         result = _students.values
-            .where((student) => student.group == groupId.toString())
+            .where((student) =>
+                student.group == groupId &&
+                (student.classNum == classNum ||
+                    (student.classNum.isEmpty && student.grade == classNum)))
             .toList();
       }
 
@@ -227,7 +291,7 @@ class TaskService {
     }
   }
 
-  // 과제 상태 업데이트
+  // 과제 상태 업데이트 (로컬 캐시도 즉시 업데이트)
   Future<void> updateTaskStatus(String studentId, String taskName,
       bool isCompleted, bool isGroupTask) async {
     final taskPath = isGroupTask ? 'groupTasks' : 'individualTasks';
@@ -342,7 +406,13 @@ class TaskService {
     _students[studentId] = updatedStudent;
 
     // 학급별 캐시도 업데이트
-    if (_studentsByClass.containsKey(student.grade)) {
+    if (_studentsByClass.containsKey(student.classNum)) {
+      final index = _studentsByClass[student.classNum]!
+          .indexWhere((s) => s.id == studentId);
+      if (index >= 0) {
+        _studentsByClass[student.classNum]![index] = updatedStudent;
+      }
+    } else if (_studentsByClass.containsKey(student.grade)) {
       final index =
           _studentsByClass[student.grade]!.indexWhere((s) => s.id == studentId);
       if (index >= 0) {
@@ -404,15 +474,16 @@ class TaskService {
     }
   }
 
-  // 학급 과제 상태 실시간 조회
-  Stream<List<FirebaseStudentModel>> getClassTasksStream(String grade) {
+  // 학급 과제 상태 실시간 조회 (필드 기반 개선)
+  Stream<List<FirebaseStudentModel>> getClassTasksStream(
+      String classIdentifier) {
     final streamController = StreamController<List<FirebaseStudentModel>>();
 
     try {
       // classNum으로 먼저 조회
       final subscription = _firestore
           .collection('students')
-          .where('classNum', isEqualTo: grade)
+          .where('classNum', isEqualTo: classIdentifier)
           .snapshots()
           .listen(
         (snapshot) {
@@ -423,41 +494,48 @@ class TaskService {
           streamController.add(students);
 
           // 로컬 캐시 업데이트
-          _studentsByClass[grade] = students;
+          _studentsByClass[classIdentifier] = students;
           for (var student in students) {
             _students[student.id] = student;
           }
         },
         onError: (error) {
-          // 로컬 캐시 사용 또는 grade으로 다시 시도
-          if (_studentsByClass.containsKey(grade)) {
-            streamController.add(_studentsByClass[grade]!);
-          } else {
-            // grade으로 다시 시도
-            _firestore
-                .collection('students')
-                .where('grade', isEqualTo: grade)
-                .get()
-                .then((gradeSnapshot) {
-              if (gradeSnapshot.docs.isNotEmpty) {
-                final gradeStudents = gradeSnapshot.docs
-                    .map((doc) => FirebaseStudentModel.fromFirestore(doc))
-                    .toList();
+          print('classNum으로 학급 데이터 조회 실패: $error - grade로 재시도합니다.');
 
-                streamController.add(gradeStudents);
+          // grade로 다시 시도
+          _firestore
+              .collection('students')
+              .where('grade', isEqualTo: classIdentifier)
+              .get()
+              .then((gradeSnapshot) {
+            if (gradeSnapshot.docs.isNotEmpty) {
+              final gradeStudents = gradeSnapshot.docs
+                  .map((doc) => FirebaseStudentModel.fromFirestore(doc))
+                  .toList();
 
-                // 로컬 캐시 업데이트
-                _studentsByClass[grade] = gradeStudents;
-                for (var student in gradeStudents) {
-                  _students[student.id] = student;
-                }
+              streamController.add(gradeStudents);
+
+              // 로컬 캐시 업데이트
+              _studentsByClass[classIdentifier] = gradeStudents;
+              for (var student in gradeStudents) {
+                _students[student.id] = student;
+              }
+            } else {
+              // 로컬 캐시 시도
+              if (_studentsByClass.containsKey(classIdentifier)) {
+                streamController.add(_studentsByClass[classIdentifier]!);
               } else {
                 streamController.add([]);
               }
-            }).catchError((e) {
+            }
+          }).catchError((e) {
+            // 로컬 캐시 시도
+            if (_studentsByClass.containsKey(classIdentifier)) {
+              streamController.add(_studentsByClass[classIdentifier]!);
+            } else {
               streamController.add([]);
-            });
-          }
+            }
+          });
         },
       );
 
@@ -469,7 +547,7 @@ class TaskService {
       return streamController.stream;
     } catch (e) {
       // Firebase 연결 실패 시 로컬 백업 로직 사용
-      return Stream.value(_studentsByClass[grade] ?? []);
+      return Stream.value(_studentsByClass[classIdentifier] ?? []);
     }
   }
 
@@ -524,63 +602,6 @@ class TaskService {
     if (failedUpdates.isNotEmpty) {
       _pendingUpdates.addAll(failedUpdates);
       await _savePendingUpdates();
-    }
-  }
-
-  // 모둠의 단체줄넘기 자격 확인
-  Future<bool> canStartGroupActivities(String grade, String groupId) async {
-    try {
-      // 모둠 학생들 가져오기
-      QuerySnapshot students = await _firestore
-          .collection('students')
-          .where('grade', isEqualTo: grade)
-          .where('group', isEqualTo: groupId)
-          .get();
-
-      int totalSuccesses = 0;
-      int totalStudents = students.docs.length;
-
-      if (totalStudents == 0) return false;
-
-      // 개인 과제 성공 횟수 계산
-      for (var doc in students.docs) {
-        Map<String, dynamic> data = doc.data() as Map<String, dynamic>;
-        Map<String, dynamic> individualTasks = data['individualTasks'] ?? {};
-
-        for (var task in individualTasks.entries) {
-          Map<String, dynamic> taskData = task.value as Map<String, dynamic>;
-          if (taskData['completed'] == true) {
-            totalSuccesses++;
-          }
-        }
-      }
-
-      // 자격 조건: 전체 학생 수 × 5회 이상 성공
-      int requiredSuccesses = totalStudents * 5;
-      return totalSuccesses >= requiredSuccesses;
-    } catch (e) {
-      // Firebase 연결 실패 시 로컬 백업 로직 사용
-      final students = _studentsByClass[grade] ?? [];
-      final groupStudents = students.where((s) => s.group == groupId).toList();
-
-      int totalSuccesses = 0;
-      int totalStudents = groupStudents.length;
-
-      if (totalStudents == 0) return false;
-
-      // 개인 과제 성공 횟수 계산
-      for (var student in groupStudents) {
-        for (var task in student.individualTasks.entries) {
-          Map<String, dynamic> taskData = task.value as Map<String, dynamic>;
-          if (taskData['completed'] == true) {
-            totalSuccesses++;
-          }
-        }
-      }
-
-      // 자격 조건: 전체 학생 수 × 5회 이상 성공
-      int requiredSuccesses = totalStudents * 5;
-      return totalSuccesses >= requiredSuccesses;
     }
   }
 }

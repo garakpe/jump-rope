@@ -1,4 +1,6 @@
+// lib/screens/student/progress_screen.dart
 import 'package:flutter/material.dart';
+import 'package:jump_rope_app/models/user_model.dart';
 import 'package:provider/provider.dart';
 import '../../models/task_model.dart';
 import '../../providers/task_provider.dart';
@@ -6,38 +8,34 @@ import '../../models/ui_models.dart';
 import '../../providers/auth_provider.dart';
 import '../../widgets/ui/custom_ios_style_card_widget.dart';
 
-// 현재 학생의 진도 정보 찾기 - 간결화
+// 현재 학생의 진도 정보 찾기 - 필드 기반 로직 개선
 StudentProgress getCurrentStudent(TaskProvider taskProvider, String studentId) {
   if (studentId.isEmpty) {
     return StudentProgress(
         id: studentId, name: '', number: 0, group: '0', studentId: studentId);
   }
 
-  // 캐시에서 먼저 확인
+  // ID 기준 검색
+  final students = taskProvider.students;
+  for (var student in students) {
+    if (student.id == studentId || student.studentId == studentId) {
+      return student;
+    }
+  }
+
+  // 캐시에서 확인
   final cachedStudent = taskProvider.getStudentFromCache(studentId);
   if (cachedStudent != null) {
     return cachedStudent;
   }
 
-  // 목록에서 검색
-  try {
-    return taskProvider.students.firstWhere(
-      (s) => s.id == studentId,
-      orElse: () => StudentProgress(
-          id: studentId,
-          name: '데이터 로딩 중',
-          number: 0,
-          group: '0',
-          studentId: studentId),
-    );
-  } catch (e) {
-    return StudentProgress(
-        id: studentId,
-        name: '데이터 로딩 중',
-        number: 0,
-        group: '0',
-        studentId: studentId);
-  }
+  // 캐시에도 없을 경우 임시 객체 반환
+  return StudentProgress(
+      id: studentId,
+      name: '데이터 로딩 중',
+      number: 0,
+      group: '0',
+      studentId: studentId);
 }
 
 class ProgressScreen extends StatefulWidget {
@@ -60,6 +58,22 @@ class _ProgressScreenState extends State<ProgressScreen>
   void initState() {
     super.initState();
     _tabController = TabController(length: 2, vsync: this);
+
+    // 화면 초기화 시 학생 데이터 새로고침 시도
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _refreshStudentData();
+    });
+  }
+
+  // 학생 데이터 새로고침 메서드 추가
+  void _refreshStudentData() {
+    final authProvider = Provider.of<AuthProvider>(context, listen: false);
+    final taskProvider = Provider.of<TaskProvider>(context, listen: false);
+    final user = authProvider.userInfo;
+
+    if (user != null && user.studentId != null && user.studentId!.isNotEmpty) {
+      taskProvider.refreshStudentData(user.studentId!);
+    }
   }
 
   @override
@@ -93,8 +107,8 @@ class _ProgressScreenState extends State<ProgressScreen>
     final myId = user?.studentId ?? '';
     final myGroup = user?.group ?? '1';
 
-    // 필터링된 학생 목록 업데이트
-    _updateFilteredStudents(students, myId, myGroup, user?.studentId ?? '');
+    // 필터링된 학생 목록 업데이트 (필드 기반)
+    _updateFilteredStudents(students, myId, myGroup, user);
 
     return Scaffold(
       backgroundColor: const Color(0xFFF2F2F7), // iOS 기본 배경색
@@ -644,12 +658,7 @@ class _ProgressScreenState extends State<ProgressScreen>
                   child: ElevatedButton(
                     onPressed: () {
                       // 데이터 새로고침 시도
-                      final user = authProvider.userInfo;
-                      final studentId = user?.studentId ?? '';
-                      if (studentId.isNotEmpty) {
-                        Provider.of<TaskProvider>(context, listen: false)
-                            .refreshStudentData(studentId);
-                      }
+                      _refreshStudentData();
                     },
                     style: ElevatedButton.styleFrom(
                       backgroundColor: Colors.blue,
@@ -697,10 +706,7 @@ class _ProgressScreenState extends State<ProgressScreen>
               label: const Text('새로고침'),
               onPressed: () {
                 // 데이터 새로고침 시도
-                if (myId.isNotEmpty) {
-                  Provider.of<TaskProvider>(context, listen: false)
-                      .refreshStudentData(myId);
-                }
+                _refreshStudentData();
               },
               style: ElevatedButton.styleFrom(
                 backgroundColor: Colors.blue,
@@ -720,27 +726,34 @@ class _ProgressScreenState extends State<ProgressScreen>
     );
   }
 
-  // 필터링된 학생 목록 업데이트
+  // 필터링된 학생 목록 업데이트 (필드 기반 통일)
   void _updateFilteredStudents(List<StudentProgress> students, String myId,
-      String myGroup, String myStudentId) {
-    // 같은 모둠, 같은 반 학생 필터링
+      String myGroup, UserModel? user) {
+    if (user == null) {
+      _filteredStudents = [];
+      return;
+    }
+
+    // 사용자의 학급 정보 추출
+    String userClassNum = user.classNum ?? '';
+    String userGrade = user.grade ?? '';
+
+    // 필드 기반 필터링으로 통일
     _filteredStudents = students.where((s) {
       // 1. 자기 자신은 항상 포함
       if (s.id == myId || s.studentId == myId) return true;
 
-      // 2. 같은 그룹 학생 필터링
-      final sameGroup = s.group == myGroup;
-      if (!sameGroup) return false;
+      // 2. 같은 그룹 학생만 포함
+      if (s.group != myGroup) return false;
 
-      // 3. 같은 반 여부 확인
-      final otherStudentId = s.studentId;
+      // 3. 같은 반(classNum) 학생 필터링
+      if (userClassNum.isNotEmpty && s.classNum.isNotEmpty) {
+        return s.classNum == userClassNum;
+      }
 
-      if (myStudentId.isNotEmpty && otherStudentId.isNotEmpty) {
-        if (myStudentId.length >= 3 && otherStudentId.length >= 3) {
-          final myPrefix = myStudentId.substring(0, 3);
-          final otherPrefix = otherStudentId.substring(0, 3);
-          return myPrefix == otherPrefix;
-        }
+      // 4. classNum이 없으면 학년(grade) 기준으로 필터링
+      if (userGrade.isNotEmpty && s.grade.isNotEmpty) {
+        return s.grade == userGrade;
       }
 
       return false;
@@ -1020,7 +1033,6 @@ class _ProgressScreenState extends State<ProgressScreen>
       final dateTime = DateTime.parse(dateString);
 
       // 간단한 날짜 포맷 (년/월/일)
-      final y = dateTime.year.toString().substring(2); // 년도 뒤 2자리
       final m = dateTime.month.toString().padLeft(2, '0');
       final d = dateTime.day.toString().padLeft(2, '0');
 

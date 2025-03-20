@@ -27,6 +27,8 @@ class TaskProvider extends ChangeNotifier {
   final Map<String, StudentProgress> _studentCache = {};
   final Map<String, int> _groupStampCounts = {}; // 타입을 Map<String, int>로 변경
   StreamSubscription? _classSubscription;
+  StreamSubscription? _groupSubscription; // 모둠원 구독 추가
+  StreamSubscription? _studentSubscription; // 학생 구독 추가
 
   // Getters
   List<StudentProgress> get students => _students;
@@ -56,6 +58,8 @@ class TaskProvider extends ChangeNotifier {
   void dispose() {
     _disposed = true;
     _classSubscription?.cancel();
+    _groupSubscription?.cancel();
+    _studentSubscription?.cancel();
     super.dispose();
   }
 
@@ -64,32 +68,23 @@ class TaskProvider extends ChangeNotifier {
     return _studentCache[studentId];
   }
 
+  // 같은 반 학생인지 확인 (필드 기반으로 통일)
   bool isInSameClass(StudentProgress student1, StudentProgress student2) {
     // 1. 같은 학생이면 당연히 같은 반
     if (student1.id == student2.id) return true;
 
-    // 학번 체계 기반 비교 대신 필드 직접 비교
+    // 2. classNum 기반 비교
     if (student1.classNum.isNotEmpty && student2.classNum.isNotEmpty) {
       return student1.classNum == student2.classNum;
     }
 
-    // classNum이 없으면 grade로 비교
+    // 3. grade 기반 비교
     if (student1.grade.isNotEmpty && student2.grade.isNotEmpty) {
       return student1.grade == student2.grade;
     }
 
-    // 위 방법으로 비교할 수 없는 경우 (이전 버전 호환성)
-    if (student1.studentId.length >= 3 && student2.studentId.length >= 3) {
-      try {
-        final classInfo1 = student1.studentId.substring(0, 3);
-        final classInfo2 = student2.studentId.substring(0, 3);
-        return classInfo1 == classInfo2;
-      } catch (e) {
-        print('학번 비교 실패: ${student1.studentId} vs ${student2.studentId} - $e');
-      }
-    }
-
-    return false;
+    // 4. group 기반 비교 (최후의 수단)
+    return student1.group == student2.group;
   }
 
   // ============ 네트워크 및 동기화 관련 메서드 ============
@@ -167,7 +162,7 @@ class TaskProvider extends ChangeNotifier {
 
   // ============ 사용자 변경 및 설정 관련 메서드 ============
 
-// 사용자 변경 처리 메서드 수정
+  // 사용자 변경 처리 메서드 수정 (실시간 구독 적용)
   void handleUserChanged(String? newStudentId, String? groupId, String grade,
       String classNum, String studentNum) {
     // 데이터 초기화
@@ -176,12 +171,16 @@ class TaskProvider extends ChangeNotifier {
     _setError('');
     _setLoading(false);
 
+    // 기존 구독 취소
+    _studentSubscription?.cancel();
+    _groupSubscription?.cancel();
+
     // 새 사용자 ID가 있을 경우 데이터 로드
     if (newStudentId != null && newStudentId.isNotEmpty) {
-      // 1. 학생 자신의 데이터 로드
-      syncStudentDataFromServer(newStudentId);
+      // 1. 학생 자신의 데이터 실시간 구독
+      _subscribeToStudentData(newStudentId);
 
-      // 2. 학생의 모둠원 데이터 로드 (그룹 ID가 있는 경우)
+      // 2. 학생의 모둠원 데이터 실시간 구독 (그룹 ID가 있는 경우)
       if (groupId != null && groupId.isNotEmpty && groupId != '0') {
         // 학급(classNum) 정보 사용
         loadGroupMembers(groupId, classNum.isNotEmpty ? classNum : grade);
@@ -189,6 +188,48 @@ class TaskProvider extends ChangeNotifier {
     }
 
     notifyListeners();
+  }
+
+  // 학생 데이터 실시간 구독 메서드 (새로 추가)
+  void _subscribeToStudentData(String studentId) {
+    if (studentId.isEmpty) return;
+
+    _setLoading(true);
+
+    try {
+      // 기존 구독 취소
+      _studentSubscription?.cancel();
+
+      // 서비스를 통해 학생 데이터 실시간 구독
+      _studentSubscription =
+          _taskService.getStudentTasksStream(studentId).listen(
+        (studentData) {
+          // 진행 상태 데이터 변환
+          final individualProgress = _convertTasksToProgress(
+              studentData.individualTasks, _individualTasks);
+
+          final groupProgress =
+              _convertTasksToProgress(studentData.groupTasks, _groupTasks);
+
+          // 학생 진행 정보 생성
+          final student = _createStudentProgress(studentData,
+              individualProgress, groupProgress, studentData.studentId);
+
+          // 캐시 및 상태 업데이트
+          _studentCache[studentId] = student;
+          setStudentProgress(student);
+
+          _setLoading(false);
+        },
+        onError: (error) {
+          _setError('학생 데이터 구독 오류: $error');
+          _setLoading(false);
+        },
+      );
+    } catch (e) {
+      _setError('학생 데이터 구독 설정 오류: $e');
+      _setLoading(false);
+    }
   }
 
   // 저장된 설정 로드
@@ -229,7 +270,7 @@ class TaskProvider extends ChangeNotifier {
 
   // ============ 학급 및 학생 데이터 관련 메서드 ============
 
-  // 학급 선택 및 데이터 로드
+  // 학급 선택 및 데이터 로드 (실시간 구독)
   void selectClass(String grade) async {
     // 기존 구독 취소
     _classSubscription?.cancel();
@@ -274,53 +315,58 @@ class TaskProvider extends ChangeNotifier {
     }
   }
 
-  // 모둠원 데이터 로드
+  // 모둠원 데이터 실시간 구독 (Stream 방식으로 수정)
   Future<bool> loadGroupMembers(String groupId, String classNum) async {
     if (groupId.isEmpty || classNum.isEmpty) return false;
+
     // 학급 번호 형식 통일 (한자리 -> 두자리 패딩)
     String formattedClassNum =
         classNum.length == 1 ? classNum.padLeft(2, '0') : classNum;
 
     _setLoading(true);
+    _setError('');
 
     try {
-      // 서비스를 통해 모둠원 불러오기
-      final groupMembers =
-          await _taskService.getGroupMembers(groupId, formattedClassNum);
+      // 기존 구독 취소
+      _groupSubscription?.cancel();
 
-      if (groupMembers.isEmpty) {
-        _setLoading(false);
-        return false;
-      }
+      // 서비스를 통해 모둠원 실시간 구독
+      _groupSubscription =
+          _taskService.getGroupMembersStream(groupId, formattedClassNum).listen(
+        (groupMembers) {
+          // 빈 데이터 처리
+          if (groupMembers.isEmpty) {
+            _setLoading(false);
+            return;
+          }
 
-      // 각 모둠원을 StudentProgress로 변환
-      for (var memberData in groupMembers) {
-        final individualProgress = _convertTasksToProgress(
-            memberData.individualTasks, _individualTasks);
-        final groupProgress =
-            _convertTasksToProgress(memberData.groupTasks, _groupTasks);
+          // 각 모둠원을 StudentProgress로 변환하여 상태 업데이트
+          for (var memberData in groupMembers) {
+            final individualProgress = _convertTasksToProgress(
+                memberData.individualTasks, _individualTasks);
+            final groupProgress =
+                _convertTasksToProgress(memberData.groupTasks, _groupTasks);
 
-        // 학번 유효성 검사
-        String studentId = memberData.studentId;
-        if (studentId.isEmpty) {
-          // 임시 학번 생성
-          studentId = '${classNum}01${memberData.id.substring(0, 2)}';
-        }
+            // 학생 진도 정보 생성
+            final memberProgress = _createStudentProgress(memberData,
+                individualProgress, groupProgress, memberData.studentId);
 
-        // 학생 진도 정보 생성
-        final memberProgress = _createStudentProgress(
-            memberData, individualProgress, groupProgress, studentId);
+            // 캐시 및 상태 업데이트
+            _studentCache[memberData.id] = memberProgress;
+            _updateStudentInList(memberProgress);
+          }
 
-        // 캐시 및 상태 업데이트
-        _studentCache[memberData.id] = memberProgress;
-        _updateStudentInList(memberProgress);
-      }
+          // 도장 개수 재계산
+          _calculateStampCountsAndNotify();
 
-      // 도장 개수 재계산
-      _calculateStampCount();
-      _calculateGroupStampCounts();
+          _setLoading(false);
+        },
+        onError: (error) {
+          _setError('모둠원 데이터 구독 오류: $error');
+          _setLoading(false);
+        },
+      );
 
-      _setLoading(false);
       return true;
     } catch (e) {
       _setError('모둠원 데이터 로드 오류: $e');
@@ -378,7 +424,7 @@ class TaskProvider extends ChangeNotifier {
         _studentCache[studentId] = student;
         setStudentProgress(student);
 
-        // 모둠원 정보 로드
+        // 모둠원 정보 로드 - 실시간 구독 방식으로 변경
         final groupId = studentData.group;
         if (groupId.isNotEmpty && groupId != '0') {
           // 학급 정보 결정 (classNum 우선, 없으면 grade)
@@ -386,7 +432,7 @@ class TaskProvider extends ChangeNotifier {
               ? studentData.classNum
               : studentData.grade;
 
-          // 모둠원 로드
+          // 모둠원 실시간 구독
           loadGroupMembers(groupId, classInfo);
         }
 
@@ -415,11 +461,8 @@ class TaskProvider extends ChangeNotifier {
     // 캐시 업데이트
     _studentCache[student.id] = student;
 
-    // 도장 개수 재계산
-    _calculateStampCount();
-    _calculateGroupStampCounts();
-
-    notifyListeners();
+    // 도장 개수 재계산 및 UI 업데이트
+    _calculateStampCountsAndNotify();
   }
 
   // 학생 목록에서 학생 업데이트 또는 추가
@@ -427,10 +470,12 @@ class TaskProvider extends ChangeNotifier {
     final index = _students.indexWhere((s) => s.id == student.id);
 
     if (index >= 0) {
-      // 기존 학생 정보 업데이트
-      final newStudents = List<StudentProgress>.from(_students);
-      newStudents[index] = student;
-      _students = newStudents;
+      // 기존 학생 정보 업데이트 (불변성 패턴 적용)
+      _students = [
+        ..._students.sublist(0, index),
+        student,
+        ..._students.sublist(index + 1)
+      ];
     } else {
       // 새 학생 추가
       _students = [..._students, student];
@@ -445,44 +490,21 @@ class TaskProvider extends ChangeNotifier {
     _setError('');
 
     try {
-      // 서버에서 학생 데이터 새로 가져오기
-      final studentData = await _taskService.getStudentDataDirectly(studentId);
+      // 기존 구독 취소
+      _studentSubscription?.cancel();
 
-      if (studentData != null) {
-        // 진행 상태 데이터 변환
-        final individualProgress = _convertTasksToProgress(
-            studentData.individualTasks, _individualTasks);
+      // 새로운 실시간 구독 시작
+      _subscribeToStudentData(studentId);
 
-        final groupProgress =
-            _convertTasksToProgress(studentData.groupTasks, _groupTasks);
+      // 해당 학생의 모둠원 정보도 다시 로드
+      final student = _studentCache[studentId];
+      if (student != null && student.group.isNotEmpty && student.group != '0') {
+        // 학급 정보 결정
+        final classInfo =
+            student.classNum.isNotEmpty ? student.classNum : student.grade;
 
-        // 중요: 학생 ID 일관되게 사용
-        final studentIdToUse = studentData.id;
-
-        // 학생 목록에서 중복 제거
-        _students = _students
-            .where(
-                (s) => s.id != studentIdToUse && s.id != studentData.studentId)
-            .toList();
-
-        // 학생 진행 정보 생성
-        final updatedStudent = _createStudentProgress(studentData,
-            individualProgress, groupProgress, studentData.studentId);
-
-        // 학생 목록에 추가 및 캐시 업데이트
-        _students = [..._students, updatedStudent];
-        _studentCache[studentIdToUse] = updatedStudent;
-
-        // 도장 개수 재계산
-        _calculateStampCount();
-        _calculateGroupStampCounts();
-
-        // 모둠원 데이터도 함께 로드
-        final studentGroup = studentData.group;
-        if (studentGroup.isNotEmpty) {
-          // 모둠원 로드
-          await loadGroupMembers(studentGroup, '1');
-        }
+        // 모둠원 다시 구독
+        loadGroupMembers(student.group, classInfo);
       }
     } catch (e) {
       _setError('데이터 새로고침 오류: $e');
@@ -525,7 +547,16 @@ class TaskProvider extends ChangeNotifier {
   void _updateLocalTaskStatus(
       String studentId, String taskName, bool isCompleted, bool isGroupTask) {
     final studentIndex = _students.indexWhere((s) => s.id == studentId);
-    if (studentIndex == -1) return;
+    if (studentIndex == -1) {
+      // 학생 목록에 없지만 캐시에는 있을 수 있음
+      if (_studentCache.containsKey(studentId)) {
+        final student = _studentCache[studentId]!;
+        _updateCachedStudentTaskStatus(
+            student, taskName, isCompleted, isGroupTask);
+        return;
+      }
+      return;
+    }
 
     final student = _students[studentIndex];
 
@@ -563,22 +594,73 @@ class TaskProvider extends ChangeNotifier {
       groupProgress: isGroupTask ? currentProgress : student.groupProgress,
     );
 
-    // 학생 목록 업데이트
-    final newStudents = List<StudentProgress>.from(_students);
-    newStudents[studentIndex] = updatedStudent;
-    _students = newStudents;
+    // 학생 목록 업데이트 (불변성 패턴 적용)
+    _students = [
+      ..._students.sublist(0, studentIndex),
+      updatedStudent,
+      ..._students.sublist(studentIndex + 1)
+    ];
 
     // 캐시도 업데이트
     _studentCache[studentId] = updatedStudent;
 
-    // 도장 개수 재계산
+    // 도장 개수 재계산 및 UI 업데이트
+    _calculateStampCountsAndNotify();
+  }
+
+  // 캐시된 학생의 과제 상태 업데이트 (새로 추가)
+  void _updateCachedStudentTaskStatus(StudentProgress student, String taskName,
+      bool isCompleted, bool isGroupTask) {
+    // 과제 맵 처리 (개인 또는 단체)
+    final Map<String, TaskProgress> currentProgress = isGroupTask
+        ? Map<String, TaskProgress>.from(student.groupProgress ?? {})
+        : Map<String, TaskProgress>.from(student.individualProgress ?? {});
+
+    // 기존 과제 상태 확인
+    final existing = currentProgress[taskName];
+
+    // 완료 날짜 결정
+    String? newCompletedDate;
+    if (isCompleted) {
+      if (existing?.isCompleted == true && existing?.completedDate != null) {
+        newCompletedDate = existing!.completedDate;
+      } else {
+        newCompletedDate = DateTime.now().toIso8601String();
+      }
+    }
+
+    // TaskProgress 객체 업데이트
+    currentProgress[taskName] = TaskProgress(
+      taskName: taskName,
+      isCompleted: isCompleted,
+      completedDate: newCompletedDate,
+    );
+
+    // 학생 객체 업데이트
+    final updatedStudent = student.copyWith(
+      individualProgress:
+          isGroupTask ? student.individualProgress : currentProgress,
+      groupProgress: isGroupTask ? currentProgress : student.groupProgress,
+    );
+
+    // 캐시 업데이트
+    _studentCache[student.id] = updatedStudent;
+
+    // students 목록에도 추가
+    _updateStudentInList(updatedStudent);
+
+    // 도장 개수 재계산 및 UI 업데이트
+    _calculateStampCountsAndNotify();
+  }
+
+  // 도장 관련 계산 통합 메서드 (중복 제거)
+  void _calculateStampCountsAndNotify() {
     _calculateStampCount();
     _calculateGroupStampCounts();
-
     notifyListeners();
   }
 
-  // 단체줄넘기 시작 가능 여부 확인 (리팩토링)
+  // 단체줄넘기 시작 가능 여부 확인 (필드 기반으로 통일)
   bool canStartGroupActivities(String groupId) {
     if (groupId.isEmpty) return false;
 
@@ -589,99 +671,95 @@ class TaskProvider extends ChangeNotifier {
     String classNum = currentUser.classNum;
     String grade = currentUser.grade;
 
-    // 현재 모둠의 실제 모둠원 수 계산 (같은 학년, 학급, 모둠에 속한 학생)
-    int studentCount = 0;
-    for (var student in _students) {
-      if (student.group == groupId && student.classNum == classNum) {
-        studentCount++;
-      }
-    }
+    // 현재 모둠의 실제 모둠원 수 계산 (필드 기반 필터링)
+    int studentCount = _students
+        .where((student) =>
+            student.group == groupId &&
+            (student.classNum == classNum ||
+                (student.classNum.isEmpty && student.grade == grade)))
+        .length;
 
-    // 캐시에서도 확인
+    // 학생 수가 없으면 캐시에서 확인
     if (studentCount == 0) {
-      for (var student in _studentCache.values) {
-        if (student.group == groupId && student.classNum == classNum) {
-          studentCount++;
-        }
-      }
+      studentCount = _studentCache.values
+          .where((student) =>
+              student.group == groupId &&
+              (student.classNum == classNum ||
+                  (student.classNum.isEmpty && student.grade == grade)))
+          .length;
     }
 
     // 학생 수가 없으면 그룹 활동 불가
     if (studentCount == 0) return false;
 
-    // 해당 모둠의 도장 개수 계산 (같은 학년, 학급, 모둠에 속한 학생들의 도장 합계)
-    int groupStamps = 0;
-    for (var student in _students) {
-      if (student.group == groupId && student.classNum == classNum) {
-        // 개인 과제 성공 개수
-        groupStamps += student.individualProgress.values
-            .where((p) => p.isCompleted)
-            .length;
-
-        // 단체 과제 성공 개수
-        groupStamps +=
-            student.groupProgress.values.where((p) => p.isCompleted).length;
-      }
-    }
+    // 해당 모둠의 도장 개수 계산 (필드 기반 필터링)
+    int groupStamps = getGroupStampCount(groupId);
 
     // 필요한 도장 수: 모둠원 수 × 5
     int requiredStamps = studentCount * 5;
 
-    print(
-        '단체줄넘기 활성화 확인: 모둠=$groupId, 학년=$grade, 학급=$classNum, 모둠원=$studentCount, 모둠도장=$groupStamps, 필요도장=$requiredStamps');
-
     return groupStamps >= requiredStamps;
   }
 
-  // 모둠별 도장 개수 가져오기 (같은 학년, 학급, 모둠에 속한 학생들만)
+  // 모둠별 도장 개수 가져오기 (필드 기반으로 통일)
   int getGroupStampCount(String groupId) {
     // 현재 사용자 정보 찾기
     final currentUser = _students.isNotEmpty ? _students.first : null;
     if (currentUser == null) return 0;
 
+    // 필드 정보 추출
     String classNum = currentUser.classNum;
+    String grade = currentUser.grade;
 
-    // 해당 모둠의 도장 개수 계산 (같은 학년, 학급, 모둠에 속한 학생들의 도장 합계)
+    // 필드 기반으로 같은 모둠원 필터링
+    final groupMembers = _students
+        .where((student) =>
+            student.group == groupId &&
+            (student.classNum == classNum ||
+                (student.classNum.isEmpty && student.grade == grade)))
+        .toList();
+
+    // 모둠원 도장 개수 합산
     int groupStamps = 0;
-    for (var student in _students) {
-      if (student.group == groupId && student.classNum == classNum) {
-        // 개인 과제 성공 개수
-        groupStamps += student.individualProgress.values
-            .where((p) => p.isCompleted)
-            .length;
+    for (var student in groupMembers) {
+      // 개인 과제 성공 개수
+      groupStamps +=
+          student.individualProgress.values.where((p) => p.isCompleted).length;
 
-        // 단체 과제 성공 개수
-        groupStamps +=
-            student.groupProgress.values.where((p) => p.isCompleted).length;
-      }
+      // 단체 과제 성공 개수
+      groupStamps +=
+          student.groupProgress.values.where((p) => p.isCompleted).length;
     }
 
     return groupStamps;
   }
 
-  // 모둠원 수 가져오기 (같은 학년, 학급, 모둠에 속한 학생들만)
+  // 모둠원 수 가져오기 (필드 기반으로 통일)
   int getGroupMemberCount(String groupId) {
     // 현재 사용자 정보 찾기
     final currentUser = _students.isNotEmpty ? _students.first : null;
     if (currentUser == null) return 0;
 
+    // 필드 정보 추출
     String classNum = currentUser.classNum;
+    String grade = currentUser.grade;
 
-    // 같은 학년, 학급, 모둠에 속한 학생 수 계산
-    int count = 0;
-    for (var student in _students) {
-      if (student.group == groupId && student.classNum == classNum) {
-        count++;
-      }
-    }
+    // 필드 기반으로 같은 모둠원 계산
+    int count = _students
+        .where((student) =>
+            student.group == groupId &&
+            (student.classNum == classNum ||
+                (student.classNum.isEmpty && student.grade == grade)))
+        .length;
 
-    // 캐시에서도 확인
+    // 결과가 없으면 캐시에서 확인
     if (count == 0) {
-      for (var student in _studentCache.values) {
-        if (student.group == groupId && student.classNum == classNum) {
-          count++;
-        }
-      }
+      count = _studentCache.values
+          .where((student) =>
+              student.group == groupId &&
+              (student.classNum == classNum ||
+                  (student.classNum.isEmpty && student.grade == grade)))
+          .length;
     }
 
     return count;
@@ -716,16 +794,10 @@ class TaskProvider extends ChangeNotifier {
       Map<String, TaskProgress> individualProgress,
       Map<String, TaskProgress> groupProgress,
       String studentId) {
-    // 학번에서 정보 추출하는 대신 필드 사용
+    // 필드 기반 접근
     String grade = data.grade;
     String classNum = data.classNum.isNotEmpty ? data.classNum : data.grade;
-
-    // studentNum은 학번의 마지막 두 자리 또는 데이터에서 가져옴
-    String studentNum = '';
-    if (data.studentId.length >= 2) {
-      // 기존에 studentNum 필드가 없는 경우를 위한 폴백
-      studentNum = data.studentId.substring(data.studentId.length - 2);
-    }
+    String studentNum = data.studentNum;
 
     return StudentProgress(
       id: data.id,
@@ -736,9 +808,9 @@ class TaskProvider extends ChangeNotifier {
       groupProgress: groupProgress,
       attendance: data.attendance,
       studentId: studentId,
-      classNum: classNum, // 추가된 필드
-      studentNum: studentNum, // 추가된 필드
-      grade: grade, // 추가된 필드
+      classNum: classNum,
+      studentNum: studentNum,
+      grade: grade,
     );
   }
 
@@ -765,14 +837,19 @@ class TaskProvider extends ChangeNotifier {
           student, individualProgress, groupProgress, student.studentId);
 
       progressList.add(studentProgress);
+
+      // 캐시도 업데이트
+      _studentCache[student.id] = studentProgress;
     }
 
     _students = progressList;
     _calculateStampCount();
     _calculateGroupStampCounts();
+
+    notifyListeners();
   }
 
-  // 전체 도장 개수 계산 (간소화)
+  // 전체 도장 개수 계산
   void _calculateStampCount() {
     _stampCount = 0;
     for (var student in _students) {
@@ -785,15 +862,29 @@ class TaskProvider extends ChangeNotifier {
     }
   }
 
-  // 모둠별 도장 개수 계산 (간소화)
+  // 모둠별 도장 개수 계산
   void _calculateGroupStampCounts() {
     // 기존 카운트 초기화
     _groupStampCounts.clear();
 
-    // 각 학생별로 완료한 과제 수를 모둠별로 집계
+    // 현재 사용자 정보 찾기
+    final currentUser = _students.isNotEmpty ? _students.first : null;
+    if (currentUser == null) return;
+
+    // 필드 정보 추출
+    String classNum = currentUser.classNum;
+    String grade = currentUser.grade;
+
+    // 각 학생별로 완료한 과제 수를 모둠별로 집계 (필드 기반 필터링)
     for (var student in _students) {
       String groupId = student.group;
       if (groupId.isEmpty) continue;
+
+      // 같은 학급/학년 확인
+      bool isSameClass = student.classNum == classNum ||
+          (student.classNum.isEmpty && student.grade == grade);
+
+      if (!isSameClass) continue;
 
       // 개인 과제 성공 개수
       int individualCount =
