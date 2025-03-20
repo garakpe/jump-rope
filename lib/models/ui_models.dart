@@ -14,7 +14,6 @@ class TaskProgress {
 class StudentProgress {
   final String id;
   final String name;
-  final int number;
   final String group;
   final int currentLevel;
   final Map<String, TaskProgress> individualProgress;
@@ -28,7 +27,6 @@ class StudentProgress {
   StudentProgress({
     required this.id,
     required this.name,
-    required this.number,
     required this.group,
     this.currentLevel = 1,
     this.individualProgress = const {},
@@ -43,7 +41,6 @@ class StudentProgress {
   StudentProgress copyWith({
     String? id,
     String? name,
-    int? number,
     String? group,
     int? currentLevel,
     Map<String, TaskProgress>? individualProgress,
@@ -57,7 +54,6 @@ class StudentProgress {
     return StudentProgress(
       id: id ?? this.id,
       name: name ?? this.name,
-      number: number ?? this.number,
       group: group ?? this.group,
       currentLevel: currentLevel ?? this.currentLevel,
       individualProgress: individualProgress ?? this.individualProgress,

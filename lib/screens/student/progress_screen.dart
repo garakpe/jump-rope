@@ -10,7 +10,12 @@ import '../../widgets/ui/custom_ios_style_card_widget.dart';
 StudentProgress getCurrentStudent(TaskProvider taskProvider, String studentId) {
   if (studentId.isEmpty) {
     return StudentProgress(
-        id: studentId, name: '', number: 0, group: '0', studentId: studentId);
+        id: studentId,
+        name: '',
+        classNum: '',
+        studentNum: '',
+        grade: '',
+        group: '');
   }
 
   // 캐시에서 먼저 확인
@@ -24,19 +29,23 @@ StudentProgress getCurrentStudent(TaskProvider taskProvider, String studentId) {
     return taskProvider.students.firstWhere(
       (s) => s.id == studentId,
       orElse: () => StudentProgress(
-          id: studentId,
-          name: '데이터 로딩 중',
-          number: 0,
-          group: '0',
-          studentId: studentId),
+        id: studentId,
+        name: '데이터 로딩 중',
+        classNum: '',
+        studentNum: '',
+        grade: '',
+        group: '',
+      ),
     );
   } catch (e) {
     return StudentProgress(
-        id: studentId,
-        name: '데이터 로딩 중',
-        number: 0,
-        group: '0',
-        studentId: studentId);
+      id: studentId,
+      name: '데이터 로딩 중',
+      classNum: '',
+      studentNum: '',
+      grade: '',
+      group: '',
+    );
   }
 }
 
@@ -370,7 +379,12 @@ class _ProgressScreenState extends State<ProgressScreen>
     final myProgress = _filteredStudents.firstWhere(
       (s) => s.id == myId || s.studentId == myId,
       orElse: () => StudentProgress(
-          id: myId, name: '', number: 0, group: '', studentId: myId),
+          id: myId,
+          name: '',
+          classNum: '',
+          studentNum: '',
+          grade: '',
+          group: ''),
     );
 
     // 이 과제의 진행 상황

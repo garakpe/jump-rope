@@ -1,4 +1,6 @@
 // lib/screens/student/dashboard_screen.dart
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../models/task_model.dart';
@@ -24,7 +26,12 @@ StudentProgress getCurrentStudent(TaskProvider taskProvider, String studentId) {
   return taskProvider.students.firstWhere(
       (s) => s.id == studentId || s.studentId == studentId,
       orElse: () => StudentProgress(
-          id: studentId, name: '', number: 0, group: '', studentId: studentId));
+          id: studentId,
+          name: '',
+          classNum: '',
+          studentNum: '',
+          grade: '',
+          group: ''));
 }
 
 class StudentDashboard extends StatefulWidget {
@@ -39,17 +46,16 @@ class _StudentDashboardState extends State<StudentDashboard>
   NavigationTab _currentTab = NavigationTab.dashboard;
   late TabController _tabController;
 
+  // 학생 데이터 변경 구독용 변수
+  StreamSubscription? _studentDataSubscription;
+
   @override
   void initState() {
     super.initState();
     _tabController = TabController(length: 2, vsync: this);
-
-    // 탭 변경 리스너 등록
     _tabController.addListener(_handleTabChange);
 
-    // 기본 탭을 홈으로 설정
-    _currentTab = NavigationTab.home;
-    // 화면이 처음 로드될 때 데이터 강제 새로고침
+    // 화면이 처음 로드될 때 데이터 로드
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _loadInitialData();
     });
@@ -82,21 +88,59 @@ class _StudentDashboardState extends State<StudentDashboard>
     }
   }
 
-  // 초기 데이터 로드 메서드 - 간결화
+  // 초기 데이터 로드 메서드
   void _loadInitialData() {
     final authProvider = Provider.of<AuthProvider>(context, listen: false);
     final user = authProvider.userInfo;
     final studentId = user?.studentId ?? '';
 
     if (studentId.isNotEmpty) {
+      // 초기 데이터 로드
       _loadStudentDataFromServer(studentId);
+
+      // 실시간 업데이트 설정
+      _setupRealtimeUpdates(studentId);
+    }
+  }
+
+  // 실시간 업데이트 설정
+  void _setupRealtimeUpdates(String studentId) {
+    if (studentId.isEmpty) return;
+
+    final taskProvider = Provider.of<TaskProvider>(context, listen: false);
+
+    // 이전 구독 취소
+    _studentDataSubscription?.cancel();
+
+    // Firebase 실시간 이벤트 구독
+    try {
+      // TaskProvider를 통해 학생 데이터 스트림을 구독
+      _studentDataSubscription =
+          taskProvider.getStudentStream(studentId).listen((updatedStudentData) {
+        // 데이터가 변경되면 UI 갱신
+        if (mounted) {
+          setState(() {
+            // 진도 정보가 변경되었으므로 UI 갱신
+            print('학생 데이터 업데이트됨: ${updatedStudentData.name}');
+          });
+        }
+      }, onError: (error) {
+        print('학생 데이터 업데이트 오류: $error');
+      });
+    } catch (e) {
+      print('실시간 업데이트 설정 오류: $e');
     }
   }
 
   @override
   void dispose() {
+    // 탭 컨트롤러 정리
     _tabController.removeListener(_handleTabChange);
     _tabController.dispose();
+
+    // 구독 취소
+    _studentDataSubscription?.cancel();
+
     super.dispose();
   }
 
@@ -190,8 +234,12 @@ class _StudentDashboardState extends State<StudentDashboard>
     );
   }
 
-  // 데이터 새로고침 메서드 - 간결화
-  void _refreshData(String studentId) {
+  // 새로고침 버튼에 연결된 메서드
+  void _refreshData([String? forceStudentId]) {
+    final authProvider = Provider.of<AuthProvider>(context, listen: false);
+    final user = authProvider.userInfo;
+    final studentId = forceStudentId ?? user?.studentId ?? '';
+
     if (studentId.isEmpty) return;
 
     // 로딩 표시
@@ -206,10 +254,13 @@ class _StudentDashboardState extends State<StudentDashboard>
       // 성공 메시지
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('데이터가 업데이트되었습니다'),
+          content: Text('데이터가 최신 상태로 업데이트되었습니다'),
           backgroundColor: Colors.green,
         ),
       );
+
+      // 실시간 업데이트 재설정
+      _setupRealtimeUpdates(studentId);
     }).catchError((e) {
       // 오류 메시지
       ScaffoldMessenger.of(context).showSnackBar(
@@ -526,8 +577,6 @@ class _StudentDashboardState extends State<StudentDashboard>
     // 단체줄넘기 허용 여부 확인 - 단순화된 로직 적용
     final canDoGroupTasks = taskProvider.canStartGroupActivities(groupId);
 
-    // 단체줄넘기 화면으로 전환 시 디버그 로그 출력 (탭 전환 리스너에서 처리)
-
     // 로딩 상태 표시
     if (taskProvider.isLoading) {
       return const Center(
@@ -608,7 +657,7 @@ class _StudentDashboardState extends State<StudentDashboard>
     }
   }
 
-  // 서버에서 학생 데이터 로드 - 간결화
+  // 서버에서 학생 데이터 로드
   Future<void> _loadStudentDataFromServer(String studentId) async {
     if (studentId.isEmpty) return;
 
@@ -826,8 +875,7 @@ class _StudentDashboardState extends State<StudentDashboard>
         );
       },
     ).then((_) {
-      // 화면 갱신
-      setState(() {});
+      // 모달이 닫힐 때 UI 갱신 필요 없음 - 실시간 업데이트가 처리함
     });
   }
 

@@ -13,13 +13,34 @@ class TaskService {
   final Map<String, List<FirebaseStudentModel>> _studentsByClass = {};
   final List<Map<String, dynamic>> _pendingUpdates = [];
 
+  // 캐시 및 스트림 관리
+  final Map<String, StreamController<FirebaseStudentModel>>
+      _studentStreamControllers = {};
+  final Map<String, StreamSubscription> _firestoreSubscriptions = {};
+
   // 상수 정의
   static const int _defaultTimeout = 5; // 기본 타임아웃 (초)
   static const int _maxRetries = 2; // 최대 재시도 횟수
+  static const String _pendingUpdatesKey = 'pendingTaskUpdates'; // 로컬 저장소 키
 
   TaskService() {
     _initializeSampleData();
     loadPendingUpdates();
+  }
+
+  // 리소스 정리 메서드
+  void dispose() {
+    // 모든 구독 취소
+    for (var subscription in _firestoreSubscriptions.values) {
+      subscription.cancel();
+    }
+    _firestoreSubscriptions.clear();
+
+    // 모든 스트림 컨트롤러 닫기
+    for (var controller in _studentStreamControllers.values) {
+      controller.close();
+    }
+    _studentStreamControllers.clear();
   }
 
   // 로컬 캐시에서 학생 데이터 조회
@@ -72,7 +93,7 @@ class TaskService {
   Future<void> loadPendingUpdates() async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      final String? pendingUpdatesJson = prefs.getString('pendingTaskUpdates');
+      final String? pendingUpdatesJson = prefs.getString(_pendingUpdatesKey);
 
       if (pendingUpdatesJson != null) {
         final List<dynamic> decoded = jsonDecode(pendingUpdatesJson);
@@ -89,27 +110,36 @@ class TaskService {
     try {
       final prefs = await SharedPreferences.getInstance();
       final String encoded = jsonEncode(_pendingUpdates);
-      await prefs.setString('pendingTaskUpdates', encoded);
+      await prefs.setString(_pendingUpdatesKey, encoded);
     } catch (e) {
       print('보류 중인 업데이트 저장 오류: $e');
     }
   }
 
-  // Firebase 작업 재시도 유틸리티 함수
+  // Firebase 작업 재시도 유틸리티 함수 - 개선된 버전
   Future<T> _retryOperation<T>(Future<T> Function() operation,
       {int maxRetries = _maxRetries,
       int timeoutSeconds = _defaultTimeout}) async {
     int retryCount = 0;
+    Exception? lastException;
 
     while (true) {
       try {
         return await operation().timeout(Duration(seconds: timeoutSeconds));
       } catch (e) {
+        lastException = e is Exception ? e : Exception('$e');
         retryCount++;
+
+        // 최대 재시도 횟수 초과 시 예외 발생
         if (retryCount >= maxRetries) {
-          throw Exception('여러 번 시도 후에도 작업을 완료하지 못했습니다: $e');
+          print('재시도 실패 ($retryCount/$maxRetries): $e');
+          throw lastException;
         }
-        await Future.delayed(Duration(milliseconds: 500 * retryCount));
+
+        // 점진적 지연 (exponential backoff)
+        final delay = Duration(milliseconds: 500 * (1 << retryCount));
+        print('$retryCount번째 재시도 실행, ${delay.inMilliseconds}ms 후 재시도: $e');
+        await Future.delayed(delay);
       }
     }
   }
@@ -227,7 +257,6 @@ class TaskService {
     }
   }
 
-  // 과제 상태 업데이트
   Future<void> updateTaskStatus(String studentId, String taskName,
       bool isCompleted, bool isGroupTask) async {
     final taskPath = isGroupTask ? 'groupTasks' : 'individualTasks';
@@ -349,13 +378,34 @@ class TaskService {
         _studentsByClass[student.grade]![index] = updatedStudent;
       }
     }
+
+    // 실시간 스트림으로 업데이트 알림
+    _notifyStudentUpdate(updatedStudent);
   }
 
-  // 학생의 과제 진도 실시간 조회
+  // 학생 데이터 업데이트 알림
+  void _notifyStudentUpdate(FirebaseStudentModel student) {
+    final controller = _studentStreamControllers[student.id];
+    if (controller != null && !controller.isClosed && controller.hasListener) {
+      controller.add(student);
+    }
+  }
+
   Stream<FirebaseStudentModel> getStudentTasksStream(String studentId) {
-    final streamController = StreamController<FirebaseStudentModel>();
+    // 기존 컨트롤러가 있고 닫히지 않았다면 재사용
+    if (_studentStreamControllers.containsKey(studentId) &&
+        !_studentStreamControllers[studentId]!.isClosed) {
+      return _studentStreamControllers[studentId]!.stream;
+    }
+
+    // 새 스트림 컨트롤러 생성
+    final streamController = StreamController<FirebaseStudentModel>.broadcast();
+    _studentStreamControllers[studentId] = streamController;
 
     try {
+      // 기존 Firestore 구독 취소
+      _firestoreSubscriptions[studentId]?.cancel();
+
       // Firestore 구독 설정
       final subscription = _firestore
           .collection('students')
@@ -364,51 +414,73 @@ class TaskService {
           .listen((snapshot) {
         if (snapshot.exists) {
           final student = FirebaseStudentModel.fromFirestore(snapshot);
-          streamController.add(student);
 
           // 로컬 캐시 업데이트
           _students[studentId] = student;
-        } else {
+
+          // 스트림에 데이터 전달
+          if (!streamController.isClosed) {
+            streamController.add(student);
+          }
+        } else if (!streamController.isClosed) {
           streamController.addError("학생 정보를 찾을 수 없습니다");
         }
       }, onError: (error) {
         // 오류 발생 시 로컬 데이터 사용
-        if (_students.containsKey(studentId)) {
+        if (_students.containsKey(studentId) && !streamController.isClosed) {
           streamController.add(_students[studentId]!);
-        } else {
+        } else if (!streamController.isClosed) {
           streamController.addError("데이터 연결 오류: $error");
         }
       });
 
+      // 구독 관리
+      _firestoreSubscriptions[studentId] = subscription;
+
       // 컨트롤러 종료 시 구독 취소
       streamController.onCancel = () {
         subscription.cancel();
+        _firestoreSubscriptions.remove(studentId);
+        _studentStreamControllers.remove(studentId);
       };
 
       return streamController.stream;
     } catch (e) {
       // Firebase 연결 실패 시 로컬 백업 로직 사용
       if (_students.containsKey(studentId)) {
-        return Stream.value(_students[studentId]!);
+        streamController.add(_students[studentId]!);
+      } else {
+        // 로컬에도 없으면 더미 데이터 반환
+        streamController.add(FirebaseStudentModel(
+          id: studentId,
+          name: 'Not Found',
+          studentId: studentId,
+          grade: '0',
+          classNum: '0',
+          studentNum: '0',
+          group: '0',
+        ));
       }
 
-      return Stream.value(FirebaseStudentModel(
-        id: 'dummy',
-        name: 'Not Found',
-        studentId: 'not_found',
-        grade: '0',
-        classNum: '0',
-        studentNum: 'not_fond',
-        group: '0',
-      ));
+      // 컨트롤러 종료 시 정리
+      streamController.onCancel = () {
+        _studentStreamControllers.remove(studentId);
+      };
+
+      return streamController.stream;
     }
   }
 
   // 학급 과제 상태 실시간 조회
   Stream<List<FirebaseStudentModel>> getClassTasksStream(String grade) {
-    final streamController = StreamController<List<FirebaseStudentModel>>();
+    final streamController =
+        StreamController<List<FirebaseStudentModel>>.broadcast();
+    String subscriptionKey = 'class_$grade';
 
     try {
+      // 기존 구독 취소
+      _firestoreSubscriptions[subscriptionKey]?.cancel();
+
       // classNum으로 먼저 조회
       final subscription = _firestore
           .collection('students')
@@ -420,7 +492,9 @@ class TaskService {
               .map((doc) => FirebaseStudentModel.fromFirestore(doc))
               .toList();
 
-          streamController.add(students);
+          if (!streamController.isClosed) {
+            streamController.add(students);
+          }
 
           // 로컬 캐시 업데이트
           _studentsByClass[grade] = students;
@@ -431,7 +505,9 @@ class TaskService {
         onError: (error) {
           // 로컬 캐시 사용 또는 grade으로 다시 시도
           if (_studentsByClass.containsKey(grade)) {
-            streamController.add(_studentsByClass[grade]!);
+            if (!streamController.isClosed) {
+              streamController.add(_studentsByClass[grade]!);
+            }
           } else {
             // grade으로 다시 시도
             _firestore
@@ -444,32 +520,49 @@ class TaskService {
                     .map((doc) => FirebaseStudentModel.fromFirestore(doc))
                     .toList();
 
-                streamController.add(gradeStudents);
+                if (!streamController.isClosed) {
+                  streamController.add(gradeStudents);
+                }
 
                 // 로컬 캐시 업데이트
                 _studentsByClass[grade] = gradeStudents;
                 for (var student in gradeStudents) {
                   _students[student.id] = student;
                 }
-              } else {
+              } else if (!streamController.isClosed) {
                 streamController.add([]);
               }
             }).catchError((e) {
-              streamController.add([]);
+              if (!streamController.isClosed) {
+                streamController.add([]);
+              }
             });
           }
         },
       );
 
+      // 구독 관리
+      _firestoreSubscriptions[subscriptionKey] = subscription;
+
       // 컨트롤러 종료 시 구독 취소
       streamController.onCancel = () {
         subscription.cancel();
+        _firestoreSubscriptions.remove(subscriptionKey);
       };
 
       return streamController.stream;
     } catch (e) {
       // Firebase 연결 실패 시 로컬 백업 로직 사용
-      return Stream.value(_studentsByClass[grade] ?? []);
+      if (!streamController.isClosed) {
+        streamController.add(_studentsByClass[grade] ?? []);
+      }
+
+      // 컨트롤러 종료 시 정리
+      streamController.onCancel = () {
+        // 로컬 데이터만 사용 중이므로 특별한 정리가 필요 없음
+      };
+
+      return streamController.stream;
     }
   }
 

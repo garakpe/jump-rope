@@ -634,7 +634,7 @@ class _ProgressManagementState extends State<ProgressManagement> {
                                   ),
                                   child: Center(
                                     child: Text(
-                                      '${student.number}',
+                                      student.studentNum,
                                       style: TextStyle(
                                         fontWeight: FontWeight.w600,
                                         fontSize: 13,
@@ -887,7 +887,7 @@ class _ProgressManagementState extends State<ProgressManagement> {
       final student = taskProvider.students.firstWhere(
         (s) => s.id == studentId,
         orElse: () => StudentProgress(
-            id: "", name: "", number: 0, group: '', studentId: ''),
+            id: "", name: "", classNum: '', group: '', studentNum: ''),
       );
 
       // 이미 완료된 과제인지 확인

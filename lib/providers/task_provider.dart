@@ -24,9 +24,13 @@ class TaskProvider extends ChangeNotifier {
   bool _previousOfflineState = false;
   bool _disposed = false;
   String _error = '';
+
+  // 캐시 및 구독 관리
   final Map<String, StudentProgress> _studentCache = {};
-  final Map<String, int> _groupStampCounts = {}; // 타입을 Map<String, int>로 변경
+  final Map<String, int> _groupStampCounts = {};
+  final Map<String, StreamSubscription> _studentSubscriptions = {}; // 학생별 구독 관리
   StreamSubscription? _classSubscription;
+  Timer? _networkCheckTimer;
 
   // Getters
   List<StudentProgress> get students => _students;
@@ -55,8 +59,18 @@ class TaskProvider extends ChangeNotifier {
   @override
   void dispose() {
     _disposed = true;
-    _classSubscription?.cancel();
+    _cancelAllSubscriptions();
+    _networkCheckTimer?.cancel();
     super.dispose();
+  }
+
+  // 모든 구독 취소
+  void _cancelAllSubscriptions() {
+    _classSubscription?.cancel();
+    for (var subscription in _studentSubscriptions.values) {
+      subscription.cancel();
+    }
+    _studentSubscriptions.clear();
   }
 
   // 학생 캐시에서 조회
@@ -64,6 +78,7 @@ class TaskProvider extends ChangeNotifier {
     return _studentCache[studentId];
   }
 
+  // 같은 학급 여부 확인
   bool isInSameClass(StudentProgress student1, StudentProgress student2) {
     // 1. 같은 학생이면 당연히 같은 반
     if (student1.id == student2.id) return true;
@@ -107,11 +122,19 @@ class TaskProvider extends ChangeNotifier {
     }
 
     _previousOfflineState = _isOffline;
-    notifyListeners();
+
+    // 상태가 변경된 경우에만 알림
+    if (wasOfflineBefore != _isOffline) {
+      notifyListeners();
+    }
+
+    // 네트워크 확인 타이머 취소 후 재설정
+    _networkCheckTimer?.cancel();
 
     // 주기적으로 상태 확인 (30초마다)
     if (!_disposed) {
-      Future.delayed(const Duration(seconds: 30), _checkNetworkStatus);
+      _networkCheckTimer =
+          Timer(const Duration(seconds: 30), _checkNetworkStatus);
     }
   }
 
@@ -162,14 +185,27 @@ class TaskProvider extends ChangeNotifier {
 
     // 기존 구독 취소 후 다시 데이터 로드
     _classSubscription?.cancel();
+
+    // 학생별 데이터 구독도 갱신
+    for (var student in _students) {
+      final studentId = student.id;
+      if (studentId.isNotEmpty) {
+        _setupStudentSubscription(studentId);
+      }
+    }
+
+    // 학급 데이터 다시 로드
     selectClass(_selectedClass);
   }
 
   // ============ 사용자 변경 및 설정 관련 메서드 ============
 
-// 사용자 변경 처리 메서드 수정
+  // 사용자 변경 처리 메서드 개선
   void handleUserChanged(String? newStudentId, String? groupId, String grade,
       String classNum, String studentNum) {
+    // 기존 구독 취소
+    _cancelAllSubscriptions();
+
     // 데이터 초기화
     _students = [];
     _studentCache.clear();
@@ -178,8 +214,12 @@ class TaskProvider extends ChangeNotifier {
 
     // 새 사용자 ID가 있을 경우 데이터 로드
     if (newStudentId != null && newStudentId.isNotEmpty) {
-      // 1. 학생 자신의 데이터 로드
-      syncStudentDataFromServer(newStudentId);
+      // 1. 학생 자신의 데이터 로드 및 구독 설정
+      syncStudentDataFromServer(newStudentId).then((student) {
+        if (student != null) {
+          _setupStudentSubscription(student.id);
+        }
+      });
 
       // 2. 학생의 모둠원 데이터 로드 (그룹 ID가 있는 경우)
       if (groupId != null && groupId.isNotEmpty && groupId != '0') {
@@ -314,6 +354,9 @@ class TaskProvider extends ChangeNotifier {
         // 캐시 및 상태 업데이트
         _studentCache[memberData.id] = memberProgress;
         _updateStudentInList(memberProgress);
+
+        // 실시간 구독 설정
+        _setupStudentSubscription(memberData.id);
       }
 
       // 도장 개수 재계산
@@ -326,6 +369,46 @@ class TaskProvider extends ChangeNotifier {
       _setError('모둠원 데이터 로드 오류: $e');
       _setLoading(false);
       return false;
+    }
+  }
+
+  // 학생 데이터 구독 설정
+  void _setupStudentSubscription(String studentId) {
+    if (studentId.isEmpty) return;
+
+    // 기존 구독이 있으면 취소
+    _studentSubscriptions[studentId]?.cancel();
+
+    try {
+      // 새 구독 설정
+      _studentSubscriptions[studentId] = _taskService
+          .getStudentTasksStream(studentId)
+          .listen((updatedStudentData) {
+        // 데이터 변환
+        final individualProgress = _convertTasksToProgress(
+            updatedStudentData.individualTasks, _individualTasks);
+        final groupProgress =
+            _convertTasksToProgress(updatedStudentData.groupTasks, _groupTasks);
+
+        // 학생 진행 정보 생성
+        final updatedStudent = _createStudentProgress(updatedStudentData,
+            individualProgress, groupProgress, updatedStudentData.studentId);
+
+        // 캐시 및 상태 업데이트
+        _studentCache[studentId] = updatedStudent;
+        _updateStudentInList(updatedStudent);
+
+        // 도장 개수 재계산
+        _calculateStampCount();
+        _calculateGroupStampCounts();
+
+        // UI 갱신
+        notifyListeners();
+      }, onError: (error) {
+        print('학생 데이터 구독 오류: $error');
+      });
+    } catch (e) {
+      print('학생 구독 설정 오류: $e');
     }
   }
 
@@ -473,6 +556,9 @@ class TaskProvider extends ChangeNotifier {
         _students = [..._students, updatedStudent];
         _studentCache[studentIdToUse] = updatedStudent;
 
+        // 실시간 구독 재설정
+        _setupStudentSubscription(studentIdToUse);
+
         // 도장 개수 재계산
         _calculateStampCount();
         _calculateGroupStampCounts();
@@ -481,8 +567,15 @@ class TaskProvider extends ChangeNotifier {
         final studentGroup = studentData.group;
         if (studentGroup.isNotEmpty) {
           // 모둠원 로드
-          await loadGroupMembers(studentGroup, '1');
+          await loadGroupMembers(
+              studentGroup,
+              studentData.classNum.isNotEmpty
+                  ? studentData.classNum
+                  : studentData.grade);
         }
+
+        // UI 갱신
+        notifyListeners();
       }
     } catch (e) {
       _setError('데이터 새로고침 오류: $e');
@@ -491,9 +584,6 @@ class TaskProvider extends ChangeNotifier {
     }
   }
 
-  // ============ 과제 관련 메서드 ============
-
-  // 과제 상태 업데이트
   Future<void> updateTaskStatus(String studentId, String taskName,
       bool isCompleted, bool isGroupTask) async {
     _setError('');
@@ -508,8 +598,35 @@ class TaskProvider extends ChangeNotifier {
         return;
       });
 
-      // 로컬 상태 업데이트
-      _updateLocalTaskStatus(studentId, taskName, isCompleted, isGroupTask);
+      // 로컬 상태 업데이트 - Firebase 리스너가 자동으로 처리하므로 로컬 업데이트는 필요 없음
+      // _updateLocalTaskStatus(studentId, taskName, isCompleted, isGroupTask);
+
+      // 학생의 모둠 ID와 학급 정보 가져오기
+      final student = _students.firstWhere(
+        (s) => s.id == studentId,
+        orElse: () =>
+            _studentCache[studentId] ??
+            StudentProgress(
+                id: studentId,
+                name: '',
+                group: '',
+                studentId: studentId,
+                grade: '',
+                classNum: '',
+                studentNum: '',
+                attendance: true,
+                individualProgress: {},
+                groupProgress: {}),
+      );
+
+      final groupId = student.group;
+      final classNum = student.classNum;
+
+      // 모둠 ID가 유효하면 모둠원 데이터 자동 새로고침
+      if (groupId.isNotEmpty) {
+        // 실시간 구독이 설정되어 있으므로 여기서는 명시적으로 추가 로드 필요 없음
+        // Firebase 리스너가 변경사항을 자동 감지
+      }
     } catch (e) {
       _setError('네트워크 연결 오류. 변경 사항은 로컬에 저장되었으며 연결이 복구되면 자동으로 동기화됩니다.');
       _isOffline = true;
@@ -521,7 +638,7 @@ class TaskProvider extends ChangeNotifier {
     }
   }
 
-  // 로컬 과제 상태 업데이트
+  // 로컬 과제 상태 업데이트 (오프라인 모드에서만 필요)
   void _updateLocalTaskStatus(
       String studentId, String taskName, bool isCompleted, bool isGroupTask) {
     final studentIndex = _students.indexWhere((s) => s.id == studentId);
@@ -721,8 +838,8 @@ class TaskProvider extends ChangeNotifier {
     String classNum = data.classNum.isNotEmpty ? data.classNum : data.grade;
 
     // studentNum은 학번의 마지막 두 자리 또는 데이터에서 가져옴
-    String studentNum = '';
-    if (data.studentId.length >= 2) {
+    String studentNum = data.studentNum;
+    if (studentNum.isEmpty && data.studentId.length >= 2) {
       // 기존에 studentNum 필드가 없는 경우를 위한 폴백
       studentNum = data.studentId.substring(data.studentId.length - 2);
     }
@@ -730,7 +847,6 @@ class TaskProvider extends ChangeNotifier {
     return StudentProgress(
       id: data.id,
       name: data.name,
-      number: int.tryParse(studentNum) ?? 0,
       group: data.group,
       individualProgress: individualProgress,
       groupProgress: groupProgress,
@@ -740,6 +856,21 @@ class TaskProvider extends ChangeNotifier {
       studentNum: studentNum, // 추가된 필드
       grade: grade, // 추가된 필드
     );
+  }
+
+  // 학생 데이터 스트림 획득 메서드
+  Stream<FirebaseStudentModel> getStudentStream(String studentId) {
+    if (studentId.isEmpty) {
+      return Stream.error("유효하지 않은 학생 ID");
+    }
+
+    try {
+      // 직접 TaskService의 메서드 호출
+      return _taskService.getStudentTasksStream(studentId);
+    } catch (e) {
+      print('학생 데이터 스트림 획득 오류: $e');
+      return Stream.error("스트림 초기화 실패: $e");
+    }
   }
 
   // FirebaseStudentModel 목록을 StudentProgress 목록으로 변환
@@ -765,11 +896,19 @@ class TaskProvider extends ChangeNotifier {
           student, individualProgress, groupProgress, student.studentId);
 
       progressList.add(studentProgress);
+
+      // 캐시 업데이트
+      _studentCache[student.id] = studentProgress;
+
+      // 실시간 구독 설정
+      _setupStudentSubscription(student.id);
     }
 
     _students = progressList;
     _calculateStampCount();
     _calculateGroupStampCounts();
+
+    notifyListeners();
   }
 
   // 전체 도장 개수 계산 (간소화)
@@ -813,14 +952,18 @@ class TaskProvider extends ChangeNotifier {
 
   // 로딩 상태 설정
   void _setLoading(bool loading) {
-    _isLoading = loading;
-    notifyListeners();
+    if (_isLoading != loading) {
+      _isLoading = loading;
+      notifyListeners();
+    }
   }
 
   // 에러 메시지 설정
   void _setError(String errorMessage) {
-    _error = errorMessage;
-    notifyListeners();
+    if (_error != errorMessage) {
+      _error = errorMessage;
+      notifyListeners();
+    }
   }
 
   // 데이터 로드 오류 처리
